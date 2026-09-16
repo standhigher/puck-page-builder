@@ -61,7 +61,12 @@ export interface RendererDefinition {
   render(document: PageDocument): ReactNode | string;
 }
 
-export interface DataSourceDefinition<P = unknown, R = unknown> {
+/**
+ * `P` defaults to `any` so an extension may contribute a narrower, validated
+ * parameter type while the framework-independent registry remains generic.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export interface DataSourceDefinition<P = any, R = unknown> {
   key: string;
   mock: (params: P) => Promise<R>;
   live: (params: P) => Promise<R>;

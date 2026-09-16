@@ -5,6 +5,8 @@ import { AppProvider, Banner, BlockStack, Page } from "@shopify/polaris";
 import { useAppBridgeStatus } from "../../components/AppBridgeLoader";
 import { SessionTokenCheck } from "../../components/SessionTokenCheck";
 import { ExtensionRegistryDemo } from "../../components/ExtensionRegistryDemo";
+import { BestTrackLiveDataDemo } from "../../components/BestTrackLiveDataDemo";
+import { AuthenticatedBestTrackLiveDataDemo } from "../../components/AuthenticatedBestTrackLiveDataDemo";
 
 export default function PageBuilderPage() {
   const apiKey = process.env.NEXT_PUBLIC_SHOPIFY_API_KEY;
@@ -18,5 +20,6 @@ export default function PageBuilderPage() {
       </BlockStack>
     </Page>
     <ExtensionRegistryDemo />
+    {appBridgeStatus === "ready" ? <AuthenticatedBestTrackLiveDataDemo /> : <BestTrackLiveDataDemo />}
   </AppProvider>;
 }

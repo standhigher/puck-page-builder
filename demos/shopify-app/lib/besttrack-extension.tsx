@@ -1,9 +1,16 @@
 import type { PageBuilderExtension } from "@standhigher/puck-page-builder/extensions";
 import { BestTrackToolbarSlot, StatusToneField, TrackingStatusBlock } from "./besttrack-extension-components";
+import { createBestTrackTrackingDataSource, type GetSessionToken } from "./besttrack-data-source";
 
-export const bestTrackExtension: PageBuilderExtension = {
+/**
+ * V0.6 configures the extension's live source with a Shopify session-token
+ * supplier. The source remains unconfigured in the V0.3 Registry showcase,
+ * where it is deliberately not invoked.
+ */
+export function createBestTrackExtension(getSessionToken?: GetSessionToken): PageBuilderExtension {
+  return {
   name: "besttrack.tracking",
-  version: "0.3.0",
+  version: "0.6.0",
   blocks: [{
     type: "besttrack.tracking-status",
     version: 1,
@@ -26,11 +33,7 @@ export const bestTrackExtension: PageBuilderExtension = {
     execute: ({ notify }) => notify?.("BestTrack Toolbar Action 已执行")
   }],
   renderers: [{ id: "besttrack.tracking.web", target: "web", render: () => "BestTrack Web Renderer" }],
-  dataSources: [{
-    key: "besttrack.tracking.query",
-    mock: async () => ({ status: "In transit" }),
-    live: async () => ({ status: "Live data is configured in V0.6" })
-  }],
+  dataSources: [createBestTrackTrackingDataSource(getSessionToken)],
   templates: [{
     id: "besttrack.tracking.ready-to-go",
     version: 1,
@@ -39,4 +42,7 @@ export const bestTrackExtension: PageBuilderExtension = {
     create: () => ({ schemaVersion: 1, pageId: "besttrack-ready-to-go", target: "web", root: {}, blocks: [], settings: { locale: "en", seoTitle: "Track your order" } })
   }],
   slots: [{ id: "besttrack.tracking.toolbar-status", slot: "toolbar.right", order: 20, component: BestTrackToolbarSlot }]
-};
+  };
+}
+
+export const bestTrackExtension = createBestTrackExtension();

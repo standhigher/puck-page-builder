@@ -18,7 +18,7 @@ export function createDemoPuckConfig(onSelect: (id: string) => void): Config {
     const body = typeof props.body === "string" ? props.body : "";
     return <section
       aria-label={`Select ${kind} in canvas`}
-      className="pb-canvas-block"
+      className={`bt-storefront__section bt-storefront__section--${kind.toLowerCase()}`}
       data-block-id={id}
       onClick={() => onSelect(id)}
       onKeyDown={(event) => {
@@ -27,16 +27,16 @@ export function createDemoPuckConfig(onSelect: (id: string) => void): Config {
       role="button"
       tabIndex={0}
     >
-      <p className="pb-canvas-block__eyebrow">{kind}</p>
-      <h2>{title}</h2>
+      <p className="bt-storefront__eyebrow">{kind}</p>
+      {kind === "Hero" ? <h1>{title}</h1> : <h2>{title}</h2>}
       <p>{body}</p>
-      {kind === "TrackingForm" ? <button type="button">Track order</button> : null}
+      {kind === "TrackingForm" ? <div className="bt-storefront__tracking"><div className="bt-storefront__form"><input aria-label="Tracking number" placeholder="Enter tracking number" /><button type="button">Track order</button></div></div> : null}
     </section>;
   };
 
   return {
     components: {
-      Hero: { render: renderBlock("Hero") },
+      Hero: { render: (props) => <div className="bt-storefront"><header className="bt-storefront__header"><span className="bt-storefront__brand">BESTTRACK</span><span className="bt-storefront__link">Help center</span></header>{renderBlock("Hero")(props)}</div> },
       TrackingForm: { render: renderBlock("TrackingForm") },
       Text: { render: renderBlock("Text") }
     }

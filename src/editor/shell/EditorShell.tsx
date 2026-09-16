@@ -5,19 +5,20 @@ import {
   Box,
   Button,
   ButtonGroup,
-  Card,
   Divider,
   InlineStack,
   Modal,
   Select,
-  Tabs,
   Text,
   Tooltip
 } from "@shopify/polaris";
 import {
   ArrowLeftIcon,
   DeleteIcon,
+  DragHandleIcon,
   DuplicateIcon,
+  LayoutSectionIcon,
+  MenuIcon,
   PlusIcon,
   RedoIcon,
   UndoIcon,
@@ -47,36 +48,30 @@ const deviceLabels: Record<Device, string> = {
 };
 
 const saveLabels: Record<EditorState["saveState"], string> = {
-  clean: "未保存变更",
-  dirty: "有未保存变更",
+  clean: "无未保存变更",
+  dirty: "未保存变更",
   saving: "保存中",
   saved: "已保存",
   failed: "保存失败",
   conflict: "内容冲突"
 };
 
-const previewLabels: Record<EditorState["previewMode"], string> = {
-  editor: "编辑",
-  "mock-preview": "Mock Preview",
-  "live-preview": "Live Preview"
-};
-
 function IconButton({
   label,
   icon,
   onClick,
-  disabled = false
+  disabled = false,
+  pressed = false
 }: {
   label: string;
   icon: typeof UndoIcon;
   onClick?: () => void;
   disabled?: boolean;
+  pressed?: boolean;
 }) {
-  return (
-    <Tooltip content={label}>
-      <Button accessibilityLabel={label} icon={icon} onClick={onClick} disabled={disabled} variant="tertiary" />
-    </Tooltip>
-  );
+  return <Tooltip content={label}>
+    <Button accessibilityLabel={label} icon={icon} onClick={onClick} disabled={disabled} pressed={pressed} variant="tertiary" />
+  </Tooltip>;
 }
 
 export function EditorShell({ initialState, iframe = true }: EditorShellProps) {
@@ -128,20 +123,18 @@ export function EditorShell({ initialState, iframe = true }: EditorShellProps) {
     window.setTimeout(() => update({ saveState: "saved" }), 350);
   };
 
-  const publishPresentationState = () => {
-    update({ publishState: "publishing" });
-    window.setTimeout(() => update({ publishState: "published" }), 350);
-  };
-
   return (
     <Puck config={puckConfig} data={puckData} iframe={{ enabled: iframe }}>
       <Puck.Layout>
-        <div className="pb-shell" data-testid="editor-shell">
+        <div className="pb-shell" data-testid="editor-shell" data-preview-mode={state.previewMode}>
           <header className="pb-header">
             <InlineStack align="space-between" blockAlign="center" gap="300" wrap={false}>
-              <InlineStack gap="150" blockAlign="center" wrap={false}>
+              <InlineStack gap="200" blockAlign="center" wrap={false}>
                 <IconButton label="返回页面列表" icon={ArrowLeftIcon} />
-                <Text as="h1" variant="headingMd">Tracking page</Text>
+                <div className="pb-page-title">
+                  <Text as="h1" variant="headingSm">Tracking page</Text>
+                  <Text as="p" variant="bodySm" tone="subdued">English (US)</Text>
+                </div>
                 <Badge tone={state.saveState === "failed" || state.saveState === "conflict" ? "critical" : "info"}>{saveLabels[state.saveState]}</Badge>
               </InlineStack>
               <InlineStack gap="150" blockAlign="center" wrap={false}>
@@ -149,67 +142,62 @@ export function EditorShell({ initialState, iframe = true }: EditorShellProps) {
                 <IconButton label="恢复" icon={RedoIcon} disabled />
                 <Button onClick={savePresentationState}>保存草稿</Button>
                 <Button onClick={() => update({ previewMode: "mock-preview" })} icon={ViewIcon}>预览</Button>
-                <Button variant="primary" onClick={publishPresentationState}>{state.publishState === "published" ? "发布变更" : "发布"}</Button>
+                <Button variant="primary" disabled>发布</Button>
               </InlineStack>
             </InlineStack>
           </header>
 
-          <section className="pb-status-bar" aria-label="Editor status controls">
-            <InlineStack align="space-between" gap="300" wrap>
-              <InlineStack gap="200" blockAlign="center">
-                <Select label="Editor Language" labelHidden options={[{ label: "中文", value: "zh-CN" }, { label: "English", value: "en-US" }]} value={state.editorLocale} onChange={(editorLocale) => update({ editorLocale })} />
-                <Select label="Page Locale" labelHidden options={[{ label: "English (US)", value: "en-US" }, { label: "中文", value: "zh-CN" }]} value={state.pageLocale} onChange={(pageLocale) => update({ pageLocale })} />
-              </InlineStack>
-              <InlineStack gap="150" blockAlign="center">
-                <Text as="span" tone="subdued">{previewLabels[state.previewMode]}</Text>
-                <Button size="slim" onClick={() => update({ previewMode: "editor" })}>编辑</Button>
-                <Button size="slim" onClick={() => update({ previewMode: "mock-preview" })}>Mock Preview</Button>
-                <Tooltip content="V0.1 仅展示入口，不会发送真实请求">
-                  <Button size="slim" onClick={() => update({ previewMode: "live-preview" })}>Live Preview</Button>
-                </Tooltip>
-                {state.publishState === "published" ? <Button size="slim">添加到店铺菜单</Button> : null}
-              </InlineStack>
-            </InlineStack>
-          </section>
-
           <div className="pb-workspace">
-            <aside className={`pb-left-rail ${state.isLeftRailOpen ? "" : "pb-panel--closed"}`} aria-label="Block navigation">
+            <nav className="pb-tool-rail" aria-label="编辑器工具">
+              <IconButton label="区块" icon={LayoutSectionIcon} pressed={state.blockView === "blocks"} onClick={() => update({ blockView: "blocks", isLeftRailOpen: true })} />
+              <IconButton label="结构" icon={MenuIcon} pressed={state.blockView === "outline"} onClick={() => update({ blockView: "outline", isLeftRailOpen: true })} />
+            </nav>
+
+            <aside className={`pb-left-panel ${state.isLeftRailOpen ? "" : "pb-panel--closed"}`} aria-label="Block navigation">
               <InlineStack align="space-between" blockAlign="center">
-                <Text as="h2" variant="headingSm">内容</Text>
-                <IconButton label="收起左侧栏" icon={XIcon} onClick={() => update({ isLeftRailOpen: false })} />
+                <div>
+                  <Text as="h2" variant="headingSm">{state.blockView === "blocks" ? "区块" : "结构"}</Text>
+                  <Text as="p" variant="bodySm" tone="subdued">{state.blockView === "blocks" ? "页面区块与快捷操作" : "当前页面层级"}</Text>
+                </div>
+                <IconButton label="收起左侧面板" icon={XIcon} onClick={() => update({ isLeftRailOpen: false })} />
               </InlineStack>
-              <Tabs tabs={[{ id: "blocks", content: "Blocks" }, { id: "outline", content: "Outline" }]} selected={state.blockView === "blocks" ? 0 : 1} onSelect={(index) => update({ blockView: index === 0 ? "blocks" : "outline" })} fitted>
-                <BlockList view={state.blockView} blocks={state.blocks} selectedBlockId={state.selectedBlockId} onSelect={selectBlock} onMove={moveBlock} onDuplicate={duplicateBlock} onDelete={deleteBlock} />
-              </Tabs>
+              <BlockList view={state.blockView} blocks={state.blocks} selectedBlockId={state.selectedBlockId} onSelect={selectBlock} onMove={moveBlock} onDuplicate={duplicateBlock} onDelete={deleteBlock} />
               <Button fullWidth icon={PlusIcon} onClick={() => update({ isPickerOpen: true })}>添加模块</Button>
             </aside>
 
             <main className="pb-canvas-area">
               <CanvasToolbar device={state.device} zoom={state.zoom} onDevice={(device) => update({ device })} onZoom={(zoom) => update({ zoom })} />
-              <div className={`pb-canvas-frame pb-canvas-frame--${state.device} pb-canvas-frame--zoom-${state.zoom}`} data-device={state.device} data-zoom={state.zoom}>
-                <Puck.Preview />
-              </div>
-              {!state.isLeftRailOpen || !state.isRightPanelOpen ? (
-                <div className="pb-collapsed-actions">
-                  {!state.isLeftRailOpen ? <Button onClick={() => update({ isLeftRailOpen: true })}>打开 Blocks</Button> : null}
-                  {!state.isRightPanelOpen ? <Button onClick={() => update({ isRightPanelOpen: true })}>打开属性</Button> : null}
+              <div className="pb-canvas-stage">
+                <div className={`pb-canvas-frame pb-canvas-frame--${state.device} pb-canvas-frame--zoom-${state.zoom}`} data-device={state.device} data-zoom={state.zoom}>
+                  <Puck.Preview />
                 </div>
-              ) : null}
+                {selectedBlock ? <div className="pb-canvas-overlay" aria-label={`已选择 ${selectedBlock.label}`}>
+                  <span>{selectedBlock.label}</span>
+                  <span>Selected</span>
+                </div> : null}
+              </div>
+              {!state.isLeftRailOpen || !state.isRightPanelOpen ? <div className="pb-collapsed-actions">
+                {!state.isLeftRailOpen ? <Button onClick={() => update({ isLeftRailOpen: true })}>打开区块面板</Button> : null}
+                {!state.isRightPanelOpen ? <Button onClick={() => update({ isRightPanelOpen: true })}>打开属性面板</Button> : null}
+              </div> : null}
             </main>
 
             <aside className={`pb-right-panel ${state.isRightPanelOpen ? "" : "pb-panel--closed"}`} aria-label="Block properties">
               <InlineStack align="space-between" blockAlign="center">
-                <Text as="h2" variant="headingSm">属性</Text>
+                <div>
+                  <Text as="h2" variant="headingSm">属性</Text>
+                  <Text as="p" variant="bodySm" tone="subdued">{selectedBlock?.label ?? "未选择区块"}</Text>
+                </div>
                 <IconButton label="收起属性面板" icon={XIcon} onClick={() => update({ isRightPanelOpen: false })} />
               </InlineStack>
-              {selectedBlock ? <PropertyPanel block={selectedBlock} /> : <Text as="p" tone="subdued">选择一个区块以查看属性。</Text>}
+              {selectedBlock ? <PropertyPanel block={selectedBlock} editorLocale={state.editorLocale} pageLocale={state.pageLocale} onEditorLocale={(editorLocale) => update({ editorLocale })} onPageLocale={(pageLocale) => update({ pageLocale })} /> : <Text as="p" tone="subdued">选择一个区块以查看属性。</Text>}
             </aside>
           </div>
 
           <Modal instant open={state.isPickerOpen} onClose={() => update({ isPickerOpen: false })} title="添加模块" primaryAction={{ content: "关闭", onAction: () => update({ isPickerOpen: false }) }}>
             <Modal.Section>
               <BlockStack gap="300">
-                <Text as="p" tone="subdued">V0.1 仅操作本地演示数据。</Text>
+                <Text as="p" tone="subdued">本版仅操作本地演示区块，不会写入页面数据或调用业务接口。</Text>
                 <InlineStack gap="200" wrap>
                   {(["Hero", "TrackingForm", "Text"] as const).map((type) => <Button key={type} onClick={() => addBlock(type)}>{type}</Button>)}
                 </InlineStack>
@@ -240,20 +228,19 @@ function BlockList({
   onDelete: (block: DemoBlock) => void;
 }) {
   return <div className={`pb-block-list pb-block-list--${view}`} data-testid={`${view}-view`}>
-    {blocks.map((block, index) => <Card key={block.id} padding="200">
-      <InlineStack align="space-between" blockAlign="center" gap="150" wrap={false}>
-        <button type="button" className={`pb-block-select ${block.id === selectedBlockId ? "pb-block-select--selected" : ""}`} onClick={() => onSelect(block.id)} aria-pressed={block.id === selectedBlockId}>
-          <Text as="span" variant="bodySm" fontWeight="semibold">{block.label}</Text>
-          {view === "blocks" ? <Text as="span" variant="bodySm" tone="subdued">{block.description}</Text> : null}
-        </button>
-        <ButtonGroup variant="segmented">
-          <Button size="slim" onClick={() => onMove(block.id, -1)} disabled={index === 0}>↑</Button>
-          <Button size="slim" onClick={() => onMove(block.id, 1)} disabled={index === blocks.length - 1}>↓</Button>
-          <IconButton label={`复制 ${block.label}`} icon={DuplicateIcon} onClick={() => onDuplicate(block)} />
-          <IconButton label={`删除 ${block.label}`} icon={DeleteIcon} onClick={() => onDelete(block)} />
-        </ButtonGroup>
-      </InlineStack>
-    </Card>)}
+    {blocks.map((block, index) => <article key={block.id} className={`pb-block-row ${block.id === selectedBlockId ? "pb-block-row--selected" : ""}`}>
+      <span className="pb-block-handle" aria-label={`${block.label} 拖动排序`}><DragHandleIcon /></span>
+      <button type="button" className="pb-block-select" onClick={() => onSelect(block.id)} aria-pressed={block.id === selectedBlockId}>
+        <Text as="span" variant="bodySm" fontWeight="semibold">{block.label}</Text>
+        {view === "blocks" ? <Text as="span" variant="bodySm" tone="subdued">{block.description}</Text> : <Text as="span" variant="bodySm" tone="subdued">{block.type}</Text>}
+      </button>
+      <div className="pb-block-actions" aria-label={`${block.label} 操作`}>
+        <Button size="slim" onClick={() => onMove(block.id, -1)} disabled={index === 0}>上移</Button>
+        <Button size="slim" onClick={() => onMove(block.id, 1)} disabled={index === blocks.length - 1}>下移</Button>
+        <IconButton label={`复制 ${block.label}`} icon={DuplicateIcon} onClick={() => onDuplicate(block)} />
+        <IconButton label={`删除 ${block.label}`} icon={DeleteIcon} onClick={() => onDelete(block)} />
+      </div>
+    </article>)}
   </div>;
 }
 
@@ -268,15 +255,39 @@ function CanvasToolbar({ device, zoom, onDevice, onZoom }: { device: Device; zoo
   </div>;
 }
 
-function PropertyPanel({ block }: { block: DemoBlock }) {
+function PropertyPanel({
+  block,
+  editorLocale,
+  pageLocale,
+  onEditorLocale,
+  onPageLocale
+}: {
+  block: DemoBlock;
+  editorLocale: string;
+  pageLocale: string;
+  onEditorLocale: (value: string) => void;
+  onPageLocale: (value: string) => void;
+}) {
+  const [tab, setTab] = useState(0);
+  const tabs = ["内容", "样式", "高级"];
+
   return <BlockStack gap="300" data-testid="property-panel">
-    <Badge>{block.type}</Badge>
-    <Text as="p" variant="headingSm">{block.label}</Text>
-    <Divider />
-    <Text as="p" tone="subdued">当前选中：{block.id}</Text>
-    <Text as="p">{block.description}</Text>
-    <Box padding="300" background="bg-surface-secondary" borderRadius="200">
-      <Text as="p" variant="bodySm" tone="subdued">属性编辑将在后续 PageDocument 版本实现。</Text>
-    </Box>
+    <div className="pb-inspector-tabs" role="tablist" aria-label="属性分类">
+      {tabs.map((label, index) => <button key={label} type="button" role="tab" aria-selected={tab === index} className={tab === index ? "pb-inspector-tab--selected" : ""} onClick={() => setTab(index)}>{label}</button>)}
+    </div>
+    {tab === 0 ? <BlockStack gap="300">
+      <Badge>{block.type}</Badge>
+      <Text as="p" variant="headingSm">{block.label}</Text>
+      <Divider />
+      <Text as="p" tone="subdued">当前选中：{block.id}</Text>
+      <Text as="p">{block.description}</Text>
+      <Box padding="300" background="bg-surface-secondary" borderRadius="200"><Text as="p" variant="bodySm" tone="subdued">字段编辑将在 PageDocument 版本实现；V0.1.1 仅提供真实页面预览和选择反馈。</Text></Box>
+    </BlockStack> : null}
+    {tab === 1 ? <BlockStack gap="300"><Text as="p" variant="bodySm" tone="subdued">样式配置将由 Block Field 与 Theme Token 提供。本版保持 Storefront 页面样式与编辑器 UI 隔离。</Text></BlockStack> : null}
+    {tab === 2 ? <BlockStack gap="300">
+      <Text as="p" variant="bodySm" tone="subdued">语言入口属于 Inspector，避免在主工具栏重复占位。</Text>
+      <Select label="Editor Language" options={[{ label: "中文", value: "zh-CN" }, { label: "English", value: "en-US" }]} value={editorLocale} onChange={onEditorLocale} />
+      <Select label="Page Locale" options={[{ label: "English (US)", value: "en-US" }, { label: "中文", value: "zh-CN" }]} value={pageLocale} onChange={onPageLocale} />
+    </BlockStack> : null}
   </BlockStack>;
 }

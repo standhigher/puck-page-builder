@@ -1,0 +1,23 @@
+:root {
+  --builder-canvas-bg: #f5f6f7;
+  --builder-surface: #ffffff;
+  --builder-surface-subtle: #f7f7f8;
+  --builder-border: #e1e3e5;
+  --builder-text: #1a1a1a;
+  --builder-text-muted: #616161;
+  --builder-accent: #2563eb;
+  --builder-accent-subtle: #eff6ff;
+  --builder-action-primary: #1f1f1f;
+  --builder-danger: #d72c0d;
+  --builder-font: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --builder-space-1: 4px;
+  --builder-space-2: 8px;
+  --builder-space-3: 12px;
+  --builder-space-4: 16px;
+  --builder-space-6: 24px;
+  --builder-space-8: 32px;
+  --builder-control-radius: 6px;
+  --builder-panel-radius: 8px;
+  --builder-canvas-radius: 12px;
+  --builder-canvas-shadow: 0 12px 32px rgba(26, 26, 26, 0.12);
+}

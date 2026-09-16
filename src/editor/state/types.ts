@@ -63,7 +63,7 @@ export const initialEditorState: EditorState = {
   blockView: "blocks",
   device: "desktop",
   zoom: "auto",
-  saveState: "clean",
+  saveState: "saved",
   previewMode: "editor",
   publishState: "draft",
   editorLocale: "zh-CN",

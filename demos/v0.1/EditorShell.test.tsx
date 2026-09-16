@@ -1,5 +1,5 @@
 import { AppProvider } from "@shopify/polaris";
-import { act, fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import { createContext, useContext } from "react";
 import { describe, expect, it, vi } from "vitest";
 import { EditorShell } from "../../src/editor/shell/EditorShell";
@@ -25,11 +25,11 @@ function renderShell(props: Partial<React.ComponentProps<typeof EditorShell>> = 
   return render(<AppProvider i18n={{}}><EditorShell iframe={false} {...props} /></AppProvider>);
 }
 
-describe("EditorShell V0.1", () => {
+describe("EditorShell V0.1.1", () => {
   it("keeps one block list when switching Blocks and Outline", () => {
     renderShell();
     expect(screen.getByTestId("blocks-view")).toHaveTextContent(/欢迎区块[\s\S]*物流查询[\s\S]*帮助文本/);
-    fireEvent.click(screen.getAllByRole("tab", { name: "Outline" }).at(-1)!);
+    fireEvent.click(screen.getByRole("button", { name: "结构" }));
     expect(screen.getByTestId("outline-view")).toHaveTextContent(/欢迎区块[\s\S]*物流查询[\s\S]*帮助文本/);
   });
 
@@ -38,7 +38,7 @@ describe("EditorShell V0.1", () => {
     fireEvent.click(screen.getByRole("button", { name: "Select TrackingForm in canvas" }));
     expect(screen.getByTestId("property-panel")).toHaveTextContent("tracking-form-1");
     expect(screen.getAllByRole("button", { name: /^物流查询/ }).find((button) => button.hasAttribute("aria-pressed"))).toHaveAttribute("aria-pressed", "true");
-    fireEvent.click(screen.getAllByRole("tab", { name: "Outline" }).at(-1)!);
+    fireEvent.click(screen.getByRole("button", { name: "结构" }));
     expect(screen.getAllByRole("button", { name: /^物流查询/ }).find((button) => button.hasAttribute("aria-pressed"))).toHaveAttribute("aria-pressed", "true");
   });
 
@@ -61,6 +61,8 @@ describe("EditorShell V0.1", () => {
 
   it("keeps editor language and page locale independent", () => {
     renderShell();
+    const inspector = screen.getByLabelText("Block properties");
+    fireEvent.click(within(inspector).getByRole("tab", { name: "高级" }));
     fireEvent.change(screen.getByLabelText("Editor Language"), { target: { value: "en-US" } });
     expect(screen.getByLabelText("Editor Language")).toHaveValue("en-US");
     expect(screen.getByLabelText("Page Locale")).toHaveValue("en-US");
@@ -69,22 +71,31 @@ describe("EditorShell V0.1", () => {
     expect(screen.getByLabelText("Page Locale")).toHaveValue("zh-CN");
   });
 
-  it("renders save, preview and publish state shells without real requests", () => {
+  it("renders save and mock preview state without real requests", () => {
     vi.useFakeTimers();
     renderShell();
-    fireEvent.click(screen.getByRole("button", { name: "Mock Preview" }));
-    expect(screen.getAllByText("Mock Preview").length).toBeGreaterThan(0);
-    fireEvent.click(screen.getByRole("button", { name: "发布" }));
+    fireEvent.click(screen.getByRole("button", { name: "预览" }));
+    expect(screen.getByTestId("editor-shell")).toHaveAttribute("data-preview-mode", "mock-preview");
+    fireEvent.click(screen.getByRole("button", { name: "保存草稿" }));
     act(() => vi.advanceTimersByTime(350));
-    expect(screen.getByRole("button", { name: "发布变更" })).toBeVisible();
+    expect(screen.getByText("已保存")).toBeVisible();
     vi.useRealTimers();
   });
 
   it("keeps core actions available when narrow-layout panels start collapsed", () => {
     renderShell({ initialState: { isLeftRailOpen: false, isRightPanelOpen: false } });
-    fireEvent.click(screen.getByRole("button", { name: "打开 Blocks" }));
-    fireEvent.click(screen.getByRole("button", { name: "打开属性" }));
+    fireEvent.click(screen.getByRole("button", { name: "打开区块面板" }));
+    fireEvent.click(screen.getByRole("button", { name: "打开属性面板" }));
     expect(screen.getByRole("button", { name: "添加模块" })).toBeVisible();
     expect(screen.getByRole("heading", { name: "属性" })).toBeVisible();
+  });
+
+  it("uses the Builder tool rail and content/style/advanced inspector tabs", () => {
+    renderShell();
+    expect(screen.getByRole("navigation", { name: "编辑器工具" })).toBeVisible();
+    const inspector = screen.getByLabelText("Block properties");
+    expect(within(inspector).getByRole("tab", { name: "内容" })).toBeVisible();
+    fireEvent.click(within(inspector).getByRole("tab", { name: "样式" }));
+    expect(within(inspector).getByText(/Storefront 页面样式与编辑器 UI 隔离/)).toBeVisible();
   });
 });

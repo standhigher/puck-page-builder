@@ -10,9 +10,14 @@ api_version = "2026-07"
 
 [access_scopes]
 # Learn more at https://shopify.dev/docs/apps/tools/cli/configuration#access_scopes
-scopes = ""
+scopes = "write_app_proxy"
 optional_scopes = [ ]
 use_legacy_install_flow = false
 
 [auth]
 redirect_urls = [ ]
+
+[app_proxy]
+url = "/api/app-proxy"
+prefix = "apps"
+subpath = "besttrack-page-builder"

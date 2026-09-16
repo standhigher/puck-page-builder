@@ -1,0 +1,6 @@
+roles = ["frontend", "backend"]
+webhooks_path = "/api/webhooks"
+
+[commands]
+dev = "pnpm dev"
+build = "pnpm build"

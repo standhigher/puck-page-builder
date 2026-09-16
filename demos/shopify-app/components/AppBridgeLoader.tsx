@@ -37,11 +37,12 @@ export function AppBridgeLoader({ children }: { children: ReactNode }) {
 
     const script = existing ?? document.createElement("script");
     const onLoad = () => {
-      if ("shopify" in window) {
-        setStatus("ready");
-      } else {
+      if (!("shopify" in window)) {
         setStatus("failed");
+        return;
       }
+
+      void shopify.ready.then(() => setStatus("ready")).catch(() => setStatus("failed"));
     };
     const onError = () => setStatus("failed");
 

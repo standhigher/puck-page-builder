@@ -1,0 +1,35 @@
+# Dependencies and package-manager caches
+node_modules/
+.pnpm-store/
+.pnp.*
+
+# Build output and framework caches
+dist/
+build/
+.next/
+out/
+.turbo/
+coverage/
+*.tsbuildinfo
+
+# Test and tool caches
+.vitest/
+.eslintcache
+
+# Local environment configuration (keep templates versioned)
+.env
+.env.*
+!.env.example
+!.env.*.example
+
+# Shopify CLI local state
+.shopify/
+
+# Logs
+*.log
+*-debug.log*
+
+# OS and editor-local files
+.DS_Store
+Thumbs.db
+.idea/

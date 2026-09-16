@@ -82,7 +82,7 @@ describe("V0.3 Extension Registry", () => {
     const engineData = toEngineData(document, registry);
     expect(engineData.content[0]).toMatchObject({ type: "acme.catalog.notice", props: { id: "notice-1" } });
     expect(fromEngineData(engineData, document, registry)).toEqual(document);
-    expect(createPageDocumentPuckConfig(() => undefined, registry).components).toHaveProperty("acme.catalog.notice");
+    expect(createPageDocumentPuckConfig(() => undefined, () => undefined, null, registry).components).toHaveProperty("acme.catalog.notice");
 
     render(<WebRenderer document={document} registry={registry} />);
     expect(screen.getByText("Extension block rendered")).toBeVisible();

@@ -1,17 +1,42 @@
 import { AppProvider } from "@shopify/polaris";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { createContext, useContext } from "react";
+import { createContext, useContext, useState } from "react";
 import { describe, expect, it, vi } from "vitest";
 import { PageDocumentEditorShell } from "../../src/editor/shell/PageDocumentEditorShell";
+import { blockIdAtRelativeY, nearestBlockIdAtY } from "../../src/editor/shell/drop-position";
 import type { PageDocument } from "../../src/core/schema/page-document";
 
-type MockPuckState = { config: { components: Record<string, { render: (props: Record<string, unknown>) => JSX.Element }> }; data: { content: { type: string; props: Record<string, unknown> }[] } };
+type MockPuckState = {
+  config: { components: Record<string, { render: (props: Record<string, unknown>) => JSX.Element }> };
+  data: { content: { type: string; props: Record<string, unknown> }[] };
+  selectedItem: { type: string; props: Record<string, unknown> } | null;
+  getSelectorForId(id: string): { index: number } | undefined;
+  dispatch(action: { type: string; ui?: { itemSelector?: { index: number } | null }; data?: Partial<MockPuckState["data"]> }): void;
+};
 const PuckContext = createContext<MockPuckState | null>(null);
 
 // Puck's rendering engine is verified in V0.2. This keeps V0.4 interaction
 // tests focused on the PageDocument editor's state and action boundaries.
 vi.mock("@puckeditor/core", () => {
-  const Puck = ({ children, config, data }: MockPuckState & { children: React.ReactNode }) => <PuckContext.Provider value={{ config, data }}><div>{children}</div></PuckContext.Provider>;
+  const Puck = ({ children, config, data }: Omit<MockPuckState, "selectedItem" | "getSelectorForId" | "dispatch"> & { children: React.ReactNode }) => {
+    const [selectedItem, setSelectedItem] = useState<MockPuckState["selectedItem"]>(null);
+    const [canvasData, setCanvasData] = useState(data);
+    const getSelectorForId = (id: string) => {
+      const index = canvasData.content.findIndex((item) => item.props.id === id);
+      return index < 0 ? undefined : { index };
+    };
+    const dispatch: MockPuckState["dispatch"] = (action) => {
+      if (action.type === "setData" && action.data) {
+        setCanvasData((current) => ({ ...current, ...action.data, content: action.data?.content ?? current.content }));
+        return;
+      }
+      if (action.type === "setUi") {
+        const index = action.ui?.itemSelector?.index;
+        setSelectedItem(typeof index === "number" ? canvasData.content[index] ?? null : null);
+      }
+    };
+    return <PuckContext.Provider value={{ config, data: canvasData, selectedItem, getSelectorForId, dispatch }}><div>{children}</div></PuckContext.Provider>;
+  };
   Puck.Layout = ({ children }: { children: React.ReactNode }) => <>{children}</>;
   function Preview() {
     const state = useContext(PuckContext)!;
@@ -21,7 +46,8 @@ vi.mock("@puckeditor/core", () => {
     })}</>;
   }
   Puck.Preview = Preview;
-  return { Puck };
+  const usePuck = () => useContext(PuckContext)!;
+  return { Puck, usePuck };
 });
 
 const document: PageDocument = {
@@ -40,35 +66,68 @@ function renderEditor(props: Partial<React.ComponentProps<typeof PageDocumentEdi
   return render(<AppProvider i18n={{}}><PageDocumentEditorShell initialDocument={document} iframe={false} {...props} /></AppProvider>);
 }
 
-function blockIds() {
-  return Array.from(screen.getByTestId("blocks-view").querySelectorAll(".pb-block-select")).map((button) => button.textContent?.match(/text-\d|core-text-\d/)?.[0]);
-}
-
 describe("PageDocumentEditorShell V0.4", () => {
-  it("adds, duplicates, deletes, and reorders blocks as immutable PageDocument operations", () => {
-    renderEditor();
-    fireEvent.click(screen.getByRole("button", { name: "添加区块" }));
-    const dialog = screen.getByRole("dialog", { name: "添加区块" });
-    fireEvent.click(within(dialog).getByRole("button", { name: "文本" }));
-    expect(blockIds()).toEqual(["text-1", "text-2", "core-text-3"]);
-
-    fireEvent.click(screen.getAllByRole("button", { name: "复制 文本" })[0]);
-    expect(blockIds()).toEqual(["text-1", "core-text-4", "text-2", "core-text-3"]);
-    fireEvent.click(screen.getAllByRole("button", { name: "删除 文本" })[0]);
-    expect(blockIds()).toEqual(["core-text-4", "text-2", "core-text-3"]);
-
-    fireEvent.click(screen.getAllByRole("button", { name: "下移" })[0]);
-    expect(blockIds()).toEqual(["text-2", "core-text-4", "core-text-3"]);
+  it("calculates the nearest canvas insertion point from the drop position", () => {
+    const blocks = [{ id: "text-1", top: 100, height: 40 }, { id: "text-2", top: 200, height: 40 }];
+    expect(nearestBlockIdAtY(blocks, 50)).toBe("text-1");
+    expect(nearestBlockIdAtY(blocks, 150)).toBe("text-2");
+    expect(nearestBlockIdAtY(blocks, 999)).toBeUndefined();
+    expect(blockIdAtRelativeY(["text-1", "text-2"], 0)).toBe("text-1");
+    expect(blockIdAtRelativeY(["text-1", "text-2"], .6)).toBe("text-2");
+    expect(blockIdAtRelativeY(["text-1", "text-2"], 1)).toBeUndefined();
   });
 
-  it("supports native drag ordering and keeps selection shared with the inspector", () => {
+  it("uses the Blocks panel as a drag-only type library and allows repeated additions", async () => {
+    const changed: PageDocument[] = [];
+    renderEditor({ onDocumentChange: (next) => changed.push(next) });
+    const library = screen.getByTestId("blocks-view");
+    expect(library.querySelectorAll("[data-block-type]")).toHaveLength(2);
+    const textType = library.querySelector('[data-block-type="core.text"]')!;
+    expect(textType.querySelector(".pb-library-block-drag-icon svg")).toBeInTheDocument();
+    fireEvent.click(textType);
+    expect(screen.queryByTestId("canvas-drop-target")).not.toBeInTheDocument();
+    expect(screen.queryByText("New text block")).not.toBeInTheDocument();
+    const transfer = { setData: () => undefined, getData: () => "core.text", effectAllowed: "" };
+    fireEvent.dragStart(textType, { dataTransfer: transfer });
+    fireEvent.drop(screen.getByTestId("canvas-drop-target"), { clientY: 9999, dataTransfer: transfer });
+    await waitFor(() => expect(changed.at(-1)?.blocks.map((block) => block.id)).toEqual(["text-1", "text-2", "core-text-3"]));
+    fireEvent.dragStart(library.querySelector('[data-block-type="core.text"]')!, { dataTransfer: transfer });
+    fireEvent.drop(screen.getByTestId("canvas-drop-target"), { clientY: 9999, dataTransfer: transfer });
+    await waitFor(() => expect(screen.getAllByText("New text block").filter((element) => element.tagName === "P")).toHaveLength(2));
+    expect(changed.at(-1)?.blocks.map((block) => block.id)).toEqual(["text-1", "text-2", "core-text-3", "core-text-4"]);
+    expect(library.querySelectorAll("[data-block-type]")).toHaveLength(2);
+    expect(textType).toHaveAttribute("data-selected", "true");
+  });
+
+  it("highlights the selected canvas block type without using canvas order", async () => {
+    renderEditor({ initialDocument: { ...document, blocks: [...document.blocks, { id: "image-1", type: "core.image", version: 1, props: { src: "https://example.com/image.jpg", alt: "Example" } }] } });
+    fireEvent.click(screen.getByRole("button", { name: "Select Image in canvas" }));
+    await waitFor(() => expect(screen.getByLabelText("图片 URL")).toBeVisible());
+    const library = screen.getByTestId("blocks-view");
+    expect(library.querySelector('[data-block-type="core.image"]')).toHaveAttribute("data-selected", "true");
+    expect(library.querySelector('[data-block-type="core.text"]')).toHaveAttribute("data-selected", "false");
+  });
+
+  it("keeps outline navigation separate from the Blocks type library", async () => {
     renderEditor();
-    const rows = screen.getByTestId("blocks-view").querySelectorAll("article");
-    const transfer = { setData: () => undefined, getData: () => "text-2", effectAllowed: "" };
-    fireEvent.dragStart(rows[1], { dataTransfer: transfer });
-    fireEvent.drop(rows[0], { dataTransfer: transfer });
-    expect(blockIds()).toEqual(["text-2", "text-1"]);
-    expect(screen.getByTestId("blocks-view").querySelectorAll(".pb-block-select")[0]).toHaveAttribute("aria-pressed", "true");
+    fireEvent.click(screen.getByRole("button", { name: "结构" }));
+    fireEvent.click(within(screen.getByTestId("outline-view")).getByRole("button", { name: /text-2/ }));
+    await waitFor(() => expect(screen.getByLabelText("文本内容")).toHaveValue("Second block"));
+    fireEvent.click(screen.getByRole("button", { name: "区块" }));
+    expect(screen.getByTestId("blocks-view").querySelector('[data-block-type="core.text"]')).toHaveAttribute("data-selected", "true");
+  });
+
+  it("synchronizes selected canvas edits and Inspector edits in both directions", async () => {
+    renderEditor();
+    const canvasText = screen.getAllByText("First block").find((element) => element.tagName === "P");
+    expect(canvasText).toBeDefined();
+    expect(canvasText).toHaveAttribute("contenteditable", "true");
+    canvasText!.textContent = "Changed in canvas";
+    fireEvent.input(canvasText!);
+    await waitFor(() => expect(screen.getByLabelText("文本内容")).toHaveValue("Changed in canvas"));
+
+    fireEvent.change(screen.getByLabelText("文本内容"), { target: { value: "Changed in inspector" } });
+    await waitFor(() => expect(screen.getAllByText("Changed in inspector").some((element) => element.tagName === "P")).toBe(true));
   });
 
   it("tracks dirty history, restores properties with undo/redo, and handles editor shortcuts", () => {
@@ -87,7 +146,7 @@ describe("PageDocumentEditorShell V0.4", () => {
     renderEditor({ adminLocale: "en" });
     fireEvent.click(screen.getByRole("button", { name: "Mobile" }));
     expect(screen.getByTestId("page-document-editor").querySelector(".pb-canvas-frame")).toHaveAttribute("data-device", "mobile");
-    expect(screen.getByRole("button", { name: "Add block" })).toBeVisible();
+    expect(screen.getByTestId("blocks-view").querySelector('[data-block-type="core.text"]')).toBeVisible();
     expect(screen.getByRole("button", { name: "Undo" })).toHaveAttribute("aria-disabled", "true");
   });
 
@@ -101,8 +160,11 @@ describe("PageDocumentEditorShell V0.4", () => {
     const changed: PageDocument[] = [];
     renderEditor({ loadState: "success", onDocumentChange: (next) => changed.push(next) });
     expect(screen.getByTestId("page-document-editor")).toHaveAttribute("data-editor-state", "success");
-    fireEvent.click(screen.getAllByRole("button", { name: "下移" })[0]);
-    expect(changed.at(-1)?.blocks.map((block) => block.id)).toEqual(["text-2", "text-1"]);
+    const textType = screen.getByTestId("blocks-view").querySelector('[data-block-type="core.text"]')!;
+    const transfer = { setData: () => undefined, getData: () => "core.text", effectAllowed: "" };
+    fireEvent.dragStart(textType, { dataTransfer: transfer });
+    fireEvent.drop(screen.getByTestId("canvas-drop-target"), { dataTransfer: transfer });
+    expect(changed.at(-1)?.blocks.map((block) => block.id)).toEqual(["text-1", "text-2", "core-text-3"]);
   });
 
   it("only clears the leave-protection snapshot after a successful V0.5 draft save", async () => {

@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useReducer, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useReducer, useRef, useState, type ReactNode } from "react";
 import type { ExtensionRegistry } from "../../core/extensions";
 import type { BlockNode, JsonValue, PageDocument } from "../../core/schema/page-document";
 import type { Device } from "../state/types";
@@ -47,13 +47,19 @@ export type EditorContextValue = {
   document: PageDocument;
   selectedBlockId: string | null;
   selectedBlock: BlockNode | null;
+  canvasSelectionRequest: string | null;
   device: Device;
   loadState: EditorLoadState;
   isDirty: boolean;
   actionState: EditorActionState;
-  selectBlock(id: string | null): void;
+  /** Request a canvas selection. The inspector changes only after Puck confirms it. */
+  requestCanvasSelection(id: string): void;
+  /** Called from the canvas/Puck selection event. */
+  confirmCanvasSelection(id: string | null): void;
+  /** Applies an edit that originated in the canvas engine. */
+  updateFromCanvas(document: PageDocument): void;
   setDevice(device: Device): void;
-  addBlock(type: string): void;
+  addBlock(type: string, beforeId?: string): string | null;
   duplicateBlock(id: string): void;
   deleteBlock(id: string): void;
   moveBlock(id: string, direction: -1 | 1): void;
@@ -83,9 +89,30 @@ function defaultBlock(type: string, blocks: BlockNode[], registry?: ExtensionReg
 
 export function EditorProvider({ initialDocument, registry, loadState = "ready", leaveWarning = "You have unsaved changes.", onDocumentChange, children }: { initialDocument: PageDocument; registry?: ExtensionRegistry; loadState?: EditorLoadState; leaveWarning?: string; onDocumentChange?: (document: PageDocument) => void; children: ReactNode }) {
   const [history, dispatch] = useReducer(historyReducer, initialDocument, (document): EditorHistory => ({ document, selectedBlockId: document.blocks[0]?.id ?? null, past: [], future: [], device: "desktop", savedDocument: document }));
+  const historyRef = useRef(history);
+  useEffect(() => { historyRef.current = history; }, [history]);
+  const [canvasSelectionRequest, setCanvasSelectionRequest] = useState<string | null>(null);
   const editable = loadState === "ready" || loadState === "success";
   const selectedBlock = history.document.blocks.find((block) => block.id === history.selectedBlockId) ?? null;
   const replace = useCallback((document: PageDocument, selectedBlockId: string | null) => dispatch({ type: "replace", document, selectedBlockId }), []);
+  // Puck keeps the active contenteditable node only while its config is referentially stable.
+  // Read the current document from a ref so typing in the canvas does not rebuild that config.
+  const requestCanvasSelection = useCallback((id: string) => { if (editable) setCanvasSelectionRequest(id); }, [editable]);
+  const confirmCanvasSelection = useCallback((id: string | null) => {
+    setCanvasSelectionRequest(null);
+    dispatch({ type: "select", id });
+  }, []);
+  const updateFromCanvas = useCallback((document: PageDocument) => {
+    const current = historyRef.current;
+    if (!editable || JSON.stringify(document) === JSON.stringify(current.document)) return;
+    replace(document, current.selectedBlockId);
+  }, [editable, replace]);
+  const updateBlockProps = useCallback((id: string, props: Record<string, JsonValue>) => {
+    if (!editable) return;
+    const current = historyRef.current;
+    const blocks = current.document.blocks.map((block) => block.id === id ? { ...block, props: { ...block.props, ...props } } : block);
+    replace({ ...current.document, blocks }, id);
+  }, [editable, replace]);
 
   useEffect(() => { onDocumentChange?.(history.document); }, [history.document, onDocumentChange]);
   const isDirty = JSON.stringify(history.document) !== JSON.stringify(history.savedDocument);
@@ -126,16 +153,24 @@ export function EditorProvider({ initialDocument, registry, loadState = "ready",
       document: history.document,
       selectedBlockId: history.selectedBlockId,
       selectedBlock,
+      canvasSelectionRequest,
       device: history.device,
       loadState,
       isDirty,
       actionState,
-      selectBlock: (id) => dispatch({ type: "select", id }),
+      requestCanvasSelection,
+      confirmCanvasSelection,
+      updateFromCanvas,
       setDevice: (device) => dispatch({ type: "device", device }),
-      addBlock: (type) => {
-        if (!editable) return;
+      addBlock: (type, beforeId) => {
+        if (!editable) return null;
         const block = defaultBlock(type, history.document.blocks, registry);
-        replace({ ...history.document, blocks: [...history.document.blocks, block] }, block.id);
+        const blocks = [...history.document.blocks];
+        const targetIndex = beforeId ? blocks.findIndex((item) => item.id === beforeId) : -1;
+        if (targetIndex < 0) blocks.push(block);
+        else blocks.splice(targetIndex, 0, block);
+        replace({ ...history.document, blocks }, block.id);
+        return block.id;
       },
       duplicateBlock: (id) => {
         if (!editable) return;
@@ -173,16 +208,12 @@ export function EditorProvider({ initialDocument, registry, loadState = "ready",
         blocks.splice(targetIndex, 0, source);
         replace({ ...history.document, blocks }, id);
       },
-      updateBlockProps: (id, props) => {
-        if (!editable) return;
-        const blocks = history.document.blocks.map((block) => block.id === id ? { ...block, props: { ...block.props, ...props } } : block);
-        replace({ ...history.document, blocks }, id);
-      },
+      updateBlockProps,
       undo: () => { if (editable) dispatch({ type: "undo" }); },
       redo: () => { if (editable) dispatch({ type: "redo" }); },
       markSaved: () => dispatch({ type: "saved" })
     };
-  }, [editable, history, isDirty, loadState, registry, replace, selectedBlock]);
+  }, [canvasSelectionRequest, confirmCanvasSelection, editable, history, isDirty, loadState, registry, replace, requestCanvasSelection, selectedBlock, updateBlockProps, updateFromCanvas]);
 
   return <EditorContext.Provider value={value}>{children}</EditorContext.Provider>;
 }

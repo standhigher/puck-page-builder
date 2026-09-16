@@ -40,5 +40,10 @@ export function fromEngineData(data: Data, base: PageDocument, registry?: Extens
     }];
   });
 
-  return createPageDocument({ ...base, root: data.root as PageDocument["root"], blocks });
+  // Puck V0.23 wraps root props in `{ props }`; PageDocument must never persist
+  // that engine-specific wrapper.
+  const root = typeof data.root === "object" && data.root !== null && "props" in data.root
+    ? (data.root as { props: PageDocument["root"] }).props
+    : data.root as PageDocument["root"];
+  return createPageDocument({ ...base, root, blocks });
 }

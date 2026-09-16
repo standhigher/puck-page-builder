@@ -1,14 +1,15 @@
-import { Puck } from "@puckeditor/core";
-import { Badge, Banner, BlockStack, Button, ButtonGroup, InlineStack, Modal, Text, TextField } from "@shopify/polaris";
-import { DeleteIcon, DragHandleIcon, DuplicateIcon, LayoutSectionIcon, MenuIcon, PlusIcon, RedoIcon, UndoIcon } from "@shopify/polaris-icons";
-import { useMemo, useState, type DragEvent } from "react";
+import { Puck, usePuck } from "@puckeditor/core";
+import { Badge, Banner, BlockStack, Button, ButtonGroup, InlineStack, Text, TextField } from "@shopify/polaris";
+import { DragHandleIcon, LayoutSectionIcon, MenuIcon, RedoIcon, UndoIcon } from "@shopify/polaris-icons";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPageDocumentPuckConfig } from "../../adapters/puck/page-document-config";
-import { toEngineData } from "../../adapters/puck/page-document";
+import { fromEngineData, toEngineData } from "../../adapters/puck/page-document";
 import type { ExtensionRegistry } from "../../core/extensions";
 import type { BlockNode, JsonValue, PageDocument } from "../../core/schema/page-document";
 import { EditorProvider, useEditorContext, type EditorLoadState } from "../context/EditorContext";
 import { createAdminI18n } from "../i18n/admin";
 import type { Device } from "../state/types";
+import { blockIdAtRelativeY, nearestBlockIdAtY } from "./drop-position";
 
 export type PageDocumentEditorShellProps = {
   initialDocument: PageDocument;
@@ -27,9 +28,13 @@ export type PageDocumentEditorShellProps = {
 const deviceLabels: Record<Exclude<Device, "full">, "desktop" | "tablet" | "mobile"> = { desktop: "desktop", tablet: "tablet", mobile: "mobile" };
 
 function blockLabel(block: BlockNode, registry?: ExtensionRegistry) {
-  if (block.type === "core.text") return "文本";
-  if (block.type === "core.image") return "图片";
-  return registry?.getBlock(block.type)?.label ?? block.type;
+  return blockTypeLabel(block.type, registry);
+}
+
+function blockTypeLabel(type: string, registry?: ExtensionRegistry) {
+  if (type === "core.text") return "文本";
+  if (type === "core.image") return "图片";
+  return registry?.getBlock(type)?.label ?? type;
 }
 
 export function PageDocumentEditorShell(props: PageDocumentEditorShellProps) {
@@ -41,22 +46,57 @@ export function PageDocumentEditorShell(props: PageDocumentEditorShellProps) {
 function PageDocumentEditor({ iframe = true, registry, adminLocale, onSave, onPublish }: PageDocumentEditorShellProps) {
   const editor = useEditorContext();
   const [blockView, setBlockView] = useState<"blocks" | "outline">("blocks");
-  const [isPickerOpen, setPickerOpen] = useState(false);
-  const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [draggingLibraryType, setDraggingLibraryType] = useState<string | null>(null);
+  const canvasFrameRef = useRef<HTMLDivElement>(null);
+  const [canvasMutationVersion, setCanvasMutationVersion] = useState(0);
   const [request, setRequest] = useState<"idle" | "saving" | "publishing">("idle");
   const [notice, setNotice] = useState<"saveFailed" | "publishFailed" | "published" | null>(null);
   const i18n = createAdminI18n(adminLocale);
   const engineData = useMemo(() => toEngineData(editor.document, registry), [editor.document, registry]);
-  const config = useMemo(() => createPageDocumentPuckConfig(editor.selectBlock, registry), [editor.selectBlock, registry]);
+  const { confirmCanvasSelection, selectedBlockId, updateBlockProps } = editor;
+  const updateFromCanvasInput = useCallback((id: string, props: Record<string, JsonValue>) => {
+    // The DOM already contains this value. Sending it back through Puck would reset
+    // the contenteditable caret after every keystroke.
+    setCanvasMutationVersion((version) => version + 1);
+    updateBlockProps(id, props);
+  }, [updateBlockProps]);
+  const config = useMemo(() => createPageDocumentPuckConfig(confirmCanvasSelection, updateFromCanvasInput, selectedBlockId, registry), [confirmCanvasSelection, registry, selectedBlockId, updateFromCanvasInput]);
 
   if (editor.loadState !== "ready" && editor.loadState !== "success") return <EditorStatus state={editor.loadState} />;
 
   const blockTypes = ["core.text", "core.image", ...(registry?.blocks.map((block) => block.type) ?? [])];
-  const onDrop = (event: DragEvent<HTMLElement>, beforeId: string) => {
+  const addFromLibrary = (type: string, beforeId?: string) => {
+    const id = editor.addBlock(type, beforeId);
+    if (id) editor.requestCanvasSelection(id);
+  };
+  const getDropBeforeId = (clientY: number) => {
+    const frame = canvasFrameRef.current;
+    if (!frame) return undefined;
+    const iframe = frame.querySelector("iframe");
+    const root = iframe?.contentDocument ?? frame;
+    const offsetTop = iframe?.getBoundingClientRect().top ?? 0;
+    const elements = Array.from(root.querySelectorAll<HTMLElement>("[data-page-document-block-id]"));
+    const puckElements = elements.length > 0 ? elements : Array.from(root.querySelectorAll<HTMLElement>("[data-puck-dnd]"));
+    // Puck may render a preview through a portal when iframe rendering is disabled.
+    const blockElements = puckElements.length > 0 ? puckElements : Array.from(window.document.querySelectorAll<HTMLElement>("[data-page-document-block-id], [data-puck-dnd]"));
+    const candidates = blockElements.map((element) => ({
+      id: element.dataset.pageDocumentBlockId ?? element.dataset.puckDnd,
+      top: element.getBoundingClientRect().top,
+      height: element.getBoundingClientRect().height
+    })).filter((item): item is { id: string; top: number; height: number } => typeof item.id === "string");
+    const nearestId = nearestBlockIdAtY(candidates, clientY - offsetTop);
+    if (nearestId || candidates.length > 0) return nearestId;
+    // Puck's sandboxed iframe may not expose its document. Its relative vertical
+    // position still maps to a deterministic insertion slot in the PageDocument.
+    const rect = frame.getBoundingClientRect();
+    if (rect.height <= 0) return undefined;
+    return blockIdAtRelativeY(editor.document.blocks.map((block) => block.id), (clientY - rect.top) / rect.height);
+  };
+  const dropFromLibrary = (event: React.DragEvent<HTMLElement>) => {
     event.preventDefault();
-    const id = event.dataTransfer.getData("text/plain") || draggingId;
-    if (id) editor.reorderBlock(id, beforeId);
-    setDraggingId(null);
+    const type = event.dataTransfer.getData("application/x-page-document-block") || draggingLibraryType;
+    if (type && blockTypes.includes(type)) addFromLibrary(type, getDropBeforeId(event.clientY));
+    setDraggingLibraryType(null);
   };
   const save = async () => {
     if (!onSave || request !== "idle") return;
@@ -86,8 +126,9 @@ function PageDocumentEditor({ iframe = true, registry, adminLocale, onSave, onPu
     }
   };
 
-  return <Puck config={config} data={engineData} iframe={{ enabled: iframe }}>
+  return <Puck config={config} data={engineData} iframe={{ enabled: iframe }} onChange={(data) => editor.updateFromCanvas(fromEngineData(data, editor.document, registry))}>
     <Puck.Layout>
+      <CanvasSelectionBridge data={engineData} requestedBlockId={editor.canvasSelectionRequest} onCanvasSelected={confirmCanvasSelection} canvasMutationVersion={canvasMutationVersion} />
       <div className="pb-shell pb-shell--v04" data-testid="page-document-editor" data-page-id={editor.document.pageId} data-dirty={editor.isDirty} data-editor-state={editor.loadState}>
         <header className="pb-header">
           <InlineStack align="space-between" blockAlign="center" gap="300" wrap={false}>
@@ -109,38 +150,66 @@ function PageDocumentEditor({ iframe = true, registry, adminLocale, onSave, onPu
             <Button accessibilityLabel={i18n.t("outline")} icon={MenuIcon} pressed={blockView === "outline"} variant="tertiary" onClick={() => setBlockView("outline")} />
           </nav>
           <aside className="pb-left-panel" aria-label="PageDocument 区块">
-            <InlineStack align="space-between" blockAlign="center"><Text as="h2" variant="headingSm">{blockView === "blocks" ? i18n.t("blocks") : i18n.t("outline")}</Text><Button size="slim" icon={PlusIcon} disabled={!editor.actionState.canAdd} onClick={() => setPickerOpen(true)}>{i18n.t("addBlock")}</Button></InlineStack>
-            {editor.document.blocks.length === 0 ? <Text as="p" tone="subdued">{i18n.t("empty")}</Text> : <div className="pb-block-list" data-testid={`${blockView}-view`}>
-              {editor.document.blocks.map((block, index) => <article key={block.id} className={`pb-document-block-row ${block.id === editor.selectedBlockId ? "pb-document-block-row--selected" : ""} ${draggingId === block.id ? "pb-document-block-row--dragging" : ""}`} draggable={editor.actionState.canReorder} onDragStart={(event) => { event.dataTransfer.setData("text/plain", block.id); event.dataTransfer.effectAllowed = "move"; setDraggingId(block.id); }} onDragEnd={() => setDraggingId(null)} onDragOver={(event) => event.preventDefault()} onDrop={(event) => onDrop(event, block.id)}>
-                <span className="pb-block-handle" aria-label={`${blockLabel(block, registry)} 拖动排序`}><DragHandleIcon /></span>
-                <button type="button" className="pb-block-select" aria-pressed={block.id === editor.selectedBlockId} onClick={() => editor.selectBlock(block.id)}>
-                  <Text as="span" variant="bodySm" fontWeight="semibold">{blockLabel(block, registry)}</Text>
-                  <Text as="span" variant="bodySm" tone="subdued">{blockView === "blocks" ? block.id : block.type}</Text>
-                </button>
-                <div className="pb-block-actions" aria-label={`${blockLabel(block, registry)} 操作`}>
-                  <Button accessibilityLabel={i18n.t("moveUp")} size="slim" disabled={!editor.actionState.canReorder || index === 0} onClick={() => editor.moveBlock(block.id, -1)}>{i18n.t("moveUp")}</Button>
-                  <Button accessibilityLabel={i18n.t("moveDown")} size="slim" disabled={!editor.actionState.canReorder || index === editor.document.blocks.length - 1} onClick={() => editor.moveBlock(block.id, 1)}>{i18n.t("moveDown")}</Button>
-                  <Button accessibilityLabel={`${i18n.t("duplicate")} ${blockLabel(block, registry)}`} icon={DuplicateIcon} variant="tertiary" disabled={!editor.actionState.canDuplicate} onClick={() => editor.duplicateBlock(block.id)} />
-                  <Button accessibilityLabel={`${i18n.t("remove")} ${blockLabel(block, registry)}`} icon={DeleteIcon} variant="tertiary" tone="critical" disabled={!editor.actionState.canDelete} onClick={() => editor.deleteBlock(block.id)} />
-                </div>
-              </article>)}
+            <InlineStack align="space-between" blockAlign="center"><Text as="h2" variant="headingSm">{blockView === "blocks" ? i18n.t("blocks") : i18n.t("outline")}</Text></InlineStack>
+            {blockView === "blocks" ? <div className="pb-block-list" data-testid="blocks-view" aria-label="区块类型库" role="list">
+              {blockTypes.map((type) => <div key={type} className={`pb-document-block-row pb-document-block-row--library ${editor.selectedBlock?.type === type ? "pb-document-block-row--selected" : ""}`} data-block-type={type} data-selected={editor.selectedBlock?.type === type} role="listitem" draggable={editor.actionState.canAdd} aria-label={`${blockTypeLabel(type, registry)}，拖拽至画布以添加${editor.selectedBlock?.type === type ? "，当前选中类型" : ""}`} onDragStart={(event) => { event.dataTransfer.setData("application/x-page-document-block", type); event.dataTransfer.effectAllowed = "copy"; setDraggingLibraryType(type); }} onDragEnd={() => setDraggingLibraryType(null)}>
+                <span className="pb-library-block-title"><Text as="span" variant="bodySm" fontWeight="semibold">{blockTypeLabel(type, registry)}</Text><span className="pb-library-block-drag-icon" aria-hidden="true"><DragHandleIcon /></span></span>
+                <Text as="span" variant="bodySm" tone="subdued">{type}</Text>
+              </div>)}
+            </div> : editor.document.blocks.length === 0 ? <Text as="p" tone="subdued">{i18n.t("empty")}</Text> : <div className="pb-block-list" data-testid="outline-view">
+              {editor.document.blocks.map((block) => <button key={block.id} type="button" className={`pb-document-block-row pb-document-block-row--library ${block.id === editor.selectedBlockId ? "pb-document-block-row--selected" : ""}`} aria-pressed={block.id === editor.selectedBlockId} onClick={() => editor.requestCanvasSelection(block.id)}>
+                <Text as="span" variant="bodySm" fontWeight="semibold">{blockLabel(block, registry)}</Text>
+                <Text as="span" variant="bodySm" tone="subdued">{block.id}</Text>
+              </button>)}
             </div>}
           </aside>
           <main className="pb-canvas-area">
             <div className="pb-canvas-toolbar"><ButtonGroup variant="segmented">{(Object.keys(deviceLabels) as Array<keyof typeof deviceLabels>).map((device) => <Button key={device} pressed={editor.device === device} onClick={() => editor.setDevice(device)}>{i18n.t(deviceLabels[device])}</Button>)}</ButtonGroup></div>
-            <div className="pb-canvas-stage"><div className={`pb-canvas-frame pb-canvas-frame--${editor.device}`} data-device={editor.device}><Puck.Preview /></div>{editor.selectedBlock ? <div className="pb-canvas-overlay" aria-label={`已选择 ${blockLabel(editor.selectedBlock, registry)}`}><span>{blockLabel(editor.selectedBlock, registry)}</span><span>Selected</span></div> : null}</div>
+            <div className="pb-canvas-stage"><div ref={canvasFrameRef} className={`pb-canvas-frame pb-canvas-frame--${editor.device}`} data-device={editor.device}><Puck.Preview /></div>{draggingLibraryType ? <div className="pb-canvas-drop-target" data-testid="canvas-drop-target" role="region" aria-label="区块投放区" onDragOver={(event) => event.preventDefault()} onDrop={dropFromLibrary}>松开以添加 {blockTypeLabel(draggingLibraryType, registry)}</div> : null}{editor.selectedBlock ? <div className="pb-canvas-overlay" aria-label={`已选择 ${blockLabel(editor.selectedBlock, registry)}`}><span>{blockLabel(editor.selectedBlock, registry)}</span><span>Selected</span></div> : null}</div>
           </main>
           <aside className="pb-right-panel" aria-label="PageDocument 属性">
             <Text as="h2" variant="headingSm">{i18n.t("properties")}</Text>
             {editor.selectedBlock ? <DocumentInspector block={editor.selectedBlock} registry={registry} disabled={!editor.actionState.canEdit} onChange={(props) => editor.updateBlockProps(editor.selectedBlock!.id, props)} /> : <Text as="p" tone="subdued">{i18n.t("selectBlock")}</Text>}
           </aside>
         </div>
-        <Modal instant open={isPickerOpen} onClose={() => setPickerOpen(false)} title={i18n.t("addBlock")} primaryAction={{ content: "关闭", onAction: () => setPickerOpen(false) }}>
-          <Modal.Section><InlineStack gap="200" wrap>{blockTypes.map((type) => <Button key={type} disabled={!editor.actionState.canAdd} onClick={() => { editor.addBlock(type); setPickerOpen(false); }}>{type === "core.text" ? "文本" : type === "core.image" ? "图片" : registry?.getBlock(type)?.label ?? type}</Button>)}</InlineStack></Modal.Section>
-        </Modal>
       </div>
     </Puck.Layout>
   </Puck>;
+}
+
+/** Bridges list-originated selection requests into Puck, then waits for Puck's selected item before updating the inspector. */
+function CanvasSelectionBridge({ data, requestedBlockId, onCanvasSelected, canvasMutationVersion }: { data: ReturnType<typeof toEngineData>; requestedBlockId: string | null; onCanvasSelected: (id: string | null) => void; canvasMutationVersion: number }) {
+  const puck = usePuck();
+  const lastSelectedId = useRef<string | null>(null);
+  const lastSyncedData = useRef<string | null>(null);
+  const lastCanvasMutationVersion = useRef(0);
+
+  const serializedData = JSON.stringify(data);
+  useEffect(() => {
+    if (lastSyncedData.current === serializedData) return;
+    lastSyncedData.current = serializedData;
+    if (canvasMutationVersion > lastCanvasMutationVersion.current) {
+      lastCanvasMutationVersion.current = canvasMutationVersion;
+      return;
+    }
+    puck.dispatch({ type: "setData", data });
+  }, [canvasMutationVersion, data, puck, serializedData]);
+
+  useEffect(() => {
+    if (!requestedBlockId) return;
+    const selector = puck.getSelectorForId(requestedBlockId);
+    if (selector) puck.dispatch({ type: "setUi", ui: { itemSelector: selector } });
+  }, [puck, requestedBlockId]);
+
+  const selectedId = typeof puck.selectedItem?.props.id === "string" ? puck.selectedItem.props.id : null;
+  useEffect(() => {
+    if (selectedId && lastSelectedId.current !== selectedId) {
+      lastSelectedId.current = selectedId;
+      onCanvasSelected(selectedId);
+    }
+  }, [onCanvasSelected, selectedId]);
+
+  return null;
 }
 
 function EditorStatus({ state }: { state: Exclude<EditorLoadState, "ready" | "success"> }) {

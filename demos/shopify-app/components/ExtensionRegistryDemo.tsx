@@ -6,7 +6,6 @@ import { useMemo, useState } from "react";
 import { PageDocumentEditorShell } from "@standhigher/puck-page-builder";
 import { bestTrackExtension } from "../lib/besttrack-extension";
 import { demoPageDocument } from "../lib/page-document-demo";
-import { loadSessionDocument, saveSessionDocument } from "../lib/page-document-session";
 
 export function ExtensionRegistryDemo() {
   const [enabled, setEnabled] = useState(true);
@@ -39,6 +38,6 @@ export function ExtensionRegistryDemo() {
         </BlockStack>
       </Card>
     </Page>
-    <PageDocumentEditorShell initialDocument={demoPageDocument} registry={registry} loadDocument={loadSessionDocument} onDocumentChange={saveSessionDocument} />
+    <PageDocumentEditorShell initialDocument={demoPageDocument} registry={registry} />
   </>;
 }

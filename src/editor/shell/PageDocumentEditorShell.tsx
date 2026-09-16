@@ -1,100 +1,129 @@
 import { Puck } from "@puckeditor/core";
-import { Badge, BlockStack, Button, ButtonGroup, InlineStack, Modal, Select, Text, TextField } from "@shopify/polaris";
-import { ArrowLeftIcon, ImageIcon, LayoutSectionIcon, MenuIcon, ViewIcon } from "@shopify/polaris-icons";
-import { useEffect, useMemo, useState } from "react";
+import { Badge, Banner, BlockStack, Button, ButtonGroup, InlineStack, Modal, Text, TextField } from "@shopify/polaris";
+import { DeleteIcon, DragHandleIcon, DuplicateIcon, LayoutSectionIcon, MenuIcon, PlusIcon, RedoIcon, UndoIcon } from "@shopify/polaris-icons";
+import { useMemo, useState, type DragEvent } from "react";
 import { createPageDocumentPuckConfig } from "../../adapters/puck/page-document-config";
 import { toEngineData } from "../../adapters/puck/page-document";
 import type { ExtensionRegistry } from "../../core/extensions";
 import type { BlockNode, JsonValue, PageDocument } from "../../core/schema/page-document";
-import type { Device, Zoom } from "../state/types";
+import { EditorProvider, useEditorContext, type EditorLoadState } from "../context/EditorContext";
+import { createAdminI18n } from "../i18n/admin";
+import type { Device } from "../state/types";
 
 export type PageDocumentEditorShellProps = {
   initialDocument: PageDocument;
   iframe?: boolean;
   registry?: ExtensionRegistry;
-  loadDocument?: (fallback: PageDocument) => PageDocument;
+  /** Presentation states are explicit so host applications can provide a consistent Admin experience. */
+  loadState?: EditorLoadState;
+  adminLocale?: string;
   onDocumentChange?: (document: PageDocument) => void;
 };
 
-const deviceLabels: Record<Device, string> = { desktop: "Desktop", tablet: "Tablet", mobile: "Mobile", full: "Full" };
+const deviceLabels: Record<Exclude<Device, "full">, "desktop" | "tablet" | "mobile"> = { desktop: "desktop", tablet: "tablet", mobile: "mobile" };
 
-function blockLabel(block: BlockNode) {
-  return block.type === "core.text" ? "文本" : block.type === "core.image" ? "图片" : block.type;
+function blockLabel(block: BlockNode, registry?: ExtensionRegistry) {
+  if (block.type === "core.text") return "文本";
+  if (block.type === "core.image") return "图片";
+  return registry?.getBlock(block.type)?.label ?? block.type;
 }
 
-export function PageDocumentEditorShell({ initialDocument, iframe = true, registry, loadDocument, onDocumentChange }: PageDocumentEditorShellProps) {
-  const [document, setDocument] = useState(() => loadDocument?.(initialDocument) ?? initialDocument);
-  const [selectedBlockId, setSelectedBlockId] = useState(initialDocument.blocks[0]?.id ?? null);
+export function PageDocumentEditorShell(props: PageDocumentEditorShellProps) {
+  return <EditorProvider initialDocument={props.initialDocument} registry={props.registry} loadState={props.loadState} leaveWarning={createAdminI18n(props.adminLocale).t("leaveWarning")} onDocumentChange={props.onDocumentChange}>
+    <PageDocumentEditor {...props} />
+  </EditorProvider>;
+}
+
+function PageDocumentEditor({ iframe = true, registry, adminLocale }: PageDocumentEditorShellProps) {
+  const editor = useEditorContext();
   const [blockView, setBlockView] = useState<"blocks" | "outline">("blocks");
-  const [device, setDevice] = useState<Device>("desktop");
-  const [zoom, setZoom] = useState<Zoom>("auto");
-  const [isDocumentOpen, setDocumentOpen] = useState(false);
-  const selectedBlock = document.blocks.find((block) => block.id === selectedBlockId) ?? null;
-  const engineData = useMemo(() => toEngineData(document, registry), [document, registry]);
-  const config = useMemo(() => createPageDocumentPuckConfig((id) => setSelectedBlockId(id), registry), [registry]);
+  const [isPickerOpen, setPickerOpen] = useState(false);
+  const [draggingId, setDraggingId] = useState<string | null>(null);
+  const i18n = createAdminI18n(adminLocale);
+  const engineData = useMemo(() => toEngineData(editor.document, registry), [editor.document, registry]);
+  const config = useMemo(() => createPageDocumentPuckConfig(editor.selectBlock, registry), [editor.selectBlock, registry]);
 
-  useEffect(() => onDocumentChange?.(document), [document, onDocumentChange]);
+  if (editor.loadState !== "ready" && editor.loadState !== "success") return <EditorStatus state={editor.loadState} />;
 
-  const updateBlockProps = (id: string, props: Record<string, JsonValue>) => {
-    setDocument((current) => ({ ...current, blocks: current.blocks.map((block) => block.id === id ? { ...block, props: { ...block.props, ...props } } : block) }));
+  const blockTypes = ["core.text", "core.image", ...(registry?.blocks.map((block) => block.type) ?? [])];
+  const onDrop = (event: DragEvent<HTMLElement>, beforeId: string) => {
+    event.preventDefault();
+    const id = event.dataTransfer.getData("text/plain") || draggingId;
+    if (id) editor.reorderBlock(id, beforeId);
+    setDraggingId(null);
   };
 
   return <Puck config={config} data={engineData} iframe={{ enabled: iframe }}>
     <Puck.Layout>
-      <div className="pb-shell" data-testid="page-document-editor" data-page-id={document.pageId}>
+      <div className="pb-shell pb-shell--v04" data-testid="page-document-editor" data-page-id={editor.document.pageId} data-dirty={editor.isDirty} data-editor-state={editor.loadState}>
         <header className="pb-header">
           <InlineStack align="space-between" blockAlign="center" gap="300" wrap={false}>
-            <InlineStack gap="200" blockAlign="center" wrap={false}>
-              <Button accessibilityLabel="返回页面列表" icon={ArrowLeftIcon} variant="tertiary" />
-              <div className="pb-page-title"><Text as="h1" variant="headingSm">{document.settings.seoTitle ?? document.pageId}</Text><Text as="p" variant="bodySm" tone="subdued">PageDocument V{document.schemaVersion} · {document.target}</Text></div>
-              <Badge tone="info">本地文档</Badge>
-            </InlineStack>
+            <div className="pb-page-title"><Text as="h1" variant="headingSm">{editor.document.settings.seoTitle ?? editor.document.pageId}</Text><Text as="p" variant="bodySm" tone="subdued">PageDocument V{editor.document.schemaVersion} · {editor.document.target}</Text></div>
             <InlineStack gap="150" blockAlign="center" wrap={false}>
-              <Button icon={ViewIcon} url="/page-builder/preview">Web Renderer</Button>
-              <Button onClick={() => setDocumentOpen(true)}>导出 PageDocument</Button>
-              <Button variant="primary" disabled>保存草稿</Button>
+              <Badge tone={editor.isDirty ? "attention" : "success"}>{editor.isDirty ? i18n.t("unsaved") : i18n.t("saved")}</Badge>
+              <Button accessibilityLabel={i18n.t("undo")} icon={UndoIcon} variant="tertiary" disabled={!editor.actionState.canUndo} onClick={editor.undo} />
+              <Button accessibilityLabel={i18n.t("redo")} icon={RedoIcon} variant="tertiary" disabled={!editor.actionState.canRedo} onClick={editor.redo} />
             </InlineStack>
           </InlineStack>
         </header>
+        {editor.loadState === "success" ? <Banner tone="success">{i18n.t("success")}</Banner> : null}
         <div className="pb-workspace pb-workspace--document">
           <nav className="pb-tool-rail" aria-label="编辑器工具">
-            <Button accessibilityLabel="区块" icon={LayoutSectionIcon} pressed={blockView === "blocks"} variant="tertiary" onClick={() => setBlockView("blocks")} />
-            <Button accessibilityLabel="结构" icon={MenuIcon} pressed={blockView === "outline"} variant="tertiary" onClick={() => setBlockView("outline")} />
+            <Button accessibilityLabel={i18n.t("blocks")} icon={LayoutSectionIcon} pressed={blockView === "blocks"} variant="tertiary" onClick={() => setBlockView("blocks")} />
+            <Button accessibilityLabel={i18n.t("outline")} icon={MenuIcon} pressed={blockView === "outline"} variant="tertiary" onClick={() => setBlockView("outline")} />
           </nav>
           <aside className="pb-left-panel" aria-label="PageDocument 区块">
-            <Text as="h2" variant="headingSm">{blockView === "blocks" ? "区块" : "结构"}</Text>
-            <Text as="p" variant="bodySm" tone="subdued">同一 PageDocument 文档视图</Text>
-            <div className="pb-block-list" data-testid={`${blockView}-view`}>
-              {document.blocks.map((block) => <button key={block.id} type="button" className={`pb-document-block ${block.id === selectedBlockId ? "pb-document-block--selected" : ""}`} aria-pressed={block.id === selectedBlockId} onClick={() => setSelectedBlockId(block.id)}>
-                {block.type === "core.image" ? <ImageIcon /> : <LayoutSectionIcon />}<span>{blockLabel(block)}</span><small>{block.id}</small>
-              </button>)}
-            </div>
+            <InlineStack align="space-between" blockAlign="center"><Text as="h2" variant="headingSm">{blockView === "blocks" ? i18n.t("blocks") : i18n.t("outline")}</Text><Button size="slim" icon={PlusIcon} disabled={!editor.actionState.canAdd} onClick={() => setPickerOpen(true)}>{i18n.t("addBlock")}</Button></InlineStack>
+            {editor.document.blocks.length === 0 ? <Text as="p" tone="subdued">{i18n.t("empty")}</Text> : <div className="pb-block-list" data-testid={`${blockView}-view`}>
+              {editor.document.blocks.map((block, index) => <article key={block.id} className={`pb-document-block-row ${block.id === editor.selectedBlockId ? "pb-document-block-row--selected" : ""} ${draggingId === block.id ? "pb-document-block-row--dragging" : ""}`} draggable={editor.actionState.canReorder} onDragStart={(event) => { event.dataTransfer.setData("text/plain", block.id); event.dataTransfer.effectAllowed = "move"; setDraggingId(block.id); }} onDragEnd={() => setDraggingId(null)} onDragOver={(event) => event.preventDefault()} onDrop={(event) => onDrop(event, block.id)}>
+                <span className="pb-block-handle" aria-label={`${blockLabel(block, registry)} 拖动排序`}><DragHandleIcon /></span>
+                <button type="button" className="pb-block-select" aria-pressed={block.id === editor.selectedBlockId} onClick={() => editor.selectBlock(block.id)}>
+                  <Text as="span" variant="bodySm" fontWeight="semibold">{blockLabel(block, registry)}</Text>
+                  <Text as="span" variant="bodySm" tone="subdued">{blockView === "blocks" ? block.id : block.type}</Text>
+                </button>
+                <div className="pb-block-actions" aria-label={`${blockLabel(block, registry)} 操作`}>
+                  <Button accessibilityLabel={i18n.t("moveUp")} size="slim" disabled={!editor.actionState.canReorder || index === 0} onClick={() => editor.moveBlock(block.id, -1)}>{i18n.t("moveUp")}</Button>
+                  <Button accessibilityLabel={i18n.t("moveDown")} size="slim" disabled={!editor.actionState.canReorder || index === editor.document.blocks.length - 1} onClick={() => editor.moveBlock(block.id, 1)}>{i18n.t("moveDown")}</Button>
+                  <Button accessibilityLabel={`${i18n.t("duplicate")} ${blockLabel(block, registry)}`} icon={DuplicateIcon} variant="tertiary" disabled={!editor.actionState.canDuplicate} onClick={() => editor.duplicateBlock(block.id)} />
+                  <Button accessibilityLabel={`${i18n.t("remove")} ${blockLabel(block, registry)}`} icon={DeleteIcon} variant="tertiary" tone="critical" disabled={!editor.actionState.canDelete} onClick={() => editor.deleteBlock(block.id)} />
+                </div>
+              </article>)}
+            </div>}
           </aside>
           <main className="pb-canvas-area">
-            <div className="pb-canvas-toolbar"><InlineStack align="space-between" blockAlign="center" gap="200" wrap><ButtonGroup variant="segmented">{(Object.keys(deviceLabels) as Device[]).map((item) => <Button key={item} pressed={device === item} onClick={() => setDevice(item)}>{deviceLabels[item]}</Button>)}</ButtonGroup><Select label="缩放" labelHidden value={zoom} options={[{ label: "Auto", value: "auto" }, { label: "70%", value: "70" }, { label: "100%", value: "100" }]} onChange={(value) => setZoom(value as Zoom)} /></InlineStack></div>
-            <div className="pb-canvas-stage"><div className={`pb-canvas-frame pb-canvas-frame--${device} pb-canvas-frame--zoom-${zoom}`} data-device={device} data-zoom={zoom}><Puck.Preview /></div>{selectedBlock ? <div className="pb-canvas-overlay" aria-label={`已选择 ${blockLabel(selectedBlock)}`}><span>{blockLabel(selectedBlock)}</span><span>Selected</span></div> : null}</div>
+            <div className="pb-canvas-toolbar"><ButtonGroup variant="segmented">{(Object.keys(deviceLabels) as Array<keyof typeof deviceLabels>).map((device) => <Button key={device} pressed={editor.device === device} onClick={() => editor.setDevice(device)}>{i18n.t(deviceLabels[device])}</Button>)}</ButtonGroup></div>
+            <div className="pb-canvas-stage"><div className={`pb-canvas-frame pb-canvas-frame--${editor.device}`} data-device={editor.device}><Puck.Preview /></div>{editor.selectedBlock ? <div className="pb-canvas-overlay" aria-label={`已选择 ${blockLabel(editor.selectedBlock, registry)}`}><span>{blockLabel(editor.selectedBlock, registry)}</span><span>Selected</span></div> : null}</div>
           </main>
           <aside className="pb-right-panel" aria-label="PageDocument 属性">
-            <Text as="h2" variant="headingSm">属性</Text>
-            {selectedBlock ? <DocumentInspector block={selectedBlock} onChange={(props) => updateBlockProps(selectedBlock.id, props)} /> : <Text as="p" tone="subdued">选择一个区块以编辑。</Text>}
+            <Text as="h2" variant="headingSm">{i18n.t("properties")}</Text>
+            {editor.selectedBlock ? <DocumentInspector block={editor.selectedBlock} registry={registry} disabled={!editor.actionState.canEdit} onChange={(props) => editor.updateBlockProps(editor.selectedBlock!.id, props)} /> : <Text as="p" tone="subdued">{i18n.t("selectBlock")}</Text>}
           </aside>
         </div>
-        <Modal instant open={isDocumentOpen} onClose={() => setDocumentOpen(false)} title="导出 PageDocument" primaryAction={{ content: "关闭", onAction: () => setDocumentOpen(false) }}>
-          <Modal.Section><pre className="pb-document-export">{JSON.stringify(document, null, 2)}</pre></Modal.Section>
+        <Modal instant open={isPickerOpen} onClose={() => setPickerOpen(false)} title={i18n.t("addBlock")} primaryAction={{ content: "关闭", onAction: () => setPickerOpen(false) }}>
+          <Modal.Section><InlineStack gap="200" wrap>{blockTypes.map((type) => <Button key={type} disabled={!editor.actionState.canAdd} onClick={() => { editor.addBlock(type); setPickerOpen(false); }}>{type === "core.text" ? "文本" : type === "core.image" ? "图片" : registry?.getBlock(type)?.label ?? type}</Button>)}</InlineStack></Modal.Section>
         </Modal>
       </div>
     </Puck.Layout>
   </Puck>;
 }
 
-function DocumentInspector({ block, onChange }: { block: BlockNode; onChange: (props: Record<string, JsonValue>) => void }) {
+function EditorStatus({ state }: { state: Exclude<EditorLoadState, "ready" | "success"> }) {
+  const i18n = createAdminI18n();
+  const tone = state === "error" ? "critical" : state === "disabled" ? "warning" : "info";
+  const message = state === "loading" ? i18n.t("loading") : state === "empty" ? i18n.t("empty") : state === "error" ? i18n.t("error") : i18n.t("disabled");
+  return <div className="pb-editor-status" data-testid="page-document-editor-state" data-editor-state={state}><Banner tone={tone} title={message}>{state === "disabled" ? i18n.t("disabled") : message}</Banner></div>;
+}
+
+function DocumentInspector({ block, registry, disabled, onChange }: { block: BlockNode; registry?: ExtensionRegistry; disabled: boolean; onChange: (props: Record<string, JsonValue>) => void }) {
+  const definition = registry?.getBlock(block.type);
   return <BlockStack gap="300" data-testid="document-inspector">
     <Badge>{block.type}</Badge>
-    <Text as="p" variant="headingSm">{blockLabel(block)}</Text>
-    {block.type === "core.text" ? <TextField label="文本内容" value={typeof block.props.content === "string" ? block.props.content : ""} onChange={(content) => onChange({ content })} autoComplete="off" multiline={4} /> : null}
-    {block.type === "core.image" ? <>
-      <TextField label="图片 URL" value={typeof block.props.src === "string" ? block.props.src : ""} onChange={(src) => onChange({ src })} autoComplete="off" />
-      <TextField label="替代文本" value={typeof block.props.alt === "string" ? block.props.alt : ""} onChange={(alt) => onChange({ alt })} autoComplete="off" />
-    </> : null}
+    <Text as="p" variant="headingSm">{blockLabel(block, registry)}</Text>
+    {block.type === "core.text" ? <TextField label="文本内容" value={typeof block.props.content === "string" ? block.props.content : ""} onChange={(content) => onChange({ content })} autoComplete="off" multiline={4} disabled={disabled} /> : null}
+    {block.type === "core.image" ? <><TextField label="图片 URL" value={typeof block.props.src === "string" ? block.props.src : ""} onChange={(src) => onChange({ src })} autoComplete="off" disabled={disabled} /><TextField label="替代文本" value={typeof block.props.alt === "string" ? block.props.alt : ""} onChange={(alt) => onChange({ alt })} autoComplete="off" disabled={disabled} /></> : null}
+    {definition ? Object.entries(definition.fields).map(([name, field]) => {
+      const Field = registry?.getField(field.field)?.component;
+      return Field ? <Field key={name} value={block.props[name]} onChange={(value) => onChange({ [name]: value as JsonValue })} /> : null;
+    }) : null}
   </BlockStack>;
 }

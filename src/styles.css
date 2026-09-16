@@ -46,6 +46,14 @@ button:focus-visible, [role="button"]:focus-visible { outline: 2px solid var(--b
 .pb-document-block svg { width: 18px; height: 18px; color: var(--builder-text-muted); }
 .pb-document-block span { font-size: 14px; font-weight: 600; }
 .pb-document-block small { grid-column: 2; color: var(--builder-text-muted); }
+.pb-document-block-row { display: flex; align-items: center; gap: var(--builder-space-2); padding: var(--builder-space-2); border: 1px solid transparent; border-radius: var(--builder-panel-radius); background: transparent; }
+.pb-document-block-row:hover { background: var(--builder-surface-subtle); }
+.pb-document-block-row--selected { border-color: var(--builder-accent); background: var(--builder-accent-subtle); }
+.pb-document-block-row--dragging { opacity: .5; }
+.pb-document-block-row .pb-block-actions { margin-left: auto; }
+.pb-document-block-row:hover .pb-block-actions, .pb-document-block-row--selected .pb-block-actions, .pb-document-block-row:focus-within .pb-block-actions { display: flex; }
+.pb-editor-status { display: grid; place-items: center; min-height: min(50vh, 420px); padding: var(--builder-space-6); }
+.pb-shell--v04 > .Polaris-Banner { margin: var(--builder-space-3) var(--builder-space-4) 0; }
 .pb-document-canvas__text, .pb-document-canvas__image { max-width: 760px; margin: 0 auto; padding: 48px; color: #1d2939; background: #fff; cursor: pointer; }
 .pb-document-canvas__text { font-size: clamp(32px, 4vw, 52px); font-weight: 650; line-height: 1.1; letter-spacing: -.03em; }
 .pb-document-canvas__text p { margin: 0; }

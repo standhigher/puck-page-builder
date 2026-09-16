@@ -59,3 +59,17 @@ removed, then run its Toolbar Action and Template check when it is enabled.
 V0.3 does **not** introduce complete block authoring, drag-and-drop, persistent
 drafts, live business-data requests, publishing, version rollback, or Shopify
 menu mutations.
+
+## V0.4 scope boundary
+
+V0.4 adds client-side PageDocument authoring to the same Shopify Demo: add,
+copy, delete and native drag-sort blocks; configure their properties; select a
+block across outline, canvas and inspector; undo/redo (including Cmd/Ctrl+Z and
+Cmd/Ctrl+Shift+Z); an unsaved-change leave warning; and desktop, tablet and
+mobile canvas previews. `EditorProvider` exposes the document actions and their
+availability through `EditorActionState`. The Admin copy catalog starts with
+Chinese and English, while the page locale remains part of `PageDocument`.
+
+The V0.4 history is in memory only. It deliberately adds no draft persistence,
+migration, publish, versioning, or backend request capability. Its interaction
+checks are contained in `demos/v0.4`.

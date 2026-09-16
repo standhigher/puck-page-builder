@@ -40,6 +40,23 @@ button:focus-visible, [role="button"]:focus-visible { outline: 2px solid var(--b
 .pb-inspector-tabs { display: grid; grid-template-columns: repeat(3, 1fr); padding: var(--builder-space-1); border: 1px solid var(--builder-border); border-radius: var(--builder-control-radius); background: var(--builder-surface-subtle); }
 .pb-inspector-tabs button { min-height: 32px; border: 0; border-radius: var(--builder-control-radius); color: var(--builder-text-muted); background: transparent; font: inherit; font-size: 13px; cursor: pointer; }
 .pb-inspector-tabs .pb-inspector-tab--selected { color: var(--builder-text); background: var(--builder-surface); box-shadow: 0 1px 2px rgba(26, 26, 26, .12); }
+.pb-document-block { display: grid; grid-template-columns: 20px minmax(0, 1fr); gap: var(--builder-space-1) var(--builder-space-2); width: 100%; padding: var(--builder-space-3); border: 1px solid transparent; border-radius: var(--builder-panel-radius); text-align: left; color: var(--builder-text); background: transparent; cursor: pointer; }
+.pb-document-block:hover { background: var(--builder-surface-subtle); }
+.pb-document-block--selected { border-color: var(--builder-accent); background: var(--builder-accent-subtle); }
+.pb-document-block svg { width: 18px; height: 18px; color: var(--builder-text-muted); }
+.pb-document-block span { font-size: 14px; font-weight: 600; }
+.pb-document-block small { grid-column: 2; color: var(--builder-text-muted); }
+.pb-document-canvas__text, .pb-document-canvas__image { max-width: 760px; margin: 0 auto; padding: 48px; color: #1d2939; background: #fff; cursor: pointer; }
+.pb-document-canvas__text { font-size: clamp(32px, 4vw, 52px); font-weight: 650; line-height: 1.1; letter-spacing: -.03em; }
+.pb-document-canvas__text p { margin: 0; }
+.pb-document-canvas__image { padding-top: 0; }
+.pb-document-canvas__image img { display: block; width: 100%; border-radius: 12px; }
+.pb-document-export { max-height: 420px; padding: var(--builder-space-3); overflow: auto; border-radius: var(--builder-control-radius); color: var(--builder-text); background: var(--builder-surface-subtle); font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; white-space: pre-wrap; }
+.pb-web-renderer { min-height: 100vh; padding: 72px clamp(24px, 10vw, 180px); color: #1d2939; background: #fff; font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+.pb-web-renderer__text { max-width: 760px; margin: 0 auto 40px; font-size: clamp(32px, 5vw, 64px); font-weight: 650; line-height: 1.08; letter-spacing: -.04em; }
+.pb-web-renderer__text p { margin: 0; }
+.pb-web-renderer__image { max-width: 900px; margin: 0 auto; }
+.pb-web-renderer__image img { display: block; width: 100%; border-radius: 18px; }
 
 /* Storefront-only presentation rendered inside the Puck iframe. */
 .bt-storefront { min-height: 100%; padding: 48px clamp(24px, 7vw, 96px); color: #18212b; background: #fffdf9; font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }

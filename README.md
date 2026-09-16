@@ -46,10 +46,14 @@ pnpm build
 shopify app config validate --path demos/shopify-app --client-id b619d8b384633280bb72ad2004be8993
 ```
 
-## V0.1.1 scope boundary
+## V0.2 scope boundary
 
-This version provides Builder UI tokens, a single 56px toolbar, 64px Tool Rail,
-collapsible blocks/outline and inspector panels, a Puck iframe storefront canvas,
-selection overlay, and Shopify App Bridge / Session Token / App Proxy validation
-foundation. It does **not** introduce PageDocument, persistent drafts, business
-data sources, real publishing, version rollback, or Shopify menu mutations.
+V0.2 adds a framework-independent `PageDocument V1`, strict schema validation,
+Text and Image example blocks, Puck `toEngineData` / `fromEngineData` adapters,
+and a minimal `WebRenderer`. The Demo loads the same PageDocument into the
+editor and `/page-builder/preview`; **导出 PageDocument** shows the current,
+edited document without storing Puck data.
+
+This version does **not** introduce persistent drafts, Extension Registry,
+business data sources, real publishing, version rollback, or Shopify menu
+mutations.

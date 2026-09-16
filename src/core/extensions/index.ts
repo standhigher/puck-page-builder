@@ -1,0 +1,2 @@
+export { createExtensionRegistry, ExtensionRegistry, ExtensionRegistryError, type ExtensionRegistryErrorCode } from "./registry";
+export type { BlockDefinition, DataSourceDefinition, EditorAction, EditorActionPosition, ExtensionActionContext, ExtensionRegistryOptions, ExtensionTarget, FieldConfig, FieldDefinition, FieldProps, LifecycleHooks, PageBuilderExtension, RendererDefinition, TemplateDefinition, UISlotContribution, UISlotName, ValidationIssue } from "./types";

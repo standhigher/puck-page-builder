@@ -1,4 +1,5 @@
 import type { Data } from "@puckeditor/core";
+import type { ExtensionRegistry } from "../../core/extensions";
 import { createPageDocument, type BlockNode, type PageDocument } from "../../core/schema/page-document";
 
 const documentToPuckType: Record<string, string> = {
@@ -8,23 +9,23 @@ const documentToPuckType: Record<string, string> = {
 
 const puckToDocumentType = Object.fromEntries(Object.entries(documentToPuckType).map(([documentType, puckType]) => [puckType, documentType]));
 
-function toEngineBlock(block: BlockNode) {
-  const type = documentToPuckType[block.type];
+function toEngineBlock(block: BlockNode, registry?: ExtensionRegistry) {
+  const type = documentToPuckType[block.type] ?? (registry?.getBlock(block.type) ? block.type : undefined);
   if (!type) throw new Error(`V0.2 不支持转换区块类型：${block.type}`);
   return { type, props: { id: block.id, ...block.props } };
 }
 
-export function toEngineData(document: PageDocument): Data {
+export function toEngineData(document: PageDocument, registry?: ExtensionRegistry): Data {
   return {
     root: { ...document.root },
-    content: document.blocks.map(toEngineBlock)
+    content: document.blocks.map((block) => toEngineBlock(block, registry))
   };
 }
 
-export function fromEngineData(data: Data, base: PageDocument): PageDocument {
+export function fromEngineData(data: Data, base: PageDocument, registry?: ExtensionRegistry): PageDocument {
   const previousBlocks = new Map(base.blocks.map((block) => [block.id, block]));
   const blocks = data.content.flatMap((item) => {
-    const type = puckToDocumentType[item.type];
+    const type = puckToDocumentType[item.type] ?? (registry?.getBlock(item.type) ? item.type : undefined);
     const id = typeof item.props.id === "string" ? item.props.id : null;
     if (!type || !id) return [];
     const previous = previousBlocks.get(id);

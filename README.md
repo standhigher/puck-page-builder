@@ -46,14 +46,16 @@ pnpm build
 shopify app config validate --path demos/shopify-app --client-id b619d8b384633280bb72ad2004be8993
 ```
 
-## V0.2 scope boundary
+## V0.3 scope boundary
 
-V0.2 adds a framework-independent `PageDocument V1`, strict schema validation,
-Text and Image example blocks, Puck `toEngineData` / `fromEngineData` adapters,
-and a minimal `WebRenderer`. The Demo loads the same PageDocument into the
-editor and `/page-builder/preview`; **导出 PageDocument** shows the current,
-edited document without storing Puck data.
+V0.3 adds the framework-independent Extension API and immutable Registry for
+Block, Field, Action, Template, Renderer, DataSource, Lifecycle Hooks and UI
+Slots. Business code consumes the separate
+`@standhigher/puck-page-builder/extensions` entry point, which does not expose
+Puck types. The Shopify Demo includes an independently assembled BestTrack
+extension: turn it off to confirm that all of its registered capabilities are
+removed, then run its Toolbar Action and Template check when it is enabled.
 
-This version does **not** introduce persistent drafts, Extension Registry,
-business data sources, real publishing, version rollback, or Shopify menu
-mutations.
+V0.3 does **not** introduce complete block authoring, drag-and-drop, persistent
+drafts, live business-data requests, publishing, version rollback, or Shopify
+menu mutations.

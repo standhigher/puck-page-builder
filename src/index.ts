@@ -5,3 +5,4 @@ export { createPageDocument, validatePageDocument } from "./core/schema/page-doc
 export type { BlockNode, DataBinding, JsonValue, PageDocument, PageDocumentIssue, PageSettings, RenderTarget } from "./core/schema/page-document";
 export { fromEngineData, toEngineData } from "./adapters/puck/page-document";
 export { WebRenderer, type WebRendererProps } from "./renderer/web/WebRenderer";
+export * from "./core/extensions";

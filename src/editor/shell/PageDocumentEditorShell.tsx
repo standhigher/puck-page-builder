@@ -4,12 +4,14 @@ import { ArrowLeftIcon, ImageIcon, LayoutSectionIcon, MenuIcon, ViewIcon } from 
 import { useEffect, useMemo, useState } from "react";
 import { createPageDocumentPuckConfig } from "../../adapters/puck/page-document-config";
 import { toEngineData } from "../../adapters/puck/page-document";
+import type { ExtensionRegistry } from "../../core/extensions";
 import type { BlockNode, JsonValue, PageDocument } from "../../core/schema/page-document";
 import type { Device, Zoom } from "../state/types";
 
 export type PageDocumentEditorShellProps = {
   initialDocument: PageDocument;
   iframe?: boolean;
+  registry?: ExtensionRegistry;
   loadDocument?: (fallback: PageDocument) => PageDocument;
   onDocumentChange?: (document: PageDocument) => void;
 };
@@ -20,7 +22,7 @@ function blockLabel(block: BlockNode) {
   return block.type === "core.text" ? "文本" : block.type === "core.image" ? "图片" : block.type;
 }
 
-export function PageDocumentEditorShell({ initialDocument, iframe = true, loadDocument, onDocumentChange }: PageDocumentEditorShellProps) {
+export function PageDocumentEditorShell({ initialDocument, iframe = true, registry, loadDocument, onDocumentChange }: PageDocumentEditorShellProps) {
   const [document, setDocument] = useState(() => loadDocument?.(initialDocument) ?? initialDocument);
   const [selectedBlockId, setSelectedBlockId] = useState(initialDocument.blocks[0]?.id ?? null);
   const [blockView, setBlockView] = useState<"blocks" | "outline">("blocks");
@@ -28,8 +30,8 @@ export function PageDocumentEditorShell({ initialDocument, iframe = true, loadDo
   const [zoom, setZoom] = useState<Zoom>("auto");
   const [isDocumentOpen, setDocumentOpen] = useState(false);
   const selectedBlock = document.blocks.find((block) => block.id === selectedBlockId) ?? null;
-  const engineData = useMemo(() => toEngineData(document), [document]);
-  const config = useMemo(() => createPageDocumentPuckConfig((id) => setSelectedBlockId(id)), []);
+  const engineData = useMemo(() => toEngineData(document, registry), [document, registry]);
+  const config = useMemo(() => createPageDocumentPuckConfig((id) => setSelectedBlockId(id), registry), [registry]);
 
   useEffect(() => onDocumentChange?.(document), [document, onDocumentChange]);
 

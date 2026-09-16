@@ -1,6 +1,19 @@
 import type { Config } from "@puckeditor/core";
+import type { ExtensionRegistry } from "../../core/extensions";
 
-export function createPageDocumentPuckConfig(onSelect: (id: string) => void): Config {
+export function createPageDocumentPuckConfig(onSelect: (id: string) => void, registry?: ExtensionRegistry): Config {
+  const extensionComponents = Object.fromEntries((registry?.blocks ?? []).flatMap((block) => {
+    const BlockRenderer = block.render.web;
+    if (!BlockRenderer) return [];
+    return [[block.type, {
+      render: (props: Record<string, unknown>) => {
+        const id = typeof props.id === "string" ? props.id : `unknown-${block.type}`;
+        return <section className="pb-document-canvas__extension" aria-label={`Select ${block.label} in canvas`} role="button" tabIndex={0} onClick={() => onSelect(id)} onKeyDown={(event) => {
+          if (event.key === "Enter" || event.key === " ") onSelect(id);
+        }}><BlockRenderer {...props} /></section>;
+      }
+    }]];
+  }));
   return {
     components: {
       Text: {
@@ -21,7 +34,8 @@ export function createPageDocumentPuckConfig(onSelect: (id: string) => void): Co
             if (event.key === "Enter" || event.key === " ") onSelect(id);
           }}><img src={src} alt={alt} /></figure>;
         }
-      }
+      },
+      ...extensionComponents
     }
-  };
+  } as Config;
 }

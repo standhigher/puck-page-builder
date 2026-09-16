@@ -41,6 +41,10 @@ export type PageDocumentValidation =
   | { success: true; data: PageDocument }
   | { success: false; issues: PageDocumentIssue[] };
 
+export type PageDocumentMigration =
+  | { success: true; data: PageDocument; migrated: boolean }
+  | { success: false; issues: PageDocumentIssue[] };
+
 const pageDocumentKeys = new Set(["schemaVersion", "pageId", "target", "templateId", "root", "blocks", "settings"]);
 const blockKeys = new Set(["id", "type", "version", "props", "slots", "binding"]);
 
@@ -139,4 +143,21 @@ export function validatePageDocument(value: unknown): PageDocumentValidation {
       settings: value.settings as PageSettings
     })
   };
+}
+
+/**
+ * Accept the pre-versioned shape produced by the early Demo and normalize it
+ * to the first persisted PageDocument schema. Future schema migrations belong
+ * here so storage callers have one validation boundary.
+ */
+export function migratePageDocument(value: unknown): PageDocumentMigration {
+  if (!isRecord(value)) {
+    const validation = validatePageDocument(value);
+    return validation.success ? { ...validation, migrated: false } : validation;
+  }
+
+  const migrated = value.schemaVersion === undefined;
+  const candidate = migrated ? { ...value, schemaVersion: 1 } : value;
+  const validation = validatePageDocument(candidate);
+  return validation.success ? { ...validation, migrated } : validation;
 }

@@ -1,23 +1,25 @@
-import type { PageDocument } from "@standhigher/puck-page-builder";
+import { migratePageDocument, type PageDocument } from "@standhigher/puck-page-builder";
 
 const storageKey = "besttrack-page-builder:v0.2:document";
 
 /**
- * Demo-only browser cache used to exercise reload behavior without adding the
- * V0.5 draft persistence API or any backend storage.
+ * The earlier Demo preview used a session cache before the Demo had a
+ * persistence API. V0.5 reads it once so the editor can migrate that local
+ * work to the draft endpoint.
  */
-export function loadSessionDocument(fallback: PageDocument): PageDocument {
+export function loadLegacySessionDocument(fallback: PageDocument): PageDocument {
   if (typeof window === "undefined") return fallback;
 
   try {
     const value = window.sessionStorage.getItem(storageKey);
-    return value ? JSON.parse(value) as PageDocument : fallback;
+    const migration = value ? migratePageDocument(JSON.parse(value)) : undefined;
+    return migration?.success ? migration.data : fallback;
   } catch {
     return fallback;
   }
 }
 
-export function saveSessionDocument(document: PageDocument) {
+export function clearLegacySessionDocument() {
   if (typeof window === "undefined") return;
-  window.sessionStorage.setItem(storageKey, JSON.stringify(document));
+  window.sessionStorage.removeItem(storageKey);
 }

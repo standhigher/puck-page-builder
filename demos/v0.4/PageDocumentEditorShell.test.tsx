@@ -1,5 +1,5 @@
 import { AppProvider } from "@shopify/polaris";
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { createContext, useContext } from "react";
 import { describe, expect, it, vi } from "vitest";
 import { PageDocumentEditorShell } from "../../src/editor/shell/PageDocumentEditorShell";
@@ -103,5 +103,16 @@ describe("PageDocumentEditorShell V0.4", () => {
     expect(screen.getByTestId("page-document-editor")).toHaveAttribute("data-editor-state", "success");
     fireEvent.click(screen.getAllByRole("button", { name: "下移" })[0]);
     expect(changed.at(-1)?.blocks.map((block) => block.id)).toEqual(["text-2", "text-1"]);
+  });
+
+  it("only clears the leave-protection snapshot after a successful V0.5 draft save", async () => {
+    const save = vi.fn<React.ComponentProps<typeof PageDocumentEditorShell>["onSave"]>().mockResolvedValue(undefined);
+    renderEditor({ onSave: save });
+    fireEvent.change(screen.getByLabelText("文本内容"), { target: { value: "Persist me" } });
+    fireEvent.click(screen.getByRole("button", { name: "保存草稿" }));
+    await waitFor(() => expect(save).toHaveBeenCalledWith(expect.objectContaining({ pageId: "v04-demo" })));
+    await waitFor(() => expect(screen.getByTestId("page-document-editor")).toHaveAttribute("data-dirty", "false"));
+    fireEvent.keyDown(window, { key: "z", ctrlKey: true });
+    expect(screen.getByTestId("page-document-editor")).toHaveAttribute("data-dirty", "true");
   });
 });

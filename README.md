@@ -73,3 +73,20 @@ Chinese and English, while the page locale remains part of `PageDocument`.
 The V0.4 history is in memory only. It deliberately adds no draft persistence,
 migration, publish, versioning, or backend request capability. Its interaction
 checks are contained in `demos/v0.4`.
+
+## V0.5 scope boundary
+
+V0.5 adds draft persistence and publishing to the Shopify Demo. The editor only
+clears its unsaved-change state after the draft or publish request succeeds, and
+the preview reads the last published PageDocument. The Demo migrates its legacy
+session document into the new draft API on first load. Its process-memory store
+is deliberately a Demo adapter, not a production persistence implementation.
+
+The V0.5 API is available at:
+
+- `GET` / `PUT` `/api/page-documents/:pageId/draft`
+- `GET` / `POST` `/api/page-documents/:pageId/published`
+
+V0.5 intentionally does not add business-data requests, live DataSource
+implementations, or data binding. Its persistence and API checks are contained
+in `demos/v0.5`.

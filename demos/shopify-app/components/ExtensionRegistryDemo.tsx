@@ -3,9 +3,9 @@
 import { createExtensionRegistry } from "@standhigher/puck-page-builder/extensions";
 import { Banner, BlockStack, Button, Card, Checkbox, InlineStack, Page, Text } from "@shopify/polaris";
 import { useMemo, useState } from "react";
-import { PageDocumentEditorShell } from "@standhigher/puck-page-builder";
 import { bestTrackExtension } from "../lib/besttrack-extension";
 import { demoPageDocument } from "../lib/page-document-demo";
+import { DraftPageDocumentEditor } from "./DraftPageDocumentEditor";
 
 export function ExtensionRegistryDemo() {
   const [enabled, setEnabled] = useState(true);
@@ -38,6 +38,6 @@ export function ExtensionRegistryDemo() {
         </BlockStack>
       </Card>
     </Page>
-    <PageDocumentEditorShell initialDocument={demoPageDocument} registry={registry} />
+    <DraftPageDocumentEditor initialDocument={demoPageDocument} registry={registry} />
   </>;
 }

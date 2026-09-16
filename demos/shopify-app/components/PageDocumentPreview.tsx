@@ -1,16 +1,24 @@
 "use client";
 
 import { WebRenderer } from "@standhigher/puck-page-builder/renderer";
-import { useCallback, useMemo, useSyncExternalStore } from "react";
-import { loadSessionDocument } from "../lib/page-document-session";
-import type { PageDocument } from "@standhigher/puck-page-builder";
+import { migratePageDocument, type PageDocument } from "@standhigher/puck-page-builder";
+import { useEffect, useState } from "react";
 
 export function PageDocumentPreview({ initialDocument }: { initialDocument: PageDocument }) {
-  const subscribe = useCallback(() => () => undefined, []);
-  const snapshot = useMemo(() => loadSessionDocument(initialDocument), [initialDocument]);
-  const getSnapshot = useCallback(() => snapshot, [snapshot]);
-  const getServerSnapshot = useCallback(() => initialDocument, [initialDocument]);
-  const document = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
+  const [document, setDocument] = useState(initialDocument);
+
+  useEffect(() => {
+    let active = true;
+    const loadPublished = async () => {
+      const response = await fetch(`/api/page-documents/${encodeURIComponent(initialDocument.pageId)}/published`, { cache: "no-store" });
+      if (!response.ok) return;
+      const stored = await response.json() as { document: unknown };
+      const migration = migratePageDocument(stored.document);
+      if (active && migration.success) setDocument(migration.data);
+    };
+    void loadPublished().catch(() => undefined);
+    return () => { active = false; };
+  }, [initialDocument]);
 
   return <WebRenderer document={document} className="pb-web-renderer pb-web-renderer--demo" />;
 }

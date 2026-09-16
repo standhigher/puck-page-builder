@@ -16,11 +16,12 @@ export type EditorActionState = {
 };
 
 type Snapshot = { document: PageDocument; selectedBlockId: string | null };
-type EditorHistory = Snapshot & { past: Snapshot[]; future: Snapshot[]; device: Device };
+type EditorHistory = Snapshot & { past: Snapshot[]; future: Snapshot[]; device: Device; savedDocument: PageDocument };
 type HistoryAction =
   | { type: "select"; id: string | null }
   | { type: "device"; device: Device }
   | { type: "replace"; document: PageDocument; selectedBlockId: string | null }
+  | { type: "saved" }
   | { type: "undo" }
   | { type: "redo" };
 
@@ -37,6 +38,7 @@ function historyReducer(state: EditorHistory, action: HistoryAction): EditorHist
     if (!next) return state;
     return { ...state, ...next, past: [...state.past, { document: state.document, selectedBlockId: state.selectedBlockId }], future: state.future.slice(1) };
   }
+  if (action.type === "saved") return { ...state, savedDocument: state.document };
   const current = { document: state.document, selectedBlockId: state.selectedBlockId };
   return { ...state, document: action.document, selectedBlockId: action.selectedBlockId, past: [...state.past, current], future: [] };
 }
@@ -59,6 +61,7 @@ export type EditorContextValue = {
   updateBlockProps(id: string, props: Record<string, JsonValue>): void;
   undo(): void;
   redo(): void;
+  markSaved(): void;
 };
 
 const EditorContext = createContext<EditorContextValue | null>(null);
@@ -79,18 +82,19 @@ function defaultBlock(type: string, blocks: BlockNode[], registry?: ExtensionReg
 }
 
 export function EditorProvider({ initialDocument, registry, loadState = "ready", leaveWarning = "You have unsaved changes.", onDocumentChange, children }: { initialDocument: PageDocument; registry?: ExtensionRegistry; loadState?: EditorLoadState; leaveWarning?: string; onDocumentChange?: (document: PageDocument) => void; children: ReactNode }) {
-  const [history, dispatch] = useReducer(historyReducer, initialDocument, (document): EditorHistory => ({ document, selectedBlockId: document.blocks[0]?.id ?? null, past: [], future: [], device: "desktop" }));
+  const [history, dispatch] = useReducer(historyReducer, initialDocument, (document): EditorHistory => ({ document, selectedBlockId: document.blocks[0]?.id ?? null, past: [], future: [], device: "desktop", savedDocument: document }));
   const editable = loadState === "ready" || loadState === "success";
   const selectedBlock = history.document.blocks.find((block) => block.id === history.selectedBlockId) ?? null;
   const replace = useCallback((document: PageDocument, selectedBlockId: string | null) => dispatch({ type: "replace", document, selectedBlockId }), []);
 
   useEffect(() => { onDocumentChange?.(history.document); }, [history.document, onDocumentChange]);
+  const isDirty = JSON.stringify(history.document) !== JSON.stringify(history.savedDocument);
   useEffect(() => {
-    if (!history.past.length || typeof window === "undefined") return;
+    if (!isDirty || typeof window === "undefined") return;
     const confirmLeave = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = leaveWarning; };
     window.addEventListener("beforeunload", confirmLeave);
     return () => window.removeEventListener("beforeunload", confirmLeave);
-  }, [history.past.length, leaveWarning]);
+  }, [isDirty, leaveWarning]);
   useEffect(() => {
     if (typeof window === "undefined") return;
     const keydown = (event: KeyboardEvent) => {
@@ -124,7 +128,7 @@ export function EditorProvider({ initialDocument, registry, loadState = "ready",
       selectedBlock,
       device: history.device,
       loadState,
-      isDirty: history.past.length > 0,
+      isDirty,
       actionState,
       selectBlock: (id) => dispatch({ type: "select", id }),
       setDevice: (device) => dispatch({ type: "device", device }),
@@ -175,9 +179,10 @@ export function EditorProvider({ initialDocument, registry, loadState = "ready",
         replace({ ...history.document, blocks }, id);
       },
       undo: () => { if (editable) dispatch({ type: "undo" }); },
-      redo: () => { if (editable) dispatch({ type: "redo" }); }
+      redo: () => { if (editable) dispatch({ type: "redo" }); },
+      markSaved: () => dispatch({ type: "saved" })
     };
-  }, [editable, history, loadState, registry, replace, selectedBlock]);
+  }, [editable, history, isDirty, loadState, registry, replace, selectedBlock]);
 
   return <EditorContext.Provider value={value}>{children}</EditorContext.Provider>;
 }

@@ -3,8 +3,8 @@ export { PageDocumentEditorShell, type PageDocumentEditorShellProps } from "./ed
 export { EditorProvider, useEditorContext, type EditorActionState, type EditorLoadState } from "./editor/context/EditorContext";
 export { createAdminI18n, type AdminLocale, type AdminMessageKey } from "./editor/i18n/admin";
 export type { DemoBlock, Device, EditorState, PreviewMode, PublishState, SaveState, Zoom } from "./editor/state/types";
-export { createPageDocument, validatePageDocument } from "./core/schema/page-document";
-export type { BlockNode, DataBinding, JsonValue, PageDocument, PageDocumentIssue, PageSettings, RenderTarget } from "./core/schema/page-document";
+export { createPageDocument, migratePageDocument, validatePageDocument } from "./core/schema/page-document";
+export type { BlockNode, DataBinding, JsonValue, PageDocument, PageDocumentIssue, PageDocumentMigration, PageSettings, RenderTarget } from "./core/schema/page-document";
 export { fromEngineData, toEngineData } from "./adapters/puck/page-document";
 export { WebRenderer, type WebRendererProps } from "./renderer/web/WebRenderer";
 export * from "./core/extensions";

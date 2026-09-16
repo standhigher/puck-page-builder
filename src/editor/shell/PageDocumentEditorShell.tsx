@@ -18,6 +18,10 @@ export type PageDocumentEditorShellProps = {
   loadState?: EditorLoadState;
   adminLocale?: string;
   onDocumentChange?: (document: PageDocument) => void;
+  /** Persist the current draft. The shell marks the document clean only after this resolves. */
+  onSave?: (document: PageDocument) => Promise<void> | void;
+  /** Publish the current document. Hosts should persist it atomically with publication. */
+  onPublish?: (document: PageDocument) => Promise<void> | void;
 };
 
 const deviceLabels: Record<Exclude<Device, "full">, "desktop" | "tablet" | "mobile"> = { desktop: "desktop", tablet: "tablet", mobile: "mobile" };
@@ -34,11 +38,13 @@ export function PageDocumentEditorShell(props: PageDocumentEditorShellProps) {
   </EditorProvider>;
 }
 
-function PageDocumentEditor({ iframe = true, registry, adminLocale }: PageDocumentEditorShellProps) {
+function PageDocumentEditor({ iframe = true, registry, adminLocale, onSave, onPublish }: PageDocumentEditorShellProps) {
   const editor = useEditorContext();
   const [blockView, setBlockView] = useState<"blocks" | "outline">("blocks");
   const [isPickerOpen, setPickerOpen] = useState(false);
   const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [request, setRequest] = useState<"idle" | "saving" | "publishing">("idle");
+  const [notice, setNotice] = useState<"saveFailed" | "publishFailed" | "published" | null>(null);
   const i18n = createAdminI18n(adminLocale);
   const engineData = useMemo(() => toEngineData(editor.document, registry), [editor.document, registry]);
   const config = useMemo(() => createPageDocumentPuckConfig(editor.selectBlock, registry), [editor.selectBlock, registry]);
@@ -52,6 +58,33 @@ function PageDocumentEditor({ iframe = true, registry, adminLocale }: PageDocume
     if (id) editor.reorderBlock(id, beforeId);
     setDraggingId(null);
   };
+  const save = async () => {
+    if (!onSave || request !== "idle") return;
+    setRequest("saving");
+    setNotice(null);
+    try {
+      await onSave(editor.document);
+      editor.markSaved();
+    } catch {
+      setNotice("saveFailed");
+    } finally {
+      setRequest("idle");
+    }
+  };
+  const publish = async () => {
+    if (!onPublish || request !== "idle") return;
+    setRequest("publishing");
+    setNotice(null);
+    try {
+      await onPublish(editor.document);
+      editor.markSaved();
+      setNotice("published");
+    } catch {
+      setNotice("publishFailed");
+    } finally {
+      setRequest("idle");
+    }
+  };
 
   return <Puck config={config} data={engineData} iframe={{ enabled: iframe }}>
     <Puck.Layout>
@@ -61,12 +94,15 @@ function PageDocumentEditor({ iframe = true, registry, adminLocale }: PageDocume
             <div className="pb-page-title"><Text as="h1" variant="headingSm">{editor.document.settings.seoTitle ?? editor.document.pageId}</Text><Text as="p" variant="bodySm" tone="subdued">PageDocument V{editor.document.schemaVersion} · {editor.document.target}</Text></div>
             <InlineStack gap="150" blockAlign="center" wrap={false}>
               <Badge tone={editor.isDirty ? "attention" : "success"}>{editor.isDirty ? i18n.t("unsaved") : i18n.t("saved")}</Badge>
+              <Button disabled={!onSave || !editor.isDirty || request !== "idle"} onClick={() => void save()}>{request === "saving" ? i18n.t("saving") : i18n.t("save")}</Button>
+              <Button variant="primary" disabled={!onPublish || request !== "idle"} onClick={() => void publish()}>{request === "publishing" ? i18n.t("publishing") : i18n.t("publish")}</Button>
               <Button accessibilityLabel={i18n.t("undo")} icon={UndoIcon} variant="tertiary" disabled={!editor.actionState.canUndo} onClick={editor.undo} />
               <Button accessibilityLabel={i18n.t("redo")} icon={RedoIcon} variant="tertiary" disabled={!editor.actionState.canRedo} onClick={editor.redo} />
             </InlineStack>
           </InlineStack>
         </header>
         {editor.loadState === "success" ? <Banner tone="success">{i18n.t("success")}</Banner> : null}
+        {notice ? <Banner tone={notice === "published" ? "success" : "critical"}>{i18n.t(notice)}</Banner> : null}
         <div className="pb-workspace pb-workspace--document">
           <nav className="pb-tool-rail" aria-label="编辑器工具">
             <Button accessibilityLabel={i18n.t("blocks")} icon={LayoutSectionIcon} pressed={blockView === "blocks"} variant="tertiary" onClick={() => setBlockView("blocks")} />

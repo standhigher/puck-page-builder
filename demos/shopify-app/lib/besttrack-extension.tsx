@@ -18,6 +18,8 @@ export function createBestTrackExtension(getSessionToken?: GetSessionToken): Pag
     category: "BestTrack",
     targets: ["web"],
     defaultProps: { heading: "Shipment update", status: "In transit" },
+    defaultVariant: "default",
+    variants: [{ id: "default", label: "Default" }, { id: "emphasis", label: "Emphasis", theme: { "color.primary": "#5c3bfe" } }],
     fields: {
       heading: { field: "core.text", label: "标题", required: true },
       status: { field: "besttrack.status-tone", label: "状态色" }
@@ -39,7 +41,10 @@ export function createBestTrackExtension(getSessionToken?: GetSessionToken): Pag
     version: 1,
     name: "Ready-to-go Tracking",
     target: "web",
-    create: () => ({ schemaVersion: 1, pageId: "besttrack-ready-to-go", target: "web", root: {}, blocks: [], settings: { locale: "en", seoTitle: "Track your order" } })
+    source: "custom",
+    requiredBlocks: ["besttrack.tracking-status"],
+    theme: { "color.primary": "#005bd3" },
+    create: () => ({ schemaVersion: 1, pageId: "besttrack-ready-to-go", target: "web", theme: {}, root: {}, blocks: [], settings: { locale: "en", seoTitle: "Track your order" } })
   }],
   slots: [{ id: "besttrack.tracking.toolbar-status", slot: "toolbar.right", order: 20, component: BestTrackToolbarSlot }]
   };

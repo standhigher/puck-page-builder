@@ -7,6 +7,7 @@ import { SessionTokenCheck } from "../../components/SessionTokenCheck";
 import { ExtensionRegistryDemo } from "../../components/ExtensionRegistryDemo";
 import { BestTrackLiveDataDemo } from "../../components/BestTrackLiveDataDemo";
 import { AuthenticatedBestTrackLiveDataDemo } from "../../components/AuthenticatedBestTrackLiveDataDemo";
+import { V061ProtocolDemo } from "../../components/V061ProtocolDemo";
 
 export default function PageBuilderPage() {
   const apiKey = process.env.NEXT_PUBLIC_SHOPIFY_API_KEY;
@@ -20,6 +21,7 @@ export default function PageBuilderPage() {
       </BlockStack>
     </Page>
     <ExtensionRegistryDemo />
+    <V061ProtocolDemo />
     {appBridgeStatus === "ready" ? <AuthenticatedBestTrackLiveDataDemo /> : <BestTrackLiveDataDemo />}
   </AppProvider>;
 }

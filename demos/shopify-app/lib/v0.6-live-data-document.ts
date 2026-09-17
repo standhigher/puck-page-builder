@@ -5,6 +5,7 @@ export const v06LiveDataDocument: PageDocument = {
   schemaVersion: 1,
   pageId: "v06-live-tracking-demo",
   target: "web",
+  theme: {},
   root: {},
   settings: { locale: "en", seoTitle: "Live tracking data" },
   blocks: [{
@@ -12,6 +13,8 @@ export const v06LiveDataDocument: PageDocument = {
     type: "besttrack.tracking-status",
     version: 1,
     props: { heading: "Shipment update", status: "Loading tracking status" },
+    variant: "default",
+    style: {},
     binding: { source: "besttrack.tracking.query", params: { trackingNumber: "BT-2048-DEMO" } }
   }]
 };

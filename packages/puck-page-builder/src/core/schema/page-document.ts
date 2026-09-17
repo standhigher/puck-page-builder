@@ -1,52 +1,44 @@
+import { normalizeThemeTokens, type ThemeTokens } from "../theme";
+
 export type JsonPrimitive = string | number | boolean | null;
 export type JsonValue = JsonPrimitive | JsonValue[] | { [key: string]: JsonValue };
-
 export type RenderTarget = "web" | "email";
+export type PageDocumentSchemaVersion = 1;
 
-export type PageSettings = {
-  locale: string;
-  seoTitle?: string;
-};
-
-export type DataBinding = {
-  source: string;
-  params?: Record<string, JsonValue>;
-};
+export type PageSettings = { locale: string; seoTitle?: string };
+export type DataBinding = { source: string; params?: Record<string, JsonValue> };
+/** Token-only block styling. Arbitrary CSS properties are deliberately not persisted. */
+export type BlockStyleOverrides = ThemeTokens;
 
 export type BlockNode = {
   id: string;
   type: string;
   version: number;
   props: Record<string, JsonValue>;
+  variant: string;
+  style: BlockStyleOverrides;
   slots?: Record<string, BlockNode[]>;
   binding?: DataBinding;
 };
 
 export type PageDocument = {
-  schemaVersion: 1;
+  schemaVersion: PageDocumentSchemaVersion;
   pageId: string;
   target: RenderTarget;
   templateId?: string;
+  templateVersion?: number;
+  theme: ThemeTokens;
   root: Record<string, JsonValue>;
   blocks: BlockNode[];
   settings: PageSettings;
 };
 
-export type PageDocumentIssue = {
-  path: string;
-  message: string;
-};
+export type PageDocumentIssue = { path: string; message: string };
+export type PageDocumentValidation = { success: true; data: PageDocument } | { success: false; issues: PageDocumentIssue[] };
+export type PageDocumentMigration = { success: true; data: PageDocument; migrated: boolean } | { success: false; issues: PageDocumentIssue[] };
 
-export type PageDocumentValidation =
-  | { success: true; data: PageDocument }
-  | { success: false; issues: PageDocumentIssue[] };
-
-export type PageDocumentMigration =
-  | { success: true; data: PageDocument; migrated: boolean }
-  | { success: false; issues: PageDocumentIssue[] };
-
-const pageDocumentKeys = new Set(["schemaVersion", "pageId", "target", "templateId", "root", "blocks", "settings"]);
-const blockKeys = new Set(["id", "type", "version", "props", "slots", "binding"]);
+const pageDocumentKeys = new Set(["schemaVersion", "pageId", "target", "templateId", "templateVersion", "theme", "root", "blocks", "settings"]);
+const blockKeys = new Set(["id", "type", "version", "props", "variant", "style", "slots", "binding"]);
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -56,6 +48,11 @@ function isJsonValue(value: unknown): value is JsonValue {
   if (value === null || typeof value === "string" || typeof value === "number" || typeof value === "boolean") return true;
   if (Array.isArray(value)) return value.every(isJsonValue);
   return isRecord(value) && Object.values(value).every(isJsonValue);
+}
+
+function themeTokensOrEmpty(value: unknown): ThemeTokens {
+  const result = normalizeThemeTokens(value);
+  return result.success ? result.data : {};
 }
 
 function normalizeBlock(value: unknown, path: string, issues: PageDocumentIssue[]): BlockNode | null {
@@ -68,8 +65,9 @@ function normalizeBlock(value: unknown, path: string, issues: PageDocumentIssue[
   if (typeof value.type !== "string" || !value.type) issues.push({ path: `${path}.type`, message: "必须是非空字符串" });
   if (typeof value.version !== "number" || !Number.isInteger(value.version) || value.version < 1) issues.push({ path: `${path}.version`, message: "必须是大于 0 的整数" });
   if (!isRecord(value.props) || !Object.values(value.props).every(isJsonValue)) issues.push({ path: `${path}.props`, message: "必须是 JSON 对象" });
+  if (typeof value.variant !== "string" || !value.variant) issues.push({ path: `${path}.variant`, message: "必须是非空字符串" });
+  if (!normalizeThemeTokens(value.style).success) issues.push({ path: `${path}.style`, message: "必须是受控 Theme Token 对象" });
   if (value.binding !== undefined && (!isRecord(value.binding) || typeof value.binding.source !== "string" || (value.binding.params !== undefined && (!isRecord(value.binding.params) || !Object.values(value.binding.params).every(isJsonValue))))) issues.push({ path: `${path}.binding`, message: "必须包含 source，且 params 必须是 JSON 对象" });
-
   if (issues.some((issue) => issue.path.startsWith(path))) return null;
   const slots = normalizeSlots(value.slots, `${path}.slots`, issues);
   if (issues.some((issue) => issue.path.startsWith(path))) return null;
@@ -78,6 +76,8 @@ function normalizeBlock(value: unknown, path: string, issues: PageDocumentIssue[
     type: value.type as string,
     version: value.version as number,
     props: value.props as Record<string, JsonValue>,
+    variant: value.variant as string,
+    style: themeTokensOrEmpty(value.style),
     ...(slots ? { slots } : {}),
     ...(value.binding ? { binding: value.binding as DataBinding } : {})
   };
@@ -100,14 +100,15 @@ function normalizeSlots(value: unknown, path: string, issues: PageDocumentIssue[
   return slots;
 }
 
-export function createPageDocument(input: Partial<PageDocument> & Pick<PageDocument, "pageId">): PageDocument {
+export function createPageDocument(input: Omit<Partial<PageDocument>, "schemaVersion" | "blocks" | "theme"> & { pageId: string; blocks?: Array<Omit<BlockNode, "variant" | "style"> & Partial<Pick<BlockNode, "variant" | "style">>>; theme?: ThemeTokens }): PageDocument {
   return {
     schemaVersion: 1,
     pageId: input.pageId,
     target: input.target ?? "web",
-    ...(input.templateId ? { templateId: input.templateId } : {}),
+    ...(input.templateId ? { templateId: input.templateId, templateVersion: input.templateVersion ?? 1 } : {}),
+    theme: themeTokensOrEmpty(input.theme),
     root: input.root ?? {},
-    blocks: input.blocks ?? [],
+    blocks: (input.blocks ?? []).map((block) => ({ ...block, variant: block.variant ?? "default", style: themeTokensOrEmpty(block.style) })),
     settings: { locale: input.settings?.locale ?? "en", ...(input.settings?.seoTitle ? { seoTitle: input.settings.seoTitle } : {}) }
   };
 }
@@ -120,10 +121,13 @@ export function validatePageDocument(value: unknown): PageDocumentValidation {
   if (typeof value.pageId !== "string" || !value.pageId) issues.push({ path: "$.pageId", message: "必须是非空字符串" });
   if (value.target !== "web" && value.target !== "email") issues.push({ path: "$.target", message: "必须是 web 或 email" });
   if (value.templateId !== undefined && typeof value.templateId !== "string") issues.push({ path: "$.templateId", message: "必须是字符串" });
+  if (value.templateVersion !== undefined && (typeof value.templateVersion !== "number" || !Number.isInteger(value.templateVersion) || value.templateVersion < 1)) issues.push({ path: "$.templateVersion", message: "必须是大于 0 的整数" });
+  if (typeof value.templateId === "string" && value.templateVersion === undefined) issues.push({ path: "$.templateVersion", message: "使用模板时必须保存模板版本" });
+  if (value.templateId === undefined && value.templateVersion !== undefined) issues.push({ path: "$.templateVersion", message: "未使用模板时不得保存模板版本" });
+  if (!normalizeThemeTokens(value.theme).success) issues.push({ path: "$.theme", message: "必须是受控 Theme Token 对象" });
   if (!isRecord(value.root) || !Object.values(value.root).every(isJsonValue)) issues.push({ path: "$.root", message: "必须是 JSON 对象" });
   if (!isRecord(value.settings) || typeof value.settings.locale !== "string") issues.push({ path: "$.settings.locale", message: "必须是字符串" });
   if (!Array.isArray(value.blocks)) issues.push({ path: "$.blocks", message: "必须是数组" });
-
   const blocks = Array.isArray(value.blocks) ? value.blocks.map((block, index) => normalizeBlock(block, `$.blocks[${index}]`, issues)).filter((block): block is BlockNode => block !== null) : [];
   const blockIds = new Set<string>();
   for (const block of blocks) {
@@ -131,13 +135,14 @@ export function validatePageDocument(value: unknown): PageDocumentValidation {
     blockIds.add(block.id);
   }
   if (issues.length > 0) return { success: false, issues };
-
   return {
     success: true,
     data: createPageDocument({
       pageId: value.pageId as string,
       target: value.target as RenderTarget,
       ...(typeof value.templateId === "string" ? { templateId: value.templateId } : {}),
+      ...(typeof value.templateVersion === "number" ? { templateVersion: value.templateVersion } : {}),
+      theme: themeTokensOrEmpty(value.theme),
       root: value.root as Record<string, JsonValue>,
       blocks,
       settings: value.settings as PageSettings
@@ -145,19 +150,8 @@ export function validatePageDocument(value: unknown): PageDocumentValidation {
   };
 }
 
-/**
- * Accept the pre-versioned shape produced by the early Demo and normalize it
- * to the first persisted PageDocument schema. Future schema migrations belong
- * here so storage callers have one validation boundary.
- */
+/** V0.6.1 starts from this schema; no pre-integration document compatibility is needed. */
 export function migratePageDocument(value: unknown): PageDocumentMigration {
-  if (!isRecord(value)) {
-    const validation = validatePageDocument(value);
-    return validation.success ? { ...validation, migrated: false } : validation;
-  }
-
-  const migrated = value.schemaVersion === undefined;
-  const candidate = migrated ? { ...value, schemaVersion: 1 } : value;
-  const validation = validatePageDocument(candidate);
-  return validation.success ? { ...validation, migrated } : validation;
+  const validation = validatePageDocument(value);
+  return validation.success ? { ...validation, migrated: false } : validation;
 }

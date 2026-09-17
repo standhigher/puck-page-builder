@@ -1,7 +1,6 @@
 "use client";
 
-import { WebRenderer } from "@standhigher/puck-page-builder/renderer";
-import { migratePageDocument, type PageDocument } from "@standhigher/puck-page-builder";
+import { WebRenderer, migratePageDocument, type PageDocument } from "@standhigher/puck-page-builder/runtime";
 import { useEffect, useState } from "react";
 
 export function PageDocumentPreview({ initialDocument }: { initialDocument: PageDocument }) {

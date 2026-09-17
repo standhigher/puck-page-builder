@@ -1,7 +1,7 @@
 import type { BlockDefinition, DataSourceDefinition, EditorAction, ExtensionRegistryOptions, FieldDefinition, LifecycleHooks, PageBuilderExtension, RendererDefinition, TemplateDefinition, UISlotContribution, UISlotName } from "./types";
 import type { PageDocument } from "../schema/page-document";
 
-export type ExtensionRegistryErrorCode = "duplicate-extension" | "duplicate-definition" | "invalid-identifier" | "invalid-target" | "missing-dependency" | "dependency-cycle";
+export type ExtensionRegistryErrorCode = "duplicate-extension" | "duplicate-definition" | "invalid-identifier" | "invalid-target" | "missing-dependency" | "missing-template-dependency" | "dependency-cycle";
 
 export class ExtensionRegistryError extends Error {
   constructor(public readonly code: ExtensionRegistryErrorCode, message: string) {
@@ -70,6 +70,26 @@ function resolveOrder(extensions: PageBuilderExtension[], disabled: Set<string>)
   return sorted;
 }
 
+/** Immutable template view with explicit source and block dependency validation. */
+export class TemplateRegistry {
+  private constructor(private readonly templateMap: ReadonlyMap<string, Registered<TemplateDefinition>>) {}
+
+  get templates() { return Object.freeze([...this.templateMap.values()]); }
+  get(id: string) { return this.templateMap.get(id); }
+
+  static create(templates: readonly Registered<TemplateDefinition>[], blocks: readonly BlockDefinition[]): TemplateRegistry {
+    const blockTypes = new Set(blocks.map((block) => block.type));
+    for (const template of templates) {
+      if (template.source !== "built-in" && template.source !== "marketplace" && template.source !== "custom") throw new ExtensionRegistryError("invalid-identifier", `Template ${template.id} 必须声明 built-in、marketplace 或 custom 来源`);
+      if (template.target !== "web" && template.target !== "email") throw new ExtensionRegistryError("invalid-target", `Template ${template.id} 必须声明 web 或 email target`);
+      for (const type of template.requiredBlocks ?? []) {
+        if (!blockTypes.has(type)) throw new ExtensionRegistryError("missing-template-dependency", `Template ${template.id} 缺少已注册区块：${type}`);
+      }
+    }
+    return Object.freeze(new TemplateRegistry(new Map(templates.map((template) => [template.id, template])))) as TemplateRegistry;
+  }
+}
+
 /** Immutable compiled view of all enabled extensions. */
 export class ExtensionRegistry {
   private constructor(
@@ -80,6 +100,7 @@ export class ExtensionRegistry {
     private readonly rendererMap: ReadonlyMap<string, Registered<RendererDefinition>>,
     private readonly dataSourceMap: ReadonlyMap<string, Registered<DataSourceDefinition>>,
     private readonly templateMap: ReadonlyMap<string, Registered<TemplateDefinition>>,
+    public readonly templateRegistry: TemplateRegistry,
     private readonly slotMap: ReadonlyMap<UISlotName, readonly Registered<UISlotContribution>[]>,
     private readonly hooks: readonly LifecycleHooks[]
   ) {}
@@ -89,13 +110,13 @@ export class ExtensionRegistry {
   get actions() { return Object.freeze([...this.actionMap.values()].sort(compareByOrder)); }
   get renderers() { return Object.freeze([...this.rendererMap.values()]); }
   get dataSources() { return Object.freeze([...this.dataSourceMap.values()]); }
-  get templates() { return Object.freeze([...this.templateMap.values()]); }
+  get templates() { return this.templateRegistry.templates; }
   getBlock(type: string) { return this.blockMap.get(type); }
   getField(type: string) { return this.fieldMap.get(type); }
   getAction(id: string) { return this.actionMap.get(id); }
   getRenderer(id: string) { return this.rendererMap.get(id); }
   getDataSource(key: string) { return this.dataSourceMap.get(key); }
-  getTemplate(id: string) { return this.templateMap.get(id); }
+  getTemplate(id: string) { return this.templateRegistry.get(id); }
   getSlot(slot: UISlotName) { return this.slotMap.get(slot) ?? []; }
   notifyChange(document: PageDocument) { this.hooks.forEach((hook) => hook.onChange?.(document)); }
   notifyError(error: Error) { this.hooks.forEach((hook) => hook.onError?.(error)); }
@@ -134,14 +155,20 @@ export class ExtensionRegistry {
       }
     }
 
+    const templateRegistry = TemplateRegistry.create(templateItems.map((template) => templates.get(template.id)!), blockItems);
     const sortedSlots = new Map<UISlotName, readonly Registered<UISlotContribution>[]>();
     for (const [slot, contributions] of slots) sortedSlots.set(slot, Object.freeze([...contributions].sort(compareByOrder)));
     return Object.freeze(new ExtensionRegistry(
-      Object.freeze([...resolved]), blocks, fields, actions, renderers, dataSources, templates, sortedSlots, Object.freeze(resolved.flatMap((extension) => extension.hooks ? [extension.hooks] : []))
+      Object.freeze([...resolved]), blocks, fields, actions, renderers, dataSources, templates, templateRegistry, sortedSlots, Object.freeze(resolved.flatMap((extension) => extension.hooks ? [extension.hooks] : []))
     )) as ExtensionRegistry;
   }
 }
 
 export function createExtensionRegistry(extensions: PageBuilderExtension[], options?: ExtensionRegistryOptions) {
   return ExtensionRegistry.create(extensions, options);
+}
+
+export function createTemplateRegistry(templates: TemplateDefinition[], blocks: BlockDefinition[] = []) {
+  const registered = templates.map((template) => Object.freeze({ ...template, extension: "standalone" }) as Registered<TemplateDefinition>);
+  return TemplateRegistry.create(registered, blocks);
 }

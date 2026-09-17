@@ -3,7 +3,7 @@ import type { FieldProps } from "@standhigher/puck-page-builder/extensions";
 export function TrackingStatusBlock(props: Record<string, unknown>) {
   const heading = typeof props.heading === "string" ? props.heading : "Shipment update";
   const status = typeof props.status === "string" ? props.status : "In transit";
-  return <section aria-label="BestTrack tracking status"><h2>{heading}</h2><p>{status}</p></section>;
+  return <section aria-label="BestTrack tracking status" style={{ color: "var(--pb-color-primary)" }}><h2>{heading}</h2><p>{status}</p></section>;
 }
 
 export function StatusToneField({ value, onChange }: FieldProps) {

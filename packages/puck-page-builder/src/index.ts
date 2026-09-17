@@ -5,6 +5,9 @@ export { createAdminI18n, type AdminLocale, type AdminMessageKey } from "./edito
 export type { DemoBlock, Device, EditorState, PreviewMode, PublishState, SaveState, Zoom } from "./editor/state/types";
 export { createPageDocument, migratePageDocument, validatePageDocument } from "./core/schema/page-document";
 export type { BlockNode, DataBinding, JsonValue, PageDocument, PageDocumentIssue, PageDocumentMigration, PageSettings, RenderTarget } from "./core/schema/page-document";
+export { mergeThemeTokens, normalizeThemeTokens, systemThemeTokens, toThemeStyle } from "./core/theme";
+export type { BlockStyleOverrides, PageDocumentSchemaVersion } from "./core/schema/page-document";
+export type { ThemeTokenName, ThemeTokens } from "./core/theme";
 export { fromEngineData, toEngineData } from "./adapters/puck/page-document";
 export { WebRenderer, type WebRendererProps } from "./renderer/web/WebRenderer";
 export * from "./core/extensions";

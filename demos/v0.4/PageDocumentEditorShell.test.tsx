@@ -54,11 +54,12 @@ const document: PageDocument = {
   schemaVersion: 1,
   pageId: "v04-demo",
   target: "web",
+  theme: {},
   root: {},
   settings: { locale: "en", seoTitle: "Tracking page" },
   blocks: [
-    { id: "text-1", type: "core.text", version: 1, props: { content: "First block" } },
-    { id: "text-2", type: "core.text", version: 1, props: { content: "Second block" } }
+    { id: "text-1", type: "core.text", version: 1, props: { content: "First block" }, variant: "default", style: {} },
+    { id: "text-2", type: "core.text", version: 1, props: { content: "Second block" }, variant: "default", style: {} }
   ]
 };
 

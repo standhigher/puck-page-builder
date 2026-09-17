@@ -17,7 +17,7 @@ function toEngineBlock(block: BlockNode, registry?: ExtensionRegistry) {
 
 export function toEngineData(document: PageDocument, registry?: ExtensionRegistry): Data {
   return {
-    root: { ...document.root },
+    root: { props: { ...document.root } },
     content: document.blocks.map((block) => toEngineBlock(block, registry))
   };
 }
@@ -35,6 +35,8 @@ export function fromEngineData(data: Data, base: PageDocument, registry?: Extens
       type,
       version: previous?.version ?? 1,
       props: props as BlockNode["props"],
+      variant: previous?.variant ?? registry?.getBlock(type)?.defaultVariant ?? "default",
+      style: previous?.style ?? {},
       ...(previous?.slots ? { slots: previous.slots } : {}),
       ...(previous?.binding ? { binding: previous.binding } : {})
     }];

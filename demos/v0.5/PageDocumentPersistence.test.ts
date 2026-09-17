@@ -8,9 +8,10 @@ const document: PageDocument = {
   schemaVersion: 1,
   pageId: "v05-demo",
   target: "web",
+  theme: {},
   root: {},
   settings: { locale: "en" },
-  blocks: [{ id: "text-1", type: "core.text", version: 1, props: { content: "Draft" } }]
+  blocks: [{ id: "text-1", type: "core.text", version: 1, props: { content: "Draft" }, variant: "default", style: {} }]
 };
 
 const context = { params: Promise.resolve({ pageId: document.pageId }) };
@@ -18,11 +19,9 @@ const context = { params: Promise.resolve({ pageId: document.pageId }) };
 describe("V0.5 PageDocument persistence", () => {
   beforeEach(() => resetPageDocumentStore());
 
-  it("migrates the pre-versioned legacy Demo shape before it crosses the persistence boundary", () => {
-    const legacy = { ...document } as Partial<PageDocument>;
-    delete legacy.schemaVersion;
-    const migration = migratePageDocument(legacy);
-    expect(migration).toEqual({ success: true, data: document, migrated: true });
+  it("validates the initial V0.6.1 document shape at the persistence boundary", () => {
+    expect(migratePageDocument(document)).toEqual({ success: true, data: document, migrated: false });
+    expect(migratePageDocument({ ...document, theme: { unsafe: "#000" } })).toMatchObject({ success: false });
   });
 
   it("stores isolated draft and published snapshots", () => {

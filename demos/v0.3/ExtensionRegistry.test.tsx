@@ -23,7 +23,7 @@ const catalogExtension: PageBuilderExtension = {
   actions: [{ id: "acme.catalog.open", label: "Open catalog", position: "right", execute: () => undefined }],
   renderers: [{ id: "acme.catalog.web", target: "web", render: () => "catalog" }],
   dataSources: [{ key: "acme.catalog.query", mock: async () => ({}), live: async () => ({}) }],
-  templates: [{ id: "acme.catalog.start", version: 1, name: "Catalog", target: "web", create: () => createPageDocument({ pageId: "catalog" }) }],
+  templates: [{ id: "acme.catalog.start", version: 1, name: "Catalog", target: "web", source: "custom", create: () => createPageDocument({ pageId: "catalog" }) }],
   slots: [{ id: "acme.catalog.toolbar", slot: "toolbar.right", component: () => null }]
 };
 

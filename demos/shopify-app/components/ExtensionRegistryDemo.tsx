@@ -1,6 +1,7 @@
 "use client";
 
 import { createExtensionRegistry } from "@standhigher/puck-page-builder/extensions";
+import { bestTrackPageExtension } from "@standhigher/besttrack-page-extension";
 import { Banner, BlockStack, Button, Card, Checkbox, InlineStack, Page, Text } from "@shopify/polaris";
 import { useMemo, useState } from "react";
 import { bestTrackExtension } from "../lib/besttrack-extension";
@@ -11,7 +12,7 @@ export function ExtensionRegistryDemo() {
   const [enabled, setEnabled] = useState(true);
   const [notice, setNotice] = useState<string>();
   const [fieldValue, setFieldValue] = useState("calm");
-  const registry = useMemo(() => createExtensionRegistry([bestTrackExtension], { disabled: enabled ? [] : [bestTrackExtension.name] }), [enabled]);
+  const registry = useMemo(() => createExtensionRegistry([bestTrackPageExtension, bestTrackExtension], { disabled: enabled ? [] : [bestTrackExtension.name] }), [enabled]);
   const template = registry.templates[0];
   const action = registry.actions[0];
   const Field = registry.fields[0]?.component;

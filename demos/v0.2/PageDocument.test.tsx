@@ -17,14 +17,14 @@ const document: PageDocument = createPageDocument({
 
 describe("PageDocument V1", () => {
   it("applies V1 defaults and rejects Puck-shaped persistence data", () => {
-    expect(createPageDocument({ pageId: "new-page" })).toEqual({ schemaVersion: 1, pageId: "new-page", target: "web", root: {}, blocks: [], settings: { locale: "en" } });
+    expect(createPageDocument({ pageId: "new-page" })).toEqual({ schemaVersion: 1, pageId: "new-page", target: "web", theme: {}, root: {}, blocks: [], settings: { locale: "en" } });
     expect(validatePageDocument(document)).toMatchObject({ success: true });
     expect(validatePageDocument({ root: {}, content: [] })).toMatchObject({ success: false });
   });
 
   it("round-trips Text and Image between PageDocument and Puck engine data", () => {
     const engine = toEngineData(document);
-    expect(engine).toMatchObject({ root: { background: "#fff" }, content: [{ type: "Text", props: { id: "text_1", content: "Track your order" } }, { type: "Image", props: { id: "image_1", alt: "Order package" } }] });
+    expect(engine).toMatchObject({ root: { props: { background: "#fff" } }, content: [{ type: "Text", props: { id: "text_1", content: "Track your order" } }, { type: "Image", props: { id: "image_1", alt: "Order package" } }] });
 
     const changed = {
       ...engine,

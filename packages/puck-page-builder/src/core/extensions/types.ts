@@ -1,5 +1,6 @@
 import type { ComponentType, ReactNode } from "react";
 import type { PageDocument, RenderTarget } from "../schema/page-document";
+import type { ThemeTokens } from "../theme";
 
 export type ExtensionTarget = RenderTarget | "all";
 export type EditorActionPosition = "left" | "center" | "right";
@@ -27,8 +28,16 @@ export interface BlockDefinition<P = Record<string, unknown>> {
   defaultProps: P;
   fields: Record<string, FieldConfig>;
   render: Partial<Record<RenderTarget, ComponentType<P>>>;
+  defaultVariant?: string;
+  variants?: BlockVariantDefinition[];
   dataSources?: string[];
   validate?: (props: P) => ValidationIssue[];
+}
+
+export interface BlockVariantDefinition {
+  id: string;
+  label: string;
+  theme?: ThemeTokens;
 }
 
 export interface FieldDefinition<T = unknown> {
@@ -73,13 +82,19 @@ export interface DataSourceDefinition<P = any, R = unknown> {
   validateParams?: (params: P) => ValidationIssue[];
 }
 
+export type TemplateSource = "built-in" | "marketplace" | "custom";
+
 export interface TemplateDefinition {
   id: string;
   version: number;
   name: string;
   target: RenderTarget;
+  source: TemplateSource;
   thumbnail?: string;
   create(): PageDocument;
+  /** Block types that must be registered before this template can be used. */
+  requiredBlocks?: string[];
+  theme?: ThemeTokens;
 }
 
 export interface LifecycleHooks {

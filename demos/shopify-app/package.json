@@ -13,6 +13,7 @@
     "@shopify/app-bridge-react": "^4.2.13",
     "@shopify/polaris": "^13.9.5",
     "@shopify/polaris-icons": "^9.3.1",
+    "@standhigher/besttrack-page-extension": "workspace:*",
     "@standhigher/puck-page-builder": "workspace:*",
     "next": "^16.3.5",
     "react": "^18.3.1",

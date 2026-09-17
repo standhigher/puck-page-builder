@@ -5,9 +5,9 @@
   "packageManager": "pnpm@11.19.0",
   "scripts": {
     "dev": "pnpm --filter @standhigher/puck-page-builder build && pnpm --filter @standhigher/demo-shopify-app dev",
-    "build": "pnpm --filter @standhigher/puck-page-builder build && pnpm --filter @standhigher/demo-shopify-app build",
+    "build": "pnpm --filter @standhigher/puck-page-builder build && pnpm --filter @standhigher/besttrack-page-extension build && pnpm --filter @standhigher/demo-shopify-app build",
     "lint": "eslint . --max-warnings=0",
-    "typecheck": "pnpm --filter @standhigher/puck-page-builder build && tsc --noEmit && pnpm --filter @standhigher/puck-page-builder typecheck && pnpm --filter @standhigher/demo-shopify-app typecheck",
+    "typecheck": "pnpm --filter @standhigher/puck-page-builder build && pnpm --filter @standhigher/besttrack-page-extension build && tsc --noEmit && pnpm --filter @standhigher/puck-page-builder typecheck && pnpm --filter @standhigher/besttrack-page-extension typecheck && pnpm --filter @standhigher/demo-shopify-app typecheck",
     "test": "vitest run"
   },
   "devDependencies": {

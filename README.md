@@ -1,5 +1,8 @@
 # BestTrack Page Builder
 
+For the V0.7.1 brand configuration and Storefront acceptance path, see the
+[Branded template guide](./docs/integration/branded-template.md).
+
 V0.1.1 contains the reusable package `@standhigher/puck-page-builder` and its
 workspace-linked Next.js Shopify Demo in `demos/shopify-app`. All component and
 integration examples remain under `demos/`.

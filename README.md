@@ -4,6 +4,13 @@ V0.1.1 contains the reusable package `@standhigher/puck-page-builder` and its
 workspace-linked Next.js Shopify Demo in `demos/shopify-app`. All component and
 integration examples remain under `demos/`.
 
+## Integration documentation
+
+For production Web rendering, business extensions, host Runtime responsibilities
+and DataSource boundaries, start with [docs/integration](./docs/integration/README.md).
+AI-assisted integration and development should begin with the repository's
+`AGENTS.md` and [AI integration guide](./docs/integration/ai-integration-guide.md).
+
 ## Local Builder UI review
 
 ```bash

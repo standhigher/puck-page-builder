@@ -1,8 +1,26 @@
 {
   "name": "@standhigher/puck-page-builder",
   "version": "0.1.0",
-  "private": true,
+  "description": "React PageDocument editor, extension registry, and web renderer for BestTrack page experiences.",
   "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/standhigher/puck-page-builder.git"
+  },
+  "bugs": {
+    "url": "https://github.com/standhigher/puck-page-builder/issues"
+  },
+  "homepage": "https://github.com/standhigher/puck-page-builder#readme",
+  "files": [
+    "dist",
+    "src/styles.css",
+    "src/ui/builder/tokens.css",
+    "README.md"
+  ],
+  "sideEffects": [
+    "./src/styles.css",
+    "./src/ui/builder/tokens.css"
+  ],
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
@@ -26,7 +44,11 @@
   },
   "scripts": {
     "build": "tsup src/index.ts src/renderer.ts src/extensions.ts src/schema.ts --format esm --dts --clean",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "prepack": "pnpm run build"
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "peerDependencies": {
     "@puckeditor/core": "^0.23.0",

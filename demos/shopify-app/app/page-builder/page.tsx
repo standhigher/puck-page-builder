@@ -12,6 +12,8 @@ import { ReadyToGoDemo } from "../../components/ReadyToGoDemo";
 import { AuthenticatedReadyToGoDemo } from "../../components/AuthenticatedReadyToGoDemo";
 import { BrandedDemo } from "../../components/BrandedDemo";
 import { AuthenticatedBrandedDemo } from "../../components/AuthenticatedBrandedDemo";
+import { SalesDemo } from "../../components/SalesDemo";
+import { AuthenticatedSalesDemo } from "../../components/AuthenticatedSalesDemo";
 
 export default function PageBuilderPage() {
   const apiKey = process.env.NEXT_PUBLIC_SHOPIFY_API_KEY;
@@ -28,6 +30,7 @@ export default function PageBuilderPage() {
     <V061ProtocolDemo />
     {appBridgeStatus === "ready" ? <AuthenticatedReadyToGoDemo /> : <ReadyToGoDemo />}
     {appBridgeStatus === "ready" ? <AuthenticatedBrandedDemo /> : <BrandedDemo />}
+    {appBridgeStatus === "ready" ? <AuthenticatedSalesDemo /> : <SalesDemo />}
     {appBridgeStatus === "ready" ? <AuthenticatedBestTrackLiveDataDemo /> : <BestTrackLiveDataDemo />}
   </AppProvider>;
 }

@@ -8,6 +8,8 @@ import { ExtensionRegistryDemo } from "../../components/ExtensionRegistryDemo";
 import { BestTrackLiveDataDemo } from "../../components/BestTrackLiveDataDemo";
 import { AuthenticatedBestTrackLiveDataDemo } from "../../components/AuthenticatedBestTrackLiveDataDemo";
 import { V061ProtocolDemo } from "../../components/V061ProtocolDemo";
+import { ReadyToGoDemo } from "../../components/ReadyToGoDemo";
+import { AuthenticatedReadyToGoDemo } from "../../components/AuthenticatedReadyToGoDemo";
 
 export default function PageBuilderPage() {
   const apiKey = process.env.NEXT_PUBLIC_SHOPIFY_API_KEY;
@@ -22,6 +24,7 @@ export default function PageBuilderPage() {
     </Page>
     <ExtensionRegistryDemo />
     <V061ProtocolDemo />
+    {appBridgeStatus === "ready" ? <AuthenticatedReadyToGoDemo /> : <ReadyToGoDemo />}
     {appBridgeStatus === "ready" ? <AuthenticatedBestTrackLiveDataDemo /> : <BestTrackLiveDataDemo />}
   </AppProvider>;
 }

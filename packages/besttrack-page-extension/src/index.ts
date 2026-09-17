@@ -12,3 +12,9 @@ export {
   type BrandedRuntimeProviderProps,
   type BrandedRuntimeState
 } from "./branded";
+export { bestTrackSalesExtension, createSalesTemplate } from "./sales-definition";
+export {
+  SalesRuntimeProvider,
+  type SalesRuntimeProviderProps,
+  type SalesRuntimeState
+} from "./sales";

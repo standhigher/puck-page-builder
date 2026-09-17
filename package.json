@@ -8,7 +8,14 @@
     "build": "pnpm --filter @standhigher/puck-page-builder build && pnpm --filter @standhigher/besttrack-page-extension build && pnpm --filter @standhigher/demo-shopify-app build",
     "lint": "eslint . --max-warnings=0",
     "typecheck": "pnpm --filter @standhigher/puck-page-builder build && pnpm --filter @standhigher/besttrack-page-extension build && tsc --noEmit && pnpm --filter @standhigher/puck-page-builder typecheck && pnpm --filter @standhigher/besttrack-page-extension typecheck && pnpm --filter @standhigher/demo-shopify-app typecheck",
-    "test": "vitest run"
+    "test": "vitest run",
+    "npm:login": "npm login && npm whoami",
+    "release:core:version": "npm --prefix packages/puck-page-builder version --no-git-tag-version --ignore-scripts",
+    "release:core:build": "pnpm --filter @standhigher/puck-page-builder build",
+    "release:core:publish": "pnpm --filter @standhigher/puck-page-builder publish --access public --no-git-checks",
+    "release:extension:version": "npm --prefix packages/besttrack-page-extension version --no-git-tag-version --ignore-scripts",
+    "release:extension:build": "pnpm --filter @standhigher/besttrack-page-extension build",
+    "release:extension:publish": "pnpm --filter @standhigher/besttrack-page-extension publish --access public --no-git-checks"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",

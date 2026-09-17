@@ -1,10 +1,8 @@
-import type { PageBuilderExtension } from "@standhigher/puck-page-builder/runtime";
-
-/**
- * V0.6.1 owns only the package boundary. Product blocks and templates are
- * intentionally deferred to their separately accepted V0.7.x versions.
- */
-export const bestTrackPageExtension: PageBuilderExtension = Object.freeze({
-  name: "besttrack.page",
-  version: "0.6.1"
-});
+export {
+  ReadyToGoRuntimeProvider,
+  type ReadyToGoRuntimeProviderProps,
+  type ReadyToGoTrackingQuery,
+  type ReadyToGoTrackingResult,
+  type ReadyToGoRuntimeState
+} from "./ready-to-go";
+export { bestTrackPageExtension, createReadyToGoTemplate } from "./ready-to-go-definition";

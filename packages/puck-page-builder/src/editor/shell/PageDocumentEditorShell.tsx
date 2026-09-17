@@ -233,7 +233,7 @@ function DocumentInspector({ block, registry, disabled, onChange }: { block: Blo
     {block.type === "core.image" ? <><TextField label="图片 URL" value={typeof block.props.src === "string" ? block.props.src : ""} onChange={(src) => onChange({ src })} autoComplete="off" disabled={disabled} /><TextField label="替代文本" value={typeof block.props.alt === "string" ? block.props.alt : ""} onChange={(alt) => onChange({ alt })} autoComplete="off" disabled={disabled} /></> : null}
     {definition ? Object.entries(definition.fields).map(([name, field]) => {
       const Field = registry?.getField(field.field)?.component;
-      return Field ? <Field key={name} value={block.props[name]} onChange={(value) => onChange({ [name]: value as JsonValue })} /> : null;
+      return Field ? <Field key={name} value={block.props[name]} onChange={(value) => onChange({ ...block.props, [name]: value as JsonValue })} /> : null;
     }) : null}
   </BlockStack>;
 }

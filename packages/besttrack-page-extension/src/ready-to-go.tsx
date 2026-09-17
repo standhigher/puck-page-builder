@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useMemo, useState, type FormEvent, type ReactNode } from "react";
 import type { FieldProps } from "@standhigher/puck-page-builder/runtime";
 
-export type ReadyToGoTrackingResult = { trackingNumber: string; status: string; carrier?: string; latestEvent?: string; updatedAt?: string; deliveryAddress?: string; recommendations?: Array<{ id: string; title: string; description: string }> };
+export type ReadyToGoTrackingResult = { trackingNumber: string; status: string; carrier?: string; latestEvent?: string; updatedAt?: string; deliveryAddress?: string; orderItems?: Array<{ id: string; title: string; quantity: number; imageUrl?: string }>; recommendations?: Array<{ id: string; title: string; description: string }> };
 export type ReadyToGoTrackingQuery = (trackingNumber: string) => Promise<ReadyToGoTrackingResult>;
 export type ReadyToGoRuntimeState = { phase: "idle" | "loading" | "success" | "error"; result?: ReadyToGoTrackingResult; error?: string };
 type ReadyToGoRuntime = ReadyToGoRuntimeState & { query(trackingNumber: string): Promise<void> };
@@ -14,6 +14,7 @@ export type ReadyToGoRuntimeProviderProps = { children: ReactNode; queryTracking
 async function queryMockReadyToGoTracking(trackingNumber: string): Promise<ReadyToGoTrackingResult> {
   return {
     trackingNumber, status: "In transit", carrier: "BestTrack demo carrier", latestEvent: "Shipment accepted at the regional hub", updatedAt: "2026-09-17T10:00:00.000Z", deliveryAddress: "Demo recipient · Shanghai",
+    orderItems: [{ id: "demo-order-item", title: "Demo shipment item", quantity: 1 }],
     recommendations: [{ id: "shipping-protection", title: "Shipping protection", description: "Extra assurance for your next delivery." }, { id: "delivery-alerts", title: "Delivery alerts", description: "Receive an update at every milestone." }]
   };
 }

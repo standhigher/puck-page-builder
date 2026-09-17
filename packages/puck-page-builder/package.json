@@ -1,6 +1,6 @@
 {
   "name": "@standhigher/puck-page-builder",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "React PageDocument editor, extension registry, and web renderer for BestTrack page experiences.",
   "type": "module",
   "repository": {

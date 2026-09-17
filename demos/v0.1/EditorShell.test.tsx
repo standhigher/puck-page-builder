@@ -2,7 +2,7 @@ import { AppProvider } from "@shopify/polaris";
 import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import { createContext, useContext } from "react";
 import { describe, expect, it, vi } from "vitest";
-import { EditorShell } from "../../src/editor/shell/EditorShell";
+import { EditorShell } from "../../packages/puck-page-builder/src/editor/shell/EditorShell";
 
 type MockPuckState = { config: { components: Record<string, { render: (props: Record<string, unknown>) => JSX.Element }> }; data: { content: { type: string; props: Record<string, unknown> }[] } };
 const PuckContext = createContext<MockPuckState | null>(null);

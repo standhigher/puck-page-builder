@@ -51,8 +51,8 @@ button:focus-visible, [role="button"]:focus-visible { outline: 2px solid var(--b
 .pb-document-block-row--library { width: 100%; flex-direction: column; align-items: flex-start; text-align: left; color: var(--builder-text); font: inherit; cursor: grab; }
 .pb-document-block-row--library:active { cursor: grabbing; }
 .pb-library-block-title { display: flex; align-items: center; justify-content: space-between; width: 100%; gap: var(--builder-space-2); }
-.pb-library-block-drag-icon { display: inline-flex; color: var(--builder-text-muted); }
-.pb-library-block-drag-icon svg { width: 16px; height: 16px; }
+.pb-library-block-drag-hint { display: inline-flex; color: var(--builder-text-muted); pointer-events: none; }
+.pb-library-block-drag-hint svg { width: 16px; height: 16px; }
 .pb-document-block-row:hover { background: var(--builder-surface-subtle); }
 .pb-document-block-row--selected { border-color: var(--builder-accent); background: var(--builder-accent-subtle); }
 .pb-editor-status { display: grid; place-items: center; min-height: min(50vh, 420px); padding: var(--builder-space-6); }

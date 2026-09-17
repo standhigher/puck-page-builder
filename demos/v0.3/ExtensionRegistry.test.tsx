@@ -1,10 +1,10 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import { fromEngineData, toEngineData } from "../../src/adapters/puck/page-document";
-import { createPageDocumentPuckConfig } from "../../src/adapters/puck/page-document-config";
-import { createExtensionRegistry, ExtensionRegistryError, type PageBuilderExtension } from "../../src/core/extensions";
-import { createPageDocument } from "../../src/core/schema/page-document";
-import { WebRenderer } from "../../src/renderer/web/WebRenderer";
+import { fromEngineData, toEngineData } from "../../packages/puck-page-builder/src/adapters/puck/page-document";
+import { createPageDocumentPuckConfig } from "../../packages/puck-page-builder/src/adapters/puck/page-document-config";
+import { createExtensionRegistry, ExtensionRegistryError, type PageBuilderExtension } from "../../packages/puck-page-builder/src/core/extensions";
+import { createPageDocument } from "../../packages/puck-page-builder/src/core/schema/page-document";
+import { WebRenderer } from "../../packages/puck-page-builder/src/renderer/web/WebRenderer";
 
 const catalogExtension: PageBuilderExtension = {
   name: "acme.catalog",

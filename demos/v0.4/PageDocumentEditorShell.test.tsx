@@ -2,9 +2,9 @@ import { AppProvider } from "@shopify/polaris";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { createContext, useContext, useState } from "react";
 import { describe, expect, it, vi } from "vitest";
-import { PageDocumentEditorShell } from "../../src/editor/shell/PageDocumentEditorShell";
-import { blockIdAtRelativeY, nearestBlockIdAtY } from "../../src/editor/shell/drop-position";
-import type { PageDocument } from "../../src/core/schema/page-document";
+import { PageDocumentEditorShell } from "../../packages/puck-page-builder/src/editor/shell/PageDocumentEditorShell";
+import { blockIdAtRelativeY, nearestBlockIdAtY } from "../../packages/puck-page-builder/src/editor/shell/drop-position";
+import type { PageDocument } from "../../packages/puck-page-builder/src/core/schema/page-document";
 
 type MockPuckState = {
   config: { components: Record<string, { render: (props: Record<string, unknown>) => JSX.Element }> };
@@ -83,7 +83,7 @@ describe("PageDocumentEditorShell V0.4", () => {
     const library = screen.getByTestId("blocks-view");
     expect(library.querySelectorAll("[data-block-type]")).toHaveLength(2);
     const textType = library.querySelector('[data-block-type="core.text"]')!;
-    expect(textType.querySelector(".pb-library-block-drag-icon svg")).toBeInTheDocument();
+    expect(textType.querySelector(".pb-library-block-drag-hint svg")).toBeInTheDocument();
     fireEvent.click(textType);
     expect(screen.queryByTestId("canvas-drop-target")).not.toBeInTheDocument();
     expect(screen.queryByText("New text block")).not.toBeInTheDocument();
@@ -97,6 +97,31 @@ describe("PageDocumentEditorShell V0.4", () => {
     expect(changed.at(-1)?.blocks.map((block) => block.id)).toEqual(["text-1", "text-2", "core-text-3", "core-text-4"]);
     expect(library.querySelectorAll("[data-block-type]")).toHaveLength(2);
     expect(textType).toHaveAttribute("data-selected", "true");
+  });
+
+  it("uses the icon as a drag hint only and never reorders the type library", () => {
+    const changed: PageDocument[] = [];
+    renderEditor({ onDocumentChange: (next) => changed.push(next) });
+    const library = screen.getByTestId("blocks-view");
+    const typeOrder = Array.from(library.querySelectorAll<HTMLElement>("[data-block-type]")).map((item) => item.dataset.blockType);
+    const textType = library.querySelector('[data-block-type="core.text"]')!;
+    const dragHint = textType.querySelector<HTMLElement>(".pb-library-block-drag-hint")!;
+    expect(dragHint).toHaveAttribute("aria-hidden", "true");
+    const initialChangeCount = changed.length;
+
+    const transfer = { setData: () => undefined, getData: () => "core.text", effectAllowed: "" };
+    fireEvent.dragStart(dragHint, { dataTransfer: transfer });
+    fireEvent.drop(library, { dataTransfer: transfer });
+    fireEvent.dragEnd(dragHint);
+    expect(changed).toHaveLength(initialChangeCount);
+    expect(Array.from(library.querySelectorAll<HTMLElement>("[data-block-type]")).map((item) => item.dataset.blockType)).toEqual(typeOrder);
+
+    fireEvent.dragStart(dragHint, { dataTransfer: transfer });
+    fireEvent.drop(screen.getByTestId("canvas-drop-target"), { clientY: 9999, dataTransfer: transfer });
+    fireEvent.dragEnd(dragHint);
+
+    expect(changed.at(-1)?.blocks.map((block) => block.id)).toEqual(["text-1", "text-2", "core-text-3"]);
+    expect(Array.from(library.querySelectorAll<HTMLElement>("[data-block-type]")).map((item) => item.dataset.blockType)).toEqual(typeOrder);
   });
 
   it("highlights the selected canvas block type without using canvas order", async () => {

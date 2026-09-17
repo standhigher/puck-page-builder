@@ -2,7 +2,7 @@ import "@puckeditor/core/dist/index.css";
 import "@shopify/polaris/build/esm/styles.css";
 import type { Metadata } from "next";
 import { AppBridgeLoader } from "../components/AppBridgeLoader";
-import "../../../src/styles.css";
+import "@standhigher/puck-page-builder/styles.css";
 import "./styles.css";
 
 export const metadata: Metadata = { title: "BestTrack Page Builder Demo" };

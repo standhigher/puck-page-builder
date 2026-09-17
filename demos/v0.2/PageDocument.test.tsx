@@ -1,8 +1,8 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import { fromEngineData, toEngineData } from "../../src/adapters/puck/page-document";
-import { createPageDocument, validatePageDocument, type PageDocument } from "../../src/core/schema/page-document";
-import { WebRenderer } from "../../src/renderer/web/WebRenderer";
+import { fromEngineData, toEngineData } from "../../packages/puck-page-builder/src/adapters/puck/page-document";
+import { createPageDocument, validatePageDocument, type PageDocument } from "../../packages/puck-page-builder/src/core/schema/page-document";
+import { WebRenderer } from "../../packages/puck-page-builder/src/renderer/web/WebRenderer";
 
 const document: PageDocument = createPageDocument({
   pageId: "page_123",

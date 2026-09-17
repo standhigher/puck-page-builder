@@ -6,7 +6,7 @@ export default defineConfig({
   plugins: [react()],
   resolve: {
     alias: {
-      "@standhigher/puck-page-builder/schema": fileURLToPath(new URL("./src/core/schema/page-document.ts", import.meta.url))
+      "@standhigher/puck-page-builder/schema": fileURLToPath(new URL("./packages/puck-page-builder/src/core/schema/page-document.ts", import.meta.url))
     }
   },
   test: {

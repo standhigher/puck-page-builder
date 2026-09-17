@@ -1,7 +1,7 @@
 import { createHmac } from "node:crypto";
 import { describe, expect, it, vi } from "vitest";
 import { GET as getTracking } from "../shopify-app/app/api/besttrack/tracking/route";
-import { createExtensionRegistry } from "../../src/core/extensions";
+import { createExtensionRegistry } from "../../packages/puck-page-builder/src/core/extensions";
 import { createBestTrackExtension } from "../shopify-app/lib/besttrack-extension";
 import { requestConfiguredBestTrackTracking, BestTrackLiveDataError } from "../shopify-app/lib/besttrack-tracking-api";
 import { resolveBlockDataBinding } from "../shopify-app/lib/page-builder-data-binding";

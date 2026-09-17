@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { migratePageDocument, type PageDocument } from "../../src/core/schema/page-document";
+import { migratePageDocument, type PageDocument } from "../../packages/puck-page-builder/src/core/schema/page-document";
 import { GET as getDraft, PUT as putDraft } from "../shopify-app/app/api/page-documents/[pageId]/draft/route";
 import { GET as getPublished, POST as postPublished } from "../shopify-app/app/api/page-documents/[pageId]/published/route";
 import { getDraft as readDraft, getPublished as readPublished, resetPageDocumentStore, saveDraft } from "../shopify-app/lib/page-document-store";

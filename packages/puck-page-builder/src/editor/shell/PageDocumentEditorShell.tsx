@@ -98,6 +98,11 @@ function PageDocumentEditor({ iframe = true, registry, adminLocale, onSave, onPu
     if (type && blockTypes.includes(type)) addFromLibrary(type, getDropBeforeId(event.clientY));
     setDraggingLibraryType(null);
   };
+  const cancelLibraryDrop = (event: React.DragEvent<HTMLElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setDraggingLibraryType(null);
+  };
   const save = async () => {
     if (!onSave || request !== "idle") return;
     setRequest("saving");
@@ -151,9 +156,9 @@ function PageDocumentEditor({ iframe = true, registry, adminLocale, onSave, onPu
           </nav>
           <aside className="pb-left-panel" aria-label="PageDocument 区块">
             <InlineStack align="space-between" blockAlign="center"><Text as="h2" variant="headingSm">{blockView === "blocks" ? i18n.t("blocks") : i18n.t("outline")}</Text></InlineStack>
-            {blockView === "blocks" ? <div className="pb-block-list" data-testid="blocks-view" aria-label="区块类型库" role="list">
+            {blockView === "blocks" ? <div className="pb-block-list" data-testid="blocks-view" aria-label="区块类型库" role="list" onDrop={cancelLibraryDrop}>
               {blockTypes.map((type) => <div key={type} className={`pb-document-block-row pb-document-block-row--library ${editor.selectedBlock?.type === type ? "pb-document-block-row--selected" : ""}`} data-block-type={type} data-selected={editor.selectedBlock?.type === type} role="listitem" draggable={editor.actionState.canAdd} aria-label={`${blockTypeLabel(type, registry)}，拖拽至画布以添加${editor.selectedBlock?.type === type ? "，当前选中类型" : ""}`} onDragStart={(event) => { event.dataTransfer.setData("application/x-page-document-block", type); event.dataTransfer.effectAllowed = "copy"; setDraggingLibraryType(type); }} onDragEnd={() => setDraggingLibraryType(null)}>
-                <span className="pb-library-block-title"><Text as="span" variant="bodySm" fontWeight="semibold">{blockTypeLabel(type, registry)}</Text><span className="pb-library-block-drag-icon" aria-hidden="true"><DragHandleIcon /></span></span>
+                <span className="pb-library-block-title"><Text as="span" variant="bodySm" fontWeight="semibold">{blockTypeLabel(type, registry)}</Text><span className="pb-library-block-drag-hint" aria-hidden="true"><DragHandleIcon /></span></span>
                 <Text as="span" variant="bodySm" tone="subdued">{type}</Text>
               </div>)}
             </div> : editor.document.blocks.length === 0 ? <Text as="p" tone="subdued">{i18n.t("empty")}</Text> : <div className="pb-block-list" data-testid="outline-view">

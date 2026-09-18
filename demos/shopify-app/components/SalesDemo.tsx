@@ -43,7 +43,7 @@ export function SalesDemo({ getSessionToken }: { getSessionToken?: GetSessionTok
   };
   if (loadState === "error") return <Page fullWidth><Banner tone="critical" title="无法加载 Sales 草稿">草稿未通过 PageDocument 校验，编辑器未打开。</Banner></Page>;
   return <SalesRuntimeProvider queryTracking={queryTracking}><Page fullWidth><BlockStack gap="300">
-    <Card><BlockStack gap="100"><Text as="h2" variant="headingSm">V0.7.2 Sales</Text><Text as="p" tone="subdued">商城化模板使用同一受控查询模型。商品与集合引用只保存 JSON 标识和最小展示数据；生产资源选择必须由服务端 BFF 授权，浏览器不会请求 Shopify Admin API。</Text>{!getSessionToken ? <Banner tone="info">独立模式使用显式 Mock Runtime；嵌入 Shopify 后使用受控 Live DataSource。</Banner> : null}</BlockStack></Card>
+    <Card><BlockStack gap="100"><Text as="h2" variant="headingSm">V0.7.2 Sales</Text><Text as="p" tone="subdued">商城化模板使用同一受控查询模型。商品与集合引用只保存 JSON 标识和最小展示数据；生产资源选择由受控 Consumer Runtime API 授权，浏览器不会请求 Shopify Admin API。</Text>{!getSessionToken ? <Banner tone="info">独立模式使用显式 Mock Runtime；嵌入 Shopify 后使用受控 Live DataSource。</Banner> : null}</BlockStack></Card>
     {loadState === "ready" ? <PageDocumentEditorShell initialDocument={document} registry={registry} iframe={false} onDocumentChange={setDocument} onSave={(next) => save(next, "draft")} onPublish={(next) => save(next, "published")} /> : <Banner tone="info">正在加载 Sales 草稿…</Banner>}
     <Card><BlockStack gap="200"><Text as="h2" variant="headingSm">Consumer WebRenderer preview</Text><WebRenderer document={document} registry={registry} className="pb-web-renderer pb-web-renderer--demo" /></BlockStack></Card>
   </BlockStack></Page></SalesRuntimeProvider>;

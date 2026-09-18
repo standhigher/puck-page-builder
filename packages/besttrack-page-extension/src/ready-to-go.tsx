@@ -13,41 +13,24 @@ import {
   text,
   TrackingProgress
 } from "./track-page-display";
+import type {
+  TrackingPageOrderItem,
+  TrackingPageQuery,
+  TrackingPageQueryResult,
+  TrackingPageRecommendation,
+  TrackingPageShipment,
+  TrackingPageTrackingEvent,
+  TrackingPageTrackingStep
+} from "./tracking-page-runtime";
 
-export type ReadyToGoOrderItem = { id: string; title: string; quantity: number; imageUrl?: string; description?: string; href?: string };
-export type ReadyToGoRecommendation = { id: string; title: string; description: string; imageUrl?: string; href?: string; price?: string };
-export type ReadyToGoTrackingStep = { id: string; label: string; state: "complete" | "current" | "upcoming"; date?: string; icon?: "check" | "bag" | "truck" | "box" };
-export type ReadyToGoTrackingEvent = { id: string; title: string; at?: string; detail?: string; state?: "complete" | "current" | "upcoming" };
-export type ReadyToGoShipment = {
-  id: string;
-  label: string;
-  trackingNumber?: string;
-  status?: string;
-  carrier?: string;
-  latestEvent?: string;
-  updatedAt?: string;
-  deliveryAddress?: string;
-  estimatedDelivery?: string;
-  progress?: ReadyToGoTrackingStep[];
-  events?: ReadyToGoTrackingEvent[];
-  orderItems?: ReadyToGoOrderItem[];
-  recommendations?: ReadyToGoRecommendation[];
-};
-export type ReadyToGoTrackingResult = {
-  trackingNumber: string;
-  status: string;
-  carrier?: string;
-  latestEvent?: string;
-  updatedAt?: string;
-  deliveryAddress?: string;
-  estimatedDelivery?: string;
-  progress?: ReadyToGoTrackingStep[];
-  events?: ReadyToGoTrackingEvent[];
-  orderItems?: ReadyToGoOrderItem[];
-  recommendations?: ReadyToGoRecommendation[];
-  shipments?: ReadyToGoShipment[];
-};
-export type ReadyToGoTrackingQuery = (trackingNumber: string) => Promise<ReadyToGoTrackingResult>;
+/** Backward-compatible Ready-to-go names for the shared Consumer Runtime contract. */
+export type ReadyToGoOrderItem = TrackingPageOrderItem;
+export type ReadyToGoRecommendation = TrackingPageRecommendation;
+export type ReadyToGoTrackingStep = TrackingPageTrackingStep;
+export type ReadyToGoTrackingEvent = TrackingPageTrackingEvent;
+export type ReadyToGoShipment = TrackingPageShipment;
+export type ReadyToGoTrackingResult = TrackingPageQueryResult;
+export type ReadyToGoTrackingQuery = TrackingPageQuery;
 export type ReadyToGoRuntimeState = { phase: "idle" | "loading" | "success" | "error"; result?: ReadyToGoTrackingResult; error?: string };
 type ReadyToGoRuntime = ReadyToGoRuntimeState & { query(trackingNumber: string): Promise<void> };
 

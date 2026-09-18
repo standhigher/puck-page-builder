@@ -12,3 +12,8 @@ the Shopify Track Page layout (query card, five-step progress, shipping
 timeline, package contents and product cards) using inline styles and `--pb-*`
 Theme Tokens. Live tracking is injected by the host Runtime; this package never
 stores credentials or network endpoints in a `PageDocument`.
+
+V0.7.2 Sales uses the shared, transient `TrackingPageQuery` contract exported
+by this package. The external Go Consumer Runtime API owns live-query
+authorization and transport; Sales only receives its display-safe result and
+never falls back to mock data after a live failure.

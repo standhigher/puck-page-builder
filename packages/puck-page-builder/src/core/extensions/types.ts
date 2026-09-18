@@ -11,6 +11,10 @@ export type ValidationIssue = { path: string; message: string };
 export type FieldConfig = {
   field: string;
   label?: string;
+  /** Product-facing editor metadata. Custom field components remain supported. */
+  control?: "text" | "textarea" | "url";
+  description?: string;
+  group?: string;
   required?: boolean;
 };
 

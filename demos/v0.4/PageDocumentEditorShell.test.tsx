@@ -4,7 +4,9 @@ import { createContext, useContext, useState } from "react";
 import { describe, expect, it, vi } from "vitest";
 import { PageDocumentEditorShell } from "../../packages/puck-page-builder/src/editor/shell/PageDocumentEditorShell";
 import { blockIdAtRelativeY, nearestBlockIdAtY } from "../../packages/puck-page-builder/src/editor/shell/drop-position";
+import { createExtensionRegistry } from "../../packages/puck-page-builder/src/core/extensions";
 import type { PageDocument } from "../../packages/puck-page-builder/src/core/schema/page-document";
+import { bestTrackBrandedExtension } from "../../packages/besttrack-page-extension/src/branded-definition";
 
 type MockPuckState = {
   config: { components: Record<string, { render: (props: Record<string, unknown>) => JSX.Element }> };
@@ -154,6 +156,17 @@ describe("PageDocumentEditorShell V0.4", () => {
 
     fireEvent.change(screen.getByLabelText("文本内容"), { target: { value: "Changed in inspector" } });
     await waitFor(() => expect(screen.getAllByText("Changed in inspector").some((element) => element.tagName === "P")).toBe(true));
+  });
+
+  it("uses grouped, semantic controls for product-facing extension fields", async () => {
+    const registry = createExtensionRegistry([bestTrackBrandedExtension]);
+    const brandedDocument = registry.getTemplate("besttrack.branded")!.create();
+    renderEditor({ initialDocument: brandedDocument, registry });
+    fireEvent.click(screen.getByRole("button", { name: "Select Announcement in canvas" }));
+    await waitFor(() => expect(screen.getByText("Links", { exact: true })).toBeVisible());
+    expect(screen.getByLabelText("Announcement").tagName).toBe("TEXTAREA");
+    expect(screen.getByLabelText("Announcement URL")).toHaveAttribute("type", "url");
+    expect(screen.getByTestId("document-inspector").querySelectorAll(".pb-inspector-section")).toHaveLength(2);
   });
 
   it("tracks dirty history, restores properties with undo/redo, and handles editor shortcuts", () => {

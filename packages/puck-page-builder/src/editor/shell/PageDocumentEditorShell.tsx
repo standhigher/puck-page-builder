@@ -1,10 +1,10 @@
 import { Puck, usePuck } from "@puckeditor/core";
-import { Badge, Banner, BlockStack, Button, ButtonGroup, InlineStack, Text, TextField } from "@shopify/polaris";
+import { Badge, Banner, Button, ButtonGroup, InlineStack, Text, TextField } from "@shopify/polaris";
 import { DragHandleIcon, LayoutSectionIcon, MenuIcon, RedoIcon, UndoIcon } from "@shopify/polaris-icons";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPageDocumentPuckConfig } from "../../adapters/puck/page-document-config";
 import { fromEngineData, toEngineData } from "../../adapters/puck/page-document";
-import type { ExtensionRegistry } from "../../core/extensions";
+import type { ExtensionRegistry, FieldConfig } from "../../core/extensions";
 import type { BlockNode, JsonValue, PageDocument } from "../../core/schema/page-document";
 import { EditorProvider, useEditorContext, type EditorLoadState } from "../context/EditorContext";
 import { createAdminI18n } from "../i18n/admin";
@@ -224,16 +224,56 @@ function EditorStatus({ state }: { state: Exclude<EditorLoadState, "ready" | "su
   return <div className="pb-editor-status" data-testid="page-document-editor-state" data-editor-state={state}><Banner tone={tone} title={message}>{state === "disabled" ? i18n.t("disabled") : message}</Banner></div>;
 }
 
+function InspectorSection({ title, children, defaultOpen = true }: { title: string; children: ReactNode; defaultOpen?: boolean }) {
+  return <details className="pb-inspector-section" open={defaultOpen}>
+    <summary><span>{title}</span><span aria-hidden="true">⌄</span></summary>
+    <div className="pb-inspector-section__body">{children}</div>
+  </details>;
+}
+
+function InspectorTextControl({ label, value, control, disabled, onChange }: { label: string; value: unknown; control: NonNullable<FieldConfig["control"]>; disabled: boolean; onChange: (value: string) => void }) {
+  const stringValue = typeof value === "string" ? value : "";
+  return <TextField label={label} labelHidden value={stringValue} onChange={onChange} autoComplete="off" disabled={disabled} multiline={control === "textarea" ? 4 : false} type={control === "url" ? "url" : "text"} />;
+}
+
+function InspectorField({ name, field, value, registry, disabled, onChange }: { name: string; field: FieldConfig; value: unknown; registry?: ExtensionRegistry; disabled: boolean; onChange: (value: JsonValue) => void }) {
+  const label = field.label ?? name;
+  const Field = registry?.getField(field.field)?.component;
+  return <div className="pb-inspector-field" data-control={field.control ?? "custom"}>
+    <div className="pb-inspector-field__heading"><Text as="p" variant="bodySm" fontWeight="semibold">{label}</Text>{field.description ? <Text as="p" variant="bodySm" tone="subdued">{field.description}</Text> : null}</div>
+    {field.control ? <InspectorTextControl label={label} value={value} control={field.control} disabled={disabled} onChange={(next) => onChange(next)} /> : Field ? <Field value={value} onChange={onChange} /> : null}
+  </div>;
+}
+
+function inspectorFieldConfig(name: string, field: FieldConfig): FieldConfig {
+  const key = name.toLowerCase();
+  const group = /(?:href|url)/.test(key) ? "Links" : /(?:default|shipment|query|hide)/.test(key) ? "Tracking settings" : /(?:id|variant|theme)/.test(key) ? "Advanced" : "Content";
+  const description = field.description ?? (field.control === "textarea"
+    ? "适合较长或多行的展示文案。"
+    : field.control === "url"
+      ? "使用站内相对路径或 HTTPS 地址。"
+      : key.includes("shipment")
+        ? "多个包裹标签使用 | 分隔。"
+        : key.includes("default")
+          ? "仅用于编辑器和空状态预览。"
+          : undefined);
+  return { ...field, group: field.group ?? group, description };
+}
+
 function DocumentInspector({ block, registry, disabled, onChange }: { block: BlockNode; registry?: ExtensionRegistry; disabled: boolean; onChange: (props: Record<string, JsonValue>) => void }) {
   const definition = registry?.getBlock(block.type);
-  return <BlockStack gap="300" data-testid="document-inspector">
-    <Badge>{block.type}</Badge>
-    <Text as="p" variant="headingSm">{blockLabel(block, registry)}</Text>
-    {block.type === "core.text" ? <TextField label="文本内容" value={typeof block.props.content === "string" ? block.props.content : ""} onChange={(content) => onChange({ content })} autoComplete="off" multiline={4} disabled={disabled} /> : null}
-    {block.type === "core.image" ? <><TextField label="图片 URL" value={typeof block.props.src === "string" ? block.props.src : ""} onChange={(src) => onChange({ src })} autoComplete="off" disabled={disabled} /><TextField label="替代文本" value={typeof block.props.alt === "string" ? block.props.alt : ""} onChange={(alt) => onChange({ alt })} autoComplete="off" disabled={disabled} /></> : null}
-    {definition ? Object.entries(definition.fields).map(([name, field]) => {
-      const Field = registry?.getField(field.field)?.component;
-      return Field ? <Field key={name} value={block.props[name]} onChange={(value) => onChange({ ...block.props, [name]: value as JsonValue })} /> : null;
-    }) : null}
-  </BlockStack>;
+  const groupedFields = definition ? Object.entries(definition.fields).reduce<Record<string, Array<[string, FieldConfig]>>>((groups, entry) => {
+    const [name, field] = entry;
+    const configuredField = inspectorFieldConfig(name, field);
+    const group = configuredField.group ?? "Content";
+    (groups[group] ??= []).push([name, configuredField]);
+    return groups;
+  }, {}) : {};
+  return <div className="pb-inspector" data-testid="document-inspector">
+    <header className="pb-inspector__header"><Badge>{block.type}</Badge><div><Text as="p" variant="headingSm">{blockLabel(block, registry)}</Text><Text as="p" variant="bodySm" tone="subdued">{definition?.category ?? "Core block"}</Text></div></header>
+    {block.type === "core.text" ? <InspectorSection title="Content"><InspectorField name="content" field={{ field: "", label: "文本内容", control: "textarea", description: "支持较长的正文内容。" }} value={block.props.content} registry={registry} disabled={disabled} onChange={(content) => onChange({ content })} /></InspectorSection> : null}
+    {block.type === "core.image" ? <InspectorSection title="Image"><InspectorField name="src" field={{ field: "", label: "图片 URL", control: "url", description: "使用 HTTPS 图片地址。" }} value={block.props.src} registry={registry} disabled={disabled} onChange={(src) => onChange({ src })} /><InspectorField name="alt" field={{ field: "", label: "替代文本", control: "text", description: "用于无障碍阅读和图片加载失败场景。" }} value={block.props.alt} registry={registry} disabled={disabled} onChange={(alt) => onChange({ alt })} /></InspectorSection> : null}
+    {Object.entries(groupedFields).map(([group, fields]) => <InspectorSection key={group} title={group} defaultOpen={group !== "Advanced"}>{fields.map(([name, field]) => <InspectorField key={name} name={name} field={field} value={block.props[name]} registry={registry} disabled={disabled} onChange={(value) => onChange({ ...block.props, [name]: value })} />)}</InspectorSection>)}
+    {definition ? <p className="pb-inspector__hint">画布中带虚线边框的内容可直接编辑。</p> : null}
+  </div>;
 }

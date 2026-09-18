@@ -26,3 +26,9 @@ merchant-authored text, preview-only tracking placeholders and collection
 links, while the storefront renders only site-relative or HTTPS resource
 links. See `docs/integration/sales-template.md` and
 `docs/integration/consumer-runtime-api.md` for the host contract.
+
+New Sales pages use the `hero` visual Variant: a token-driven announcement,
+merchant HTTPS hero image and tracking-only query card. Existing `commerce`
+Variants and published v1 documents stay valid. The browser does not offer an
+order-number mode because the shared Consumer Runtime API currently accepts
+only a tracking number.

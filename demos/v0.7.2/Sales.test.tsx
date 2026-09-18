@@ -8,8 +8,36 @@ describe("V0.7.2 Sales", () => {
   it("registers sales@1.0.0 with the seven commerce blocks", () => {
     const registry = createExtensionRegistry([bestTrackSalesExtension]);
     const template = registry.getTemplate("besttrack.sales");
-    expect(template).toMatchObject({ source: "built-in", version: 1, theme: { "color.primary": "#dc2626" } });
+    expect(template).toMatchObject({ source: "built-in", version: 1, theme: { "color.primary": "#000000" } });
     expect(template?.create().blocks.map((block) => block.type)).toEqual(["besttrack.sales.announcement", "besttrack.sales.query", "besttrack.sales.order-items", "besttrack.sales.other-tracking", "besttrack.sales.service-cards", "besttrack.sales.product-categories", "besttrack.sales.recommendations"]);
+    expect(template?.create().blocks.map((block) => block.id)).toEqual(["sales-1", "sales-2", "sales-3", "sales-4", "sales-5", "sales-6", "sales-7"]);
+    expect(template?.create().blocks.every((block) => block.variant === "hero")).toBe(true);
+    expect(registry.getBlock("besttrack.sales.query")?.variants?.some((variant) => variant.id === "commerce")).toBe(true);
+  });
+
+  it("renders the responsive Sales Hero with a safe image and tracking-only query control", () => {
+    const registry = createExtensionRegistry([bestTrackSalesExtension]);
+    const { container } = render(<SalesRuntimeProvider queryTracking={async () => ({ trackingNumber: "BT-2024", status: "In transit" })}><WebRenderer document={registry.getTemplate("besttrack.sales")!.create()} registry={registry} /></SalesRuntimeProvider>);
+    const hero = container.querySelector<HTMLElement>("[data-sales-hero]");
+    const card = container.querySelector<HTMLElement>("[data-sales-query-card]");
+    const image = container.querySelector<HTMLImageElement>("[data-sales-hero-image]");
+    expect(hero).toHaveStyle({ minHeight: "clamp(460px, 52vw, 620px)" });
+    expect(card).toHaveStyle({ width: "min(560px, 100%)" });
+    expect(image?.src).toContain("images.unsplash.com");
+    expect(screen.getByPlaceholderText("Enter your tracking number")).toBeVisible();
+    expect(screen.getByText("Powered by BestTrack")).toBeVisible();
+    expect(screen.queryByRole("tab", { name: /order number/i })).not.toBeInTheDocument();
+    expect(screen.queryByText("Order Number")).not.toBeInTheDocument();
+  });
+
+  it("continues to render published Sales v1 commerce variants", () => {
+    const registry = createExtensionRegistry([bestTrackSalesExtension]);
+    const document = registry.getTemplate("besttrack.sales")!.create();
+    document.blocks.forEach((block) => { block.variant = "commerce"; });
+    expect(document.blocks.every((block) => registry.getBlock(block.type)?.variants?.some((variant) => variant.id === block.variant))).toBe(true);
+    render(<SalesRuntimeProvider queryTracking={async () => ({ trackingNumber: "BT-2024", status: "In transit" })}><WebRenderer document={document} registry={registry} /></SalesRuntimeProvider>);
+    expect(screen.getByRole("heading", { name: "Track your order" })).toBeVisible();
+    expect(screen.getByRole("region", { name: "Shop with confidence" })).toBeVisible();
   });
 
   it("keeps the v1 editor definitions valid by default and rejects unsafe Sales props", () => {
@@ -25,6 +53,9 @@ describe("V0.7.2 Sales", () => {
     expect(query.validate?.({ heading: "", submitLabel: "Track", defaultTrackingNumber: "customer secret" })).toEqual(expect.arrayContaining([
       expect.objectContaining({ path: "props.heading" }),
       expect.objectContaining({ path: "props.defaultTrackingNumber" })
+    ]));
+    expect(query.validate?.({ heading: "Track", submitLabel: "Track", defaultTrackingNumber: "BT-2048", heroImageUrl: "javascript:unsafe" })).toEqual(expect.arrayContaining([
+      expect.objectContaining({ path: "props.heroImageUrl" })
     ]));
     const categories = registry.getBlock("besttrack.sales.product-categories")!;
     expect(categories.validate?.({ heading: "Shop", collectionId: "gid://shopify/Collection/1", collectionLabel: "Featured", collectionHref: "javascript:unsafe" })).toEqual(expect.arrayContaining([

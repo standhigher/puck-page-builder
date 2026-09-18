@@ -32,6 +32,11 @@ type TrackingPageQueryRequest = {
 };
 ```
 
+This is intentionally the only query mode supported by Sales Hero. The
+storefront must not present an order-number mode, or submit an order identifier
+as `trackingNumber`, until the Go Consumer Runtime API publishes a separate
+discriminated request mode with its own validation and authorization rules.
+
 The Consumer Runtime API must determine the tenant and authorization scope
 from trusted request context, not from a `PageDocument`, browser-supplied shop
 ID, or a client-side token. It should reject invalid input before calling an

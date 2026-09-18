@@ -54,10 +54,10 @@ function PageDocumentEditor({ iframe = true, registry, adminLocale, onSave, onPu
   const i18n = createAdminI18n(adminLocale);
   const engineData = useMemo(() => toEngineData(editor.document, registry), [editor.document, registry]);
   const { confirmCanvasSelection, selectedBlockId, updateBlockProps } = editor;
-  const updateFromCanvasInput = useCallback((id: string, props: Record<string, JsonValue>) => {
+  const updateFromCanvasInput = useCallback((id: string, props: Record<string, JsonValue>, preserveCanvasValue = false) => {
     // The DOM already contains this value. Sending it back through Puck would reset
     // the contenteditable caret after every keystroke.
-    setCanvasMutationVersion((version) => version + 1);
+    if (preserveCanvasValue) setCanvasMutationVersion((version) => version + 1);
     updateBlockProps(id, props);
   }, [updateBlockProps]);
   const config = useMemo(() => createPageDocumentPuckConfig(confirmCanvasSelection, updateFromCanvasInput, selectedBlockId, registry), [confirmCanvasSelection, registry, selectedBlockId, updateFromCanvasInput]);

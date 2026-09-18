@@ -13,7 +13,7 @@
 ## 最小 Web 区块
 
 ```tsx
-import type { FieldProps, PageBuilderExtension } from "@standhigher/puck-page-builder/extensions";
+import type { BlockEditorProps, FieldProps, PageBuilderExtension } from "@standhigher/puck-page-builder/extensions";
 
 type NoticeProps = { title: string; description: string };
 
@@ -46,6 +46,28 @@ export const deliveryExtension: PageBuilderExtension = {
 
 当前包不会为扩展自动提供通用文本字段。需要在编辑器属性面板编辑业务 props 时，扩展应先注册自己的 `FieldDefinition`，再在区块的 `fields` 中引用它。
 
+## 画布内编辑
+
+需要所见即所得编辑时，可额外声明 `render.editor`。它接收区块的静态
+props，以及 `blockId`、`selected` 和 `onPropsChange`。画布和属性
+面板必须通过 `onPropsChange` 写入同一份 JSON props；不要在编辑器组件中
+维护会被保存的副本状态。
+
+`render.editor` 只用于管理端画布，`WebRenderer` 永远只调用
+`render.web`。因此查询、鉴权、实时订单数据或其他消费者交互不得在
+editor renderer 中执行；使用固定的设计态数据预览即可。
+
+```tsx
+function DeliveryNoticeEditor({ selected, onPropsChange, title }: BlockEditorProps<NoticeProps>) {
+  return selected ? <input aria-label="Canvas title" value={title}
+    onChange={(event) => onPropsChange({ title: event.currentTarget.value })} />
+    : <h2>{title}</h2>;
+}
+
+// ...
+render: { web: DeliveryNotice, editor: DeliveryNoticeEditor }
+```
+
 将其加入业务侧稳定 Registry 后，`WebRenderer` 即可渲染该区块：
 
 ```ts
@@ -60,4 +82,4 @@ const registry = createExtensionRegistry([deliveryExtension]);
 
 ## 开发检查
 
-每个业务扩展至少应覆盖：Registry 装配、默认 props、Web 渲染、非法参数及禁用扩展后的表现。DataSource 场景继续阅读 [DataSource 接入](./data-source.md)。
+每个业务扩展至少应覆盖：Registry 装配、默认 props、Web 渲染、非法参数及禁用扩展后的表现。声明 `render.editor` 时，还应测试画布改值、属性面板改值与输出 `PageDocument` 的双向同步。DataSource 场景继续阅读 [DataSource 接入](./data-source.md)。

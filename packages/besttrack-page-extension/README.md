@@ -18,3 +18,11 @@ V0.7.2 Sales uses the shared, transient `TrackingPageQuery` contract exported
 by this package. The external Go Consumer Runtime API owns live-query
 authorization and transport; Sales only receives its display-safe result and
 never falls back to mock data after a live failure.
+
+Sales keeps the stable `besttrack.sales` v1 template and seven block IDs.
+Its host must inject the query from an authorized Consumer Runtime flow; this
+package provides neither a Go client nor a BFF. The editor validates
+merchant-authored text, preview-only tracking placeholders and collection
+links, while the storefront renders only site-relative or HTTPS resource
+links. See `docs/integration/sales-template.md` and
+`docs/integration/consumer-runtime-api.md` for the host contract.

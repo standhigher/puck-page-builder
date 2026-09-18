@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import { bestTrackSalesExtension, SalesRuntimeProvider, type ReadyToGoTrackingQuery, type TrackingPageQuery } from "../../packages/besttrack-page-extension/src";
+import { bestTrackSalesExtension, SalesRuntimeProvider, type ReadyToGoTrackingQuery, type TrackingPageQuery, type TrackingPageQueryResult } from "../../packages/besttrack-page-extension/src";
 import { createExtensionRegistry } from "../../packages/puck-page-builder/src/core/extensions";
 import { WebRenderer } from "../../packages/puck-page-builder/src/renderer/web/WebRenderer";
 
@@ -10,6 +10,26 @@ describe("V0.7.2 Sales", () => {
     const template = registry.getTemplate("besttrack.sales");
     expect(template).toMatchObject({ source: "built-in", version: 1, theme: { "color.primary": "#dc2626" } });
     expect(template?.create().blocks.map((block) => block.type)).toEqual(["besttrack.sales.announcement", "besttrack.sales.query", "besttrack.sales.order-items", "besttrack.sales.other-tracking", "besttrack.sales.service-cards", "besttrack.sales.product-categories", "besttrack.sales.recommendations"]);
+  });
+
+  it("keeps the v1 editor definitions valid by default and rejects unsafe Sales props", () => {
+    const registry = createExtensionRegistry([bestTrackSalesExtension]);
+    const document = registry.getTemplate("besttrack.sales")!.create();
+    document.blocks.forEach((block) => {
+      const definition = registry.getBlock(block.type)!;
+      expect(definition.variants?.some((variant) => variant.id === block.variant)).toBe(true);
+      expect(definition.validate?.(block.props)).toEqual([]);
+    });
+
+    const query = registry.getBlock("besttrack.sales.query")!;
+    expect(query.validate?.({ heading: "", submitLabel: "Track", defaultTrackingNumber: "customer secret" })).toEqual(expect.arrayContaining([
+      expect.objectContaining({ path: "props.heading" }),
+      expect.objectContaining({ path: "props.defaultTrackingNumber" })
+    ]));
+    const categories = registry.getBlock("besttrack.sales.product-categories")!;
+    expect(categories.validate?.({ heading: "Shop", collectionId: "gid://shopify/Collection/1", collectionLabel: "Featured", collectionHref: "javascript:unsafe" })).toEqual(expect.arrayContaining([
+      expect.objectContaining({ path: "props.collectionHref" })
+    ]));
   });
 
   it("uses one tracking query for sales order items and product recommendations", async () => {
@@ -53,6 +73,34 @@ describe("V0.7.2 Sales", () => {
     fireEvent.click(screen.getByRole("button", { name: "Track order" }));
     expect(await screen.findByText("We couldn’t retrieve this order right now. Please try again later.")).toBeVisible();
     expect(screen.queryByText("upstream credential detail")).not.toBeInTheDocument();
+  });
+
+  it("rejects malformed customer input before it reaches the Consumer Runtime", () => {
+    const registry = createExtensionRegistry([bestTrackSalesExtension]);
+    const query = vi.fn<TrackingPageQuery>();
+    render(<SalesRuntimeProvider queryTracking={query}><WebRenderer document={registry.getTemplate("besttrack.sales")!.create()} registry={registry} /></SalesRuntimeProvider>);
+    fireEvent.change(screen.getByLabelText("Sales tracking number"), { target: { value: "not valid!" } });
+    fireEvent.click(screen.getByRole("button", { name: "Track order" }));
+    expect(screen.getByRole("alert")).toHaveTextContent("Enter a tracking number using 4–64 letters, numbers, or hyphens.");
+    expect(query).not.toHaveBeenCalled();
+  });
+
+  it("announces loading for every result block and rejects insecure resource URLs", async () => {
+    const registry = createExtensionRegistry([bestTrackSalesExtension]);
+    let resolveQuery: (value: TrackingPageQueryResult) => void = () => undefined;
+    const query = vi.fn<TrackingPageQuery>(() => new Promise<TrackingPageQueryResult>((resolve) => { resolveQuery = resolve; }));
+    const document = registry.getTemplate("besttrack.sales")!.create();
+    const categories = document.blocks.find((block) => block.type === "besttrack.sales.product-categories")!;
+    categories.props = { ...categories.props, collectionHref: "http://example.test/collection" };
+    render(<SalesRuntimeProvider queryTracking={query}><WebRenderer document={document} registry={registry} /></SalesRuntimeProvider>);
+
+    fireEvent.click(screen.getByRole("button", { name: "Track order" }));
+    expect(await screen.findByText("Checking your order…")).toBeVisible();
+    expect(screen.getByRole("region", { name: "Items in your order" })).toHaveAttribute("aria-busy", "true");
+    expect(screen.getByText("Collection link is unavailable.")).toBeVisible();
+
+    resolveQuery({ trackingNumber: "BT-2048-DEMO", status: "In transit" });
+    expect(await screen.findByText("No recommendations are available for this order.")).toBeVisible();
   });
 
 });

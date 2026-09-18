@@ -4,7 +4,7 @@ import { DragHandleIcon, LayoutSectionIcon, MenuIcon, RedoIcon, UndoIcon } from 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPageDocumentPuckConfig } from "../../adapters/puck/page-document-config";
 import { fromEngineData, toEngineData } from "../../adapters/puck/page-document";
-import type { ExtensionRegistry, FieldConfig } from "../../core/extensions";
+import type { ExtensionRegistry, FieldConfig, ValidationIssue } from "../../core/extensions";
 import type { BlockNode, JsonValue, PageDocument } from "../../core/schema/page-document";
 import { EditorProvider, useEditorContext, type EditorLoadState } from "../context/EditorContext";
 import { createAdminI18n } from "../i18n/admin";
@@ -37,6 +37,19 @@ function blockTypeLabel(type: string, registry?: ExtensionRegistry) {
   return registry?.getBlock(type)?.label ?? type;
 }
 
+function validateDocumentBlocks(document: PageDocument, registry?: ExtensionRegistry): ValidationIssue[] {
+  if (!registry) return [];
+  return document.blocks.flatMap((block) => {
+    const definition = registry.getBlock(block.type);
+    if (!definition) return [];
+    const issues = [...(definition.validate?.(block.props) ?? [])];
+    if (definition.variants?.length && !definition.variants.some((variant) => variant.id === block.variant)) {
+      issues.push({ path: "variant", message: `Unsupported variant: ${block.variant}.` });
+    }
+    return issues.map((issue) => ({ ...issue, path: `${block.id}.${issue.path}` }));
+  });
+}
+
 export function PageDocumentEditorShell(props: PageDocumentEditorShellProps) {
   return <EditorProvider initialDocument={props.initialDocument} registry={props.registry} loadState={props.loadState} leaveWarning={createAdminI18n(props.adminLocale).t("leaveWarning")} onDocumentChange={props.onDocumentChange}>
     <PageDocumentEditor {...props} />
@@ -53,6 +66,7 @@ function PageDocumentEditor({ iframe = true, registry, adminLocale, onSave, onPu
   const [notice, setNotice] = useState<"saveFailed" | "publishFailed" | "published" | null>(null);
   const i18n = createAdminI18n(adminLocale);
   const engineData = useMemo(() => toEngineData(editor.document, registry), [editor.document, registry]);
+  const validationIssues = useMemo(() => validateDocumentBlocks(editor.document, registry), [editor.document, registry]);
   const { confirmCanvasSelection, selectedBlockId, updateBlockProps } = editor;
   const updateFromCanvasInput = useCallback((id: string, props: Record<string, JsonValue>, preserveCanvasValue = false) => {
     // The DOM already contains this value. Sending it back through Puck would reset
@@ -104,7 +118,7 @@ function PageDocumentEditor({ iframe = true, registry, adminLocale, onSave, onPu
     setDraggingLibraryType(null);
   };
   const save = async () => {
-    if (!onSave || request !== "idle") return;
+    if (!onSave || request !== "idle" || validationIssues.length > 0) return;
     setRequest("saving");
     setNotice(null);
     try {
@@ -117,7 +131,7 @@ function PageDocumentEditor({ iframe = true, registry, adminLocale, onSave, onPu
     }
   };
   const publish = async () => {
-    if (!onPublish || request !== "idle") return;
+    if (!onPublish || request !== "idle" || validationIssues.length > 0) return;
     setRequest("publishing");
     setNotice(null);
     try {
@@ -140,8 +154,8 @@ function PageDocumentEditor({ iframe = true, registry, adminLocale, onSave, onPu
             <div className="pb-page-title"><Text as="h1" variant="headingSm">{editor.document.settings.seoTitle ?? editor.document.pageId}</Text><Text as="p" variant="bodySm" tone="subdued">PageDocument V{editor.document.schemaVersion} · {editor.document.target}</Text></div>
             <InlineStack gap="150" blockAlign="center" wrap={false}>
               <Badge tone={editor.isDirty ? "attention" : "success"}>{editor.isDirty ? i18n.t("unsaved") : i18n.t("saved")}</Badge>
-              <Button disabled={!onSave || !editor.isDirty || request !== "idle"} onClick={() => void save()}>{request === "saving" ? i18n.t("saving") : i18n.t("save")}</Button>
-              <Button variant="primary" disabled={!onPublish || request !== "idle"} onClick={() => void publish()}>{request === "publishing" ? i18n.t("publishing") : i18n.t("publish")}</Button>
+              <Button disabled={!onSave || !editor.isDirty || request !== "idle" || validationIssues.length > 0} onClick={() => void save()}>{request === "saving" ? i18n.t("saving") : i18n.t("save")}</Button>
+              <Button variant="primary" disabled={!onPublish || request !== "idle" || validationIssues.length > 0} onClick={() => void publish()}>{request === "publishing" ? i18n.t("publishing") : i18n.t("publish")}</Button>
               <Button accessibilityLabel={i18n.t("undo")} icon={UndoIcon} variant="tertiary" disabled={!editor.actionState.canUndo} onClick={editor.undo} />
               <Button accessibilityLabel={i18n.t("redo")} icon={RedoIcon} variant="tertiary" disabled={!editor.actionState.canRedo} onClick={editor.redo} />
             </InlineStack>
@@ -149,6 +163,7 @@ function PageDocumentEditor({ iframe = true, registry, adminLocale, onSave, onPu
         </header>
         {editor.loadState === "success" ? <Banner tone="success">{i18n.t("success")}</Banner> : null}
         {notice ? <Banner tone={notice === "published" ? "success" : "critical"}>{i18n.t(notice)}</Banner> : null}
+        {validationIssues.length > 0 ? <Banner tone="critical" title="区块属性未通过校验"><ul>{validationIssues.map((issue) => <li key={`${issue.path}-${issue.message}`}>{issue.path}: {issue.message}</li>)}</ul></Banner> : null}
         <div className="pb-workspace pb-workspace--document">
           <nav className="pb-tool-rail" aria-label="编辑器工具">
             <Button accessibilityLabel={i18n.t("blocks")} icon={LayoutSectionIcon} pressed={blockView === "blocks"} variant="tertiary" onClick={() => setBlockView("blocks")} />

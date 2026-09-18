@@ -1,10 +1,19 @@
-import { createContext, useCallback, useContext, useMemo, useState, type FormEvent, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import type { BlockEditorProps, FieldProps } from "@standhigher/puck-page-builder/runtime";
-import type { ReadyToGoRecommendation, ReadyToGoTrackingEvent, ReadyToGoTrackingQuery, ReadyToGoTrackingResult, ReadyToGoTrackingStep } from "./ready-to-go";
+import {
+  isEmptyTrackingPageResult,
+  type TrackingPageQuery,
+  type TrackingPageQueryResult,
+  type TrackingPageRecommendation,
+  type TrackingPageRuntimePhase,
+  type TrackingPageTrackingEvent,
+  type TrackingPageTrackingStep
+} from "./tracking-page-runtime";
 
-export type BrandedRuntimeState = { phase: "idle" | "loading" | "success" | "error"; result?: ReadyToGoTrackingResult; error?: string };
+/** Branded uses the shared, display-safe Consumer Runtime result without persisting it. */
+export type BrandedRuntimeState = { phase: TrackingPageRuntimePhase; result?: TrackingPageQueryResult; error?: string };
 type BrandedRuntime = BrandedRuntimeState & {
-  displayedResult?: ReadyToGoTrackingResult;
+  displayedResult?: TrackingPageQueryResult;
   selectedShipmentId: string | null;
   query(trackingNumber: string): Promise<void>;
   reset(): void;
@@ -19,7 +28,7 @@ const initialRuntime: BrandedRuntime = {
   selectShipment() { return undefined; }
 };
 const BrandedRuntimeContext = createContext<BrandedRuntime>(initialRuntime);
-export type BrandedRuntimeProviderProps = { children: ReactNode; queryTracking: ReadyToGoTrackingQuery };
+export type BrandedRuntimeProviderProps = { children: ReactNode; queryTracking: TrackingPageQuery };
 
 const contentWidth = { width: "min(1200px, 100%)", margin: "0 auto", padding: "0 clamp(16px, 4vw, 48px)", boxSizing: "border-box" as const };
 const cardStyle = { background: "#fff", color: "#0a0a0a", border: "1px solid #e7e7e7", borderRadius: 10, fontFamily: "var(--pb-font-family)" };
@@ -27,17 +36,22 @@ const cardStyle = { background: "#fff", color: "#0a0a0a", border: "1px solid #e7
 export function BrandedRuntimeProvider({ children, queryTracking }: BrandedRuntimeProviderProps) {
   const [state, setState] = useState<BrandedRuntimeState>({ phase: "idle" });
   const [selectedShipmentId, setSelectedShipmentId] = useState<string | null>(null);
+  const requestId = useRef(0);
   const query = useCallback(async (trackingNumber: string) => {
+    const currentRequestId = ++requestId.current;
     setState({ phase: "loading" });
     try {
       const result = await queryTracking(trackingNumber);
+      if (currentRequestId !== requestId.current) return;
       setSelectedShipmentId(result.shipments?.[0]?.id ?? null);
-      setState({ phase: "success", result });
-    } catch (error) {
-      setState({ phase: "error", error: error instanceof Error ? error.message : "tracking-query-failed" });
+      setState({ phase: isEmptyTrackingPageResult(result) ? "empty" : "success", result });
+    } catch {
+      if (currentRequestId !== requestId.current) return;
+      setState({ phase: "error", error: "tracking-query-failed" });
     }
   }, [queryTracking]);
   const reset = useCallback(() => {
+    requestId.current += 1;
     setSelectedShipmentId(null);
     setState({ phase: "idle" });
   }, []);
@@ -46,7 +60,9 @@ export function BrandedRuntimeProvider({ children, queryTracking }: BrandedRunti
     const shipment = state.result.shipments?.find((item) => item.id === selectedShipmentId);
     return shipment ? { ...state.result, ...shipment } : state.result;
   }, [selectedShipmentId, state.result]);
-  const selectShipment = useCallback((id: string) => setSelectedShipmentId(id), []);
+  const selectShipment = useCallback((id: string) => {
+    if (state.result?.shipments?.some((shipment) => shipment.id === id)) setSelectedShipmentId(id);
+  }, [state.result]);
   const value = useMemo<BrandedRuntime>(
     () => ({ ...state, displayedResult, selectedShipmentId, query, reset, selectShipment }),
     [displayedResult, query, reset, selectedShipmentId, selectShipment, state]
@@ -58,7 +74,7 @@ function useBrandedRuntime() { return useContext(BrandedRuntimeContext); }
 function text(props: Record<string, unknown>, key: string, fallback: string) { return typeof props[key] === "string" ? props[key] : fallback; }
 function safeHref(value: unknown) {
   if (typeof value !== "string") return "#";
-  if (value.startsWith("/")) return value;
+  if (value.startsWith("/") && !value.startsWith("//")) return value;
   try { const url = new URL(value); return url.protocol === "https:" || url.protocol === "http:" ? url.toString() : "#"; } catch { return "#"; }
 }
 function safeImageUrl(value: unknown) {
@@ -82,7 +98,7 @@ function ProductImage({ src, alt }: { src?: string; alt: string }) {
 function ShipmentSwitcher({ shipmentLabels: configuredLabels }: { shipmentLabels?: unknown }) {
   const runtime = useBrandedRuntime();
   const configuredShipments = shipmentLabels(configuredLabels);
-  const shipments = runtime.result?.shipments?.length ? runtime.result.shipments : configuredShipments;
+  const shipments = runtime.phase === "idle" || runtime.phase === "loading" ? configuredShipments : runtime.result?.shipments ?? [];
   if (!shipments.length) return null;
   return <div aria-label="Shipment switcher" style={{ ...contentWidth, minHeight: 56, display: "flex", alignItems: "center", gap: 8, overflowX: "auto", whiteSpace: "nowrap" }}>
     {shipments.map((shipment, index) => {
@@ -112,20 +128,21 @@ function QueryHero(props: Record<string, unknown>) {
         <input id="branded-tracking-number" aria-label={mode === "order" ? "Order number" : "Tracking number"} value={trackingNumber} onChange={(event) => setTrackingNumber(event.target.value)} required minLength={4} maxLength={64} placeholder={mode === "order" ? "Enter your order number" : "Enter your tracking number"} style={{ width: "100%", height: 48, padding: "0 16px", boxSizing: "border-box", border: "1px solid #e2e2e2", borderRadius: 10, font: "inherit" }} />
         <button type="submit" disabled={runtime.phase === "loading"} style={{ width: "100%", minHeight: 48, marginTop: 24, border: 0, borderRadius: 10, background: runtime.phase === "loading" ? "#6b6b6b" : "#000", color: "#fff", font: "inherit", cursor: runtime.phase === "loading" ? "wait" : "pointer" }}>{runtime.phase === "loading" ? "Tracking…" : text(props, "submitLabel", "Track")}</button>
       </form>
-      {runtime.phase === "error" ? <p role="alert" style={{ marginBottom: 0, color: "#b42318" }}>{runtime.error}</p> : null}
+      {runtime.phase === "empty" ? <p role="status" style={{ marginBottom: 0, color: "#6b6b6b" }}>We couldn’t find an order for that number.</p> : null}
+      {runtime.phase === "error" ? <p role="alert" style={{ marginBottom: 0, color: "#b42318" }}>We couldn’t retrieve this order right now. Please try again later.</p> : null}
       <small style={{ display: "block", marginTop: 10, color: "#8a8a8a", fontSize: 8, textAlign: "right" }}>Powered by BestTrack</small>
     </div>
   </div>;
 }
 
-function defaultProgress(status: string): ReadyToGoTrackingStep[] {
+function defaultProgress(status: string): TrackingPageTrackingStep[] {
   const steps = ["Ordered", "Order Ready", "In Transit", "Out for Delivery", "Delivered"];
   const normalized = status.toLowerCase();
   const current = normalized.includes("deliver") ? (normalized.includes("out for") ? 3 : 4) : normalized.includes("transit") ? 2 : normalized.includes("ready") ? 1 : 0;
   return steps.map((label, index) => ({ id: label.toLowerCase().replaceAll(" ", "-"), label, state: index < current ? "complete" : index === current ? "current" : "upcoming" }));
 }
 
-function TrackingProgress({ steps }: { steps: ReadyToGoTrackingStep[] }) {
+function TrackingProgress({ steps }: { steps: TrackingPageTrackingStep[] }) {
   return <div aria-label="Delivery progress" style={{ overflowX: "auto", padding: "28px 0 8px" }}>
     <ol style={{ display: "grid", gridTemplateColumns: "repeat(" + steps.length + ", minmax(112px, 1fr))", minWidth: Math.max(560, steps.length * 138), padding: 0, margin: 0, listStyle: "none" }}>
       {steps.map((step, index) => <li key={step.id} style={{ position: "relative", display: "grid", justifyItems: "center", gap: 12, color: step.state === "upcoming" ? "#718096" : "#0f1d3a", textAlign: "center" }}>
@@ -137,7 +154,7 @@ function TrackingProgress({ steps }: { steps: ReadyToGoTrackingStep[] }) {
   </div>;
 }
 
-function ShippingTimeline({ events }: { events: ReadyToGoTrackingEvent[] }) {
+function ShippingTimeline({ events }: { events: TrackingPageTrackingEvent[] }) {
   if (!events.length) return <p style={{ margin: 0, color: "#6b6b6b" }}>Shipping events will appear when the carrier publishes them.</p>;
   return <ol aria-label="Shipping events" style={{ display: "grid", gap: 22, margin: 0, padding: 0, listStyle: "none" }}>
     {events.map((event, index) => <li key={event.id} style={{ display: "grid", gridTemplateColumns: "22px 1fr", columnGap: 14, position: "relative" }}>
@@ -148,7 +165,7 @@ function ShippingTimeline({ events }: { events: ReadyToGoTrackingEvent[] }) {
   </ol>;
 }
 
-function PackageContents({ items }: { items: ReadyToGoTrackingResult["orderItems"] }) {
+function PackageContents({ items }: { items: TrackingPageQueryResult["orderItems"] }) {
   if (!items?.length) return <p style={{ margin: 0, color: "#6b6b6b" }}>Package contents are not available for this shipment.</p>;
   return <div style={{ display: "grid", gap: 16 }}>{items.map((item) => <article key={item.id} style={{ display: "flex", alignItems: "flex-start", gap: 14 }}><ProductImage src={item.imageUrl} alt={item.title} /><div><strong>{item.title}</strong><p style={{ margin: "5px 0", color: "#6b6b6b", fontSize: 14 }}>{item.description ?? "Product details are available in your order."}</p><small style={{ color: "#6b6b6b" }}>Qty {item.quantity}</small></div></article>)}</div>;
 }
@@ -272,18 +289,19 @@ export function BrandedOrderItemsBlock(props: Record<string, unknown>) {
   </div></section>;
 }
 
-function RecommendationCard({ item }: { item: ReadyToGoRecommendation }) {
-  return <article style={{ overflow: "hidden", borderRadius: 6, background: "#fff", boxShadow: "0 1px 2px rgb(0 0 0 / 8%)" }}><ProductImage src={item.imageUrl} alt={item.title} /><div style={{ padding: 14 }}><strong>{item.title}</strong>{item.price ? <p style={{ margin: "6px 0", fontWeight: 700 }}>{item.price}</p> : null}<p style={{ margin: "6px 0", color: "#6b6b6b", fontSize: 13 }}>{item.description}</p><a href={safeHref(item.href)} style={{ color: "#0a0a0a", fontSize: 13, fontWeight: 700 }}>View product</a></div></article>;
+function RecommendationCard({ item }: { item: TrackingPageRecommendation }) {
+  const href = safeHref(item.href);
+  return <article style={{ overflow: "hidden", borderRadius: 6, background: "#fff", boxShadow: "0 1px 2px rgb(0 0 0 / 8%)" }}><ProductImage src={item.imageUrl} alt={item.title} /><div style={{ padding: 14 }}><strong>{item.title}</strong>{item.price ? <p style={{ margin: "6px 0", fontWeight: 700 }}>{item.price}</p> : null}<p style={{ margin: "6px 0", color: "#6b6b6b", fontSize: 13 }}>{item.description}</p>{href === "#" ? <span style={{ color: "#6b6b6b", fontSize: 13, fontWeight: 700 }}>View product</span> : <a href={href} style={{ color: "#0a0a0a", fontSize: 13, fontWeight: 700 }}>View product</a>}</div></article>;
 }
 
 export function BrandedRecommendationsBlock(props: Record<string, unknown>) {
   const runtime = useBrandedRuntime();
   const recommendations = runtime.displayedResult?.recommendations ?? [];
   const title = text(props, "heading", "You might also like");
-  if (runtime.phase === "success" && !recommendations.length && text(props, "hideWhenEmpty", "false") === "true") return null;
+  if ((runtime.phase === "success" || runtime.phase === "empty") && !recommendations.length && text(props, "hideWhenEmpty", "false") === "true") return null;
   return <section aria-label={title} style={{ background: "#fffdf0", color: "#0a0a0a", fontFamily: "var(--pb-font-family)", padding: "clamp(28px, 4vw, 48px) 0" }}><div style={contentWidth}>
     <h2 style={{ margin: "0 0 24px", textAlign: "center", fontSize: 20 }}>{title}</h2>
-    {runtime.phase === "loading" ? <div aria-label="Loading recommendations" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 16 }}>{[0, 1, 2].map((item) => <span key={item} style={{ display: "block", height: 220, borderRadius: 6, background: "#e7e7e7" }} />)}</div> : runtime.phase === "success" && recommendations.length ? <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 16 }}>{recommendations.map((item) => <RecommendationCard key={item.id} item={item} />)}</div> : <p style={{ margin: 0, textAlign: "center", color: runtime.phase === "error" ? "#b42318" : "#6b6b6b" }}>{runtime.phase === "error" ? "Recommendations are temporarily unavailable." : "Recommendations will appear with your order."}</p>}
+    {runtime.phase === "loading" ? <div aria-label="Loading recommendations" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 16 }}>{[0, 1, 2].map((item) => <span key={item} style={{ display: "block", height: 220, borderRadius: 6, background: "#e7e7e7" }} />)}</div> : runtime.phase === "success" && recommendations.length ? <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 16 }}>{recommendations.map((item) => <RecommendationCard key={item.id} item={item} />)}</div> : <p style={{ margin: 0, textAlign: "center", color: runtime.phase === "error" ? "#b42318" : "#6b6b6b" }}>{runtime.phase === "error" ? "Recommendations are temporarily unavailable." : runtime.phase === "empty" ? "No recommendations are available for that number." : "Recommendations will appear with your order."}</p>}
   </div></section>;
 }
 

@@ -1,8 +1,9 @@
 # @standhigher/besttrack-page-extension
 
 V0.7.1 adds the besttrack.branded built-in template. Its announcement, order
-query, order items, recommendations, quick links and Blog blocks use the same
-host-injected tracking query contract as Ready-to-go. Logo and content are
+query, order items, recommendations, quick links and Blog blocks use the
+shared, host-injected `TrackingPageQuery` contract. The
+`ReadyToGoTrackingQuery` name remains a compatible alias. Logo and content are
 JSON-only block props; brand colour, font and radius use the template Theme
 Tokens and may be overridden through PageDocument.theme.
 

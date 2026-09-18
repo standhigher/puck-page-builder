@@ -10,16 +10,19 @@ the shipment switcher, query hero and the successful-query result.
 Register bestTrackBrandedExtension alongside the business extension that owns
 besttrack.tracking.query. Render the Editor, preview and Storefront document
 with this same Registry. The Branded blocks are deliberately presentation-only:
-the host supplies a ReadyToGoRuntimeProvider (or an equivalent host wrapper)
-with an explicit mock query in preview and a server-authorized live query in
-production.
+the host supplies a BrandedRuntimeProvider (or an equivalent host wrapper)
+with a `TrackingPageQuery`: an explicit mock query in preview and a
+server-authorized live query in production. The legacy
+`ReadyToGoTrackingQuery` alias remains assignable for existing integrations.
 
 The query result is shared by the tracking experience and recommendations
 blocks. A result may expose multiple shipments; selecting one changes the
 tracking number, state, five-stage progress, shipping-event timeline, package
-contents and recommendations together without issuing another query. The
-template does not register a second DataSource and never falls back from a live
-failure to mock data.
+contents and recommendations together without issuing another query. An
+`outcome: "empty"` result and an unavailable live query have controlled,
+generic storefront states; the raw host error is not displayed. The template
+does not register a second DataSource and never falls back from a live failure
+to mock data.
 
 ## Brand configuration
 

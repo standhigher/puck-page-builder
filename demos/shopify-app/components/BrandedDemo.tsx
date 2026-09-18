@@ -33,7 +33,26 @@ export function BrandedDemo({ getSessionToken }: { getSessionToken?: GetSessionT
     return () => { active = false; };
   }, [initialDocument]);
   const queryTracking = useCallback<ReadyToGoTrackingQuery>(async (trackingNumber) => {
-    if (!getSessionToken) return { trackingNumber, status: "In transit", carrier: "BestTrack demo carrier", latestEvent: "Shipment accepted at the regional hub", deliveryAddress: "Demo recipient · Shanghai", orderItems: [{ id: "sample-order", title: "Studio tote", quantity: 1 }], recommendations: [{ id: "shipping-protection", title: "Shipping protection", description: "Extra assurance for your next delivery." }] };
+    if (!getSessionToken) return {
+      trackingNumber, status: "In transit", carrier: "BestTrack demo carrier", latestEvent: "Shipment accepted at the regional hub", deliveryAddress: "Demo recipient · Shanghai",
+      shipments: [
+        {
+          id: "shipment-1", label: "Shipment #1", trackingNumber, status: "In transit",
+          progress: [{ id: "ordered", label: "Ordered", state: "complete" }, { id: "ready", label: "Order Ready", state: "complete" }, { id: "transit", label: "In Transit", state: "current" }, { id: "out", label: "Out for Delivery", state: "upcoming" }, { id: "delivered", label: "Delivered", state: "upcoming" }],
+          events: [{ id: "hub", title: "Shipment accepted at the regional hub", at: "Sep 4, 3:51 PM", detail: "BestTrack demo carrier", state: "current" }, { id: "warehouse", title: "Warehouse accepted your order", at: "Sep 4, 3:46 PM", state: "complete" }, { id: "placed", title: "The order has been placed and confirmed.", at: "Sep 4, 3:31 PM", state: "complete" }],
+          orderItems: [{ id: "studio-tote", title: "Studio tote", quantity: 1, description: "Product details load automatically after tracking.", imageUrl: "https://images.unsplash.com/photo-1591561954557-26941169b49e?auto=format&fit=crop&w=120&q=80" }],
+          recommendations: [{ id: "shipping-protection", title: "Shipping protection", description: "Extra assurance for your next delivery.", imageUrl: "https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?auto=format&fit=crop&w=640&q=80", href: "/products/shipping-protection", price: "$12.00" }]
+        },
+        {
+          id: "shipment-2", label: "Shipment #2", trackingNumber: trackingNumber + "-2", status: "Order Ready",
+          progress: [{ id: "ordered", label: "Ordered", state: "complete" }, { id: "ready", label: "Order Ready", state: "current" }, { id: "transit", label: "In Transit", state: "upcoming" }, { id: "out", label: "Out for Delivery", state: "upcoming" }, { id: "delivered", label: "Delivered", state: "upcoming" }],
+          events: [{ id: "packed", title: "Your package is being prepared", at: "Sep 4, 4:20 PM", state: "current" }, { id: "confirmed", title: "The order has been placed and confirmed.", at: "Sep 4, 3:31 PM", state: "complete" }],
+          orderItems: [{ id: "travel-case", title: "Travel case", quantity: 1, description: "Packed separately for safe delivery.", imageUrl: "https://images.unsplash.com/photo-1553062407-98eeb64c6a62?auto=format&fit=crop&w=120&q=80" }],
+          recommendations: [{ id: "delivery-alerts", title: "Delivery alerts", description: "Receive updates at every milestone.", imageUrl: "https://images.unsplash.com/photo-1556740749-887f6717d7e4?auto=format&fit=crop&w=640&q=80", href: "/products/delivery-alerts", price: "$8.00" }]
+        },
+        { id: "shipment-3", label: "Shipment #3", trackingNumber: trackingNumber + "-3", status: "Ordered", progress: [{ id: "ordered", label: "Ordered", state: "current" }, { id: "ready", label: "Order Ready", state: "upcoming" }, { id: "transit", label: "In Transit", state: "upcoming" }, { id: "out", label: "Out for Delivery", state: "upcoming" }, { id: "delivered", label: "Delivered", state: "upcoming" }], events: [{ id: "confirmed", title: "The order has been placed and confirmed.", at: "Sep 4, 3:31 PM", state: "current" }], orderItems: [], recommendations: [] }
+      ]
+    };
     const source = registry.getDataSource("besttrack.tracking.query");
     if (!source) throw new Error("besttrack-tracking-source-not-registered");
     return source.live({ trackingNumber }) as Promise<Awaited<ReturnType<ReadyToGoTrackingQuery>>>;

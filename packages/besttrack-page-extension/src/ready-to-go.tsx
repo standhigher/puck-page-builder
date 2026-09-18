@@ -1,7 +1,37 @@
 import { createContext, useCallback, useContext, useMemo, useState, type FormEvent, type ReactNode } from "react";
 import type { FieldProps } from "@standhigher/puck-page-builder/runtime";
 
-export type ReadyToGoTrackingResult = { trackingNumber: string; status: string; carrier?: string; latestEvent?: string; updatedAt?: string; deliveryAddress?: string; orderItems?: Array<{ id: string; title: string; quantity: number; imageUrl?: string }>; recommendations?: Array<{ id: string; title: string; description: string }> };
+export type ReadyToGoOrderItem = { id: string; title: string; quantity: number; imageUrl?: string; description?: string };
+export type ReadyToGoRecommendation = { id: string; title: string; description: string; imageUrl?: string; href?: string; price?: string };
+export type ReadyToGoTrackingStep = { id: string; label: string; state: "complete" | "current" | "upcoming" };
+export type ReadyToGoTrackingEvent = { id: string; title: string; at?: string; detail?: string; state?: "complete" | "current" | "upcoming" };
+export type ReadyToGoShipment = {
+  id: string;
+  label: string;
+  trackingNumber?: string;
+  status?: string;
+  carrier?: string;
+  latestEvent?: string;
+  updatedAt?: string;
+  deliveryAddress?: string;
+  progress?: ReadyToGoTrackingStep[];
+  events?: ReadyToGoTrackingEvent[];
+  orderItems?: ReadyToGoOrderItem[];
+  recommendations?: ReadyToGoRecommendation[];
+};
+export type ReadyToGoTrackingResult = {
+  trackingNumber: string;
+  status: string;
+  carrier?: string;
+  latestEvent?: string;
+  updatedAt?: string;
+  deliveryAddress?: string;
+  progress?: ReadyToGoTrackingStep[];
+  events?: ReadyToGoTrackingEvent[];
+  orderItems?: ReadyToGoOrderItem[];
+  recommendations?: ReadyToGoRecommendation[];
+  shipments?: ReadyToGoShipment[];
+};
 export type ReadyToGoTrackingQuery = (trackingNumber: string) => Promise<ReadyToGoTrackingResult>;
 export type ReadyToGoRuntimeState = { phase: "idle" | "loading" | "success" | "error"; result?: ReadyToGoTrackingResult; error?: string };
 type ReadyToGoRuntime = ReadyToGoRuntimeState & { query(trackingNumber: string): Promise<void> };

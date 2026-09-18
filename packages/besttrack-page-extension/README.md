@@ -6,4 +6,9 @@ host-injected tracking query contract as Ready-to-go. Logo and content are
 JSON-only block props; brand colour, font and radius use the template Theme
 Tokens and may be overridden through PageDocument.theme.
 
-V0.7.0 provides the Ready-to-go built-in template: order query, shipment progress, delivery information and recommendations. Live tracking is injected by the host Runtime; this package never stores credentials or network endpoints in a `PageDocument`.
+V0.7.0 provides the Ready-to-go built-in template: order query, shipment
+progress, delivery information and recommendations. The consumer surface follows
+the Shopify Track Page layout (query card, five-step progress, shipping
+timeline, package contents and product cards) using inline styles and `--pb-*`
+Theme Tokens. Live tracking is injected by the host Runtime; this package never
+stores credentials or network endpoints in a `PageDocument`.

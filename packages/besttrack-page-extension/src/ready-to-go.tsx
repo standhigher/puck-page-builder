@@ -1,9 +1,22 @@
-import { createContext, useCallback, useContext, useMemo, useState, type FormEvent, type ReactNode } from "react";
-import type { FieldProps } from "@standhigher/puck-page-builder/runtime";
+import { createContext, useCallback, useContext, useMemo, useState, type CSSProperties, type FormEvent, type ReactNode } from "react";
+import type { BlockEditorProps, FieldProps } from "@standhigher/puck-page-builder/runtime";
+import {
+  contentWidth,
+  defaultProgress,
+  IdleMessage,
+  PackageContents,
+  pageFont,
+  RecommendationCards,
+  SectionShell,
+  ShippingTimeline,
+  SkeletonRow,
+  text,
+  TrackingProgress
+} from "./track-page-display";
 
-export type ReadyToGoOrderItem = { id: string; title: string; quantity: number; imageUrl?: string; description?: string };
+export type ReadyToGoOrderItem = { id: string; title: string; quantity: number; imageUrl?: string; description?: string; href?: string };
 export type ReadyToGoRecommendation = { id: string; title: string; description: string; imageUrl?: string; href?: string; price?: string };
-export type ReadyToGoTrackingStep = { id: string; label: string; state: "complete" | "current" | "upcoming" };
+export type ReadyToGoTrackingStep = { id: string; label: string; state: "complete" | "current" | "upcoming"; date?: string; icon?: "check" | "bag" | "truck" | "box" };
 export type ReadyToGoTrackingEvent = { id: string; title: string; at?: string; detail?: string; state?: "complete" | "current" | "upcoming" };
 export type ReadyToGoShipment = {
   id: string;
@@ -14,6 +27,7 @@ export type ReadyToGoShipment = {
   latestEvent?: string;
   updatedAt?: string;
   deliveryAddress?: string;
+  estimatedDelivery?: string;
   progress?: ReadyToGoTrackingStep[];
   events?: ReadyToGoTrackingEvent[];
   orderItems?: ReadyToGoOrderItem[];
@@ -26,6 +40,7 @@ export type ReadyToGoTrackingResult = {
   latestEvent?: string;
   updatedAt?: string;
   deliveryAddress?: string;
+  estimatedDelivery?: string;
   progress?: ReadyToGoTrackingStep[];
   events?: ReadyToGoTrackingEvent[];
   orderItems?: ReadyToGoOrderItem[];
@@ -41,12 +56,30 @@ const ReadyToGoRuntimeContext = createContext<ReadyToGoRuntime>(initialRuntime);
 export type ReadyToGoRuntimeProviderProps = { children: ReactNode; queryTracking?: ReadyToGoTrackingQuery };
 
 /** Mock is an explicit preview default, never a fallback for an injected live query. */
-async function queryMockReadyToGoTracking(trackingNumber: string): Promise<ReadyToGoTrackingResult> {
+function previewReadyToGoTracking(trackingNumber = "BT-2048-DEMO"): ReadyToGoTrackingResult {
   return {
-    trackingNumber, status: "In transit", carrier: "BestTrack demo carrier", latestEvent: "Shipment accepted at the regional hub", updatedAt: "2026-09-17T10:00:00.000Z", deliveryAddress: "Demo recipient · Shanghai",
-    orderItems: [{ id: "demo-order-item", title: "Demo shipment item", quantity: 1 }],
-    recommendations: [{ id: "shipping-protection", title: "Shipping protection", description: "Extra assurance for your next delivery." }, { id: "delivery-alerts", title: "Delivery alerts", description: "Receive an update at every milestone." }]
+    trackingNumber,
+    status: "In transit",
+    carrier: "BestTrack demo carrier",
+    latestEvent: "Shipment accepted at the regional hub",
+    updatedAt: "Sep 17, 10:00 AM",
+    deliveryAddress: "Demo recipient · Shanghai",
+    estimatedDelivery: "Sep 22 - Sep 24",
+    progress: defaultProgress("In transit"),
+    events: [
+      { id: "hub", title: "Shipment accepted at the regional hub", at: "Sep 17, 10:00 AM", state: "current" },
+      { id: "info", title: "The order has been placed and confirmed.", at: "Sep 16, 3:31 PM", state: "complete" }
+    ],
+    orderItems: [{ id: "demo-order-item", title: "Demo shipment item", quantity: 1, description: "Product details are available in your order." }],
+    recommendations: [
+      { id: "shipping-protection", title: "Shipping protection", description: "Extra assurance for your next delivery.", price: "$9.00" },
+      { id: "delivery-alerts", title: "Delivery alerts", description: "Receive an update at every milestone.", price: "$4.00" }
+    ]
   };
+}
+
+async function queryMockReadyToGoTracking(trackingNumber: string): Promise<ReadyToGoTrackingResult> {
+  return previewReadyToGoTracking(trackingNumber);
 }
 
 export function ReadyToGoRuntimeProvider({ children, queryTracking = queryMockReadyToGoTracking }: ReadyToGoRuntimeProviderProps) {
@@ -61,44 +94,279 @@ export function ReadyToGoRuntimeProvider({ children, queryTracking = queryMockRe
 }
 
 function useReadyToGoRuntime() { return useContext(ReadyToGoRuntimeContext); }
-const cardStyle = { border: "1px solid var(--pb-color-border)", borderRadius: "var(--pb-radius)", padding: "var(--pb-spacing)", background: "var(--pb-color-surface)", color: "var(--pb-color-text)" };
-function ResultCard({ title, children }: { title: string; children: ReactNode }) { return <section aria-label={title} style={cardStyle}><h2 style={{ marginTop: 0 }}>{title}</h2>{children}</section>; }
+
+const heroStyle: CSSProperties = {
+  ...pageFont,
+  position: "relative",
+  minHeight: 520,
+  display: "grid",
+  placeItems: "center",
+  overflow: "hidden",
+  backgroundColor: "#fff",
+  padding: "48px 24px",
+  boxSizing: "border-box"
+};
+const formCardStyle: CSSProperties = {
+  display: "flex",
+  flexDirection: "column",
+  width: "min(560px, 100%)",
+  maxWidth: 560,
+  minHeight: 388,
+  borderRadius: "var(--pb-radius, 8px)",
+  background: "var(--pb-color-surface, #fff)",
+  color: "var(--pb-color-text, #0f172a)",
+  padding: 40,
+  boxSizing: "border-box",
+  boxShadow: "0 8px 24px rgba(0, 0, 0, 0.12)"
+};
+const tabStyle = (active: boolean): CSSProperties => ({
+  appearance: "none",
+  flex: 1,
+  minHeight: 53,
+  margin: 0,
+  padding: "16px 10px",
+  font: "inherit",
+  fontSize: 15,
+  lineHeight: "21px",
+  fontWeight: active ? 500 : 400,
+  background: "none",
+  border: 0,
+  borderBottom: active ? "2px solid #0f172a" : "2px solid transparent",
+  borderRadius: 0,
+  color: active ? "#0f172a" : "#94a3b8",
+  cursor: "pointer"
+});
+const inputStyle: CSSProperties = {
+  width: "100%",
+  height: 48,
+  borderRadius: "var(--pb-radius, 8px)",
+  border: "1px solid #111",
+  background: "#fff",
+  padding: 12,
+  font: "inherit",
+  fontSize: 14,
+  lineHeight: "20px",
+  color: "#334155",
+  boxSizing: "border-box"
+};
 
 export function ReadyToGoTextField({ value, onChange }: FieldProps) {
   return <input aria-label="Ready-to-go text" value={typeof value === "string" ? value : ""} onChange={(event) => onChange(event.target.value)} />;
 }
 
-export function ReadyToGoQueryBlock(props: Record<string, unknown>) {
-  const runtime = useReadyToGoRuntime();
-  const [trackingNumber, setTrackingNumber] = useState(typeof props.defaultTrackingNumber === "string" ? props.defaultTrackingNumber : "BT-2048-DEMO");
-  const heading = typeof props.heading === "string" ? props.heading : "Track your order";
-  const submitLabel = typeof props.submitLabel === "string" ? props.submitLabel : "Track package";
-  const submit = (event: FormEvent<HTMLFormElement>) => { event.preventDefault(); void runtime.query(trackingNumber); };
-  return <section aria-label="Ready-to-go tracking query" style={{ ...cardStyle, maxWidth: 720, margin: "0 auto" }}>
-    <h1 style={{ marginTop: 0 }}>{heading}</h1>
-    <form onSubmit={submit} style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-      <input aria-label="Tracking number" value={trackingNumber} onChange={(event) => setTrackingNumber(event.target.value)} required minLength={4} maxLength={64} style={{ flex: "1 1 220px", padding: 10, borderRadius: "var(--pb-radius)", border: "1px solid var(--pb-color-border)" }} />
-      <button type="submit" disabled={runtime.phase === "loading"} style={{ padding: "10px 16px", border: 0, borderRadius: "var(--pb-radius)", background: "var(--pb-color-primary)", color: "white" }}>{runtime.phase === "loading" ? "Tracking…" : submitLabel}</button>
-    </form>
-    {runtime.phase === "error" ? <p role="alert">{runtime.error}</p> : null}
+type ReadyToGoEditorProps = BlockEditorProps<Record<string, unknown>>;
+
+function InlineText({ block, name, fallback }: { block: ReadyToGoEditorProps; name: string; fallback: string }) {
+  const value = text(block, name, fallback);
+  if (!block.selected) return <span data-ready-to-go-editor-field={name}>{value}</span>;
+  return <input
+    aria-label={"Canvas " + name}
+    data-ready-to-go-editor-field={name}
+    value={value}
+    onMouseDown={(event) => event.stopPropagation()}
+    onClick={(event) => event.stopPropagation()}
+    onChange={(event) => block.onPropsChange({ [name]: event.currentTarget.value })}
+    style={{ display: "inline-block", width: "100%", minWidth: "5ch", boxSizing: "border-box", border: "1px dashed currentColor", borderRadius: 3, padding: "2px 5px", background: "transparent", color: "inherit", font: "inherit", fontWeight: "inherit", lineHeight: "inherit", letterSpacing: "inherit", textAlign: "inherit" }}
+  />;
+}
+
+function eventsFrom(result: ReadyToGoTrackingResult | undefined): ReadyToGoTrackingEvent[] {
+  if (result?.events?.length) return result.events;
+  if (result?.latestEvent) return [{ id: "latest", title: result.latestEvent, at: result.updatedAt, state: "current" }];
+  return [];
+}
+
+function ProgressResult({ result, showEstimatedDelivery = true }: { result: ReadyToGoTrackingResult; showEstimatedDelivery?: boolean }) {
+  const steps = result.progress?.length ? result.progress : defaultProgress(result.status);
+  return <>
+    <p style={{ margin: 0, fontSize: 20, lineHeight: 1.4, color: "#000" }}>Tracking: {result.trackingNumber}</p>
+    <h2 style={{ margin: "48px 0 0", fontSize: 32, lineHeight: "40px", fontWeight: 700, color: "#303030" }}>{result.status}</h2>
+    {showEstimatedDelivery && result.estimatedDelivery ? <div style={{ margin: "16px auto 0", maxWidth: 720, borderRadius: 10, background: "#eaf4ff", padding: "20px 22px 18px", textAlign: "left" }}>
+      <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: "#202124" }}>Estimated delivery</p>
+      <p style={{ margin: "6px 0 0", fontSize: 22, fontWeight: 700, color: "#202124" }}>{result.estimatedDelivery}</p>
+    </div> : null}
+    <TrackingProgress steps={steps} />
+  </>;
+}
+
+function DeliveryResult({ heading, contentsHeading, carrierHeading, result }: { heading: ReactNode; contentsHeading: ReactNode; carrierHeading: ReactNode; result: ReadyToGoTrackingResult }) {
+  return <div style={{ ...contentWidth, display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 280px), 500px))", gap: 40, justifyContent: "center", alignItems: "start" }}>
+    <div>
+      <h3 style={{ margin: 0, fontSize: 20, lineHeight: "20px", fontWeight: 700 }}>{heading}</h3>
+      <ShippingTimeline events={eventsFrom(result)} />
+    </div>
+    <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+      <div>
+        <h3 style={{ margin: "0 0 12px", fontSize: 18, fontWeight: 700 }}>{contentsHeading}</h3>
+        <PackageContents items={result.orderItems ?? []} />
+      </div>
+      <div>
+        <h3 style={{ margin: "0 0 12px", fontSize: 18, fontWeight: 700 }}>{carrierHeading}</h3>
+        <p style={{ margin: 0, fontSize: 14, fontWeight: 600, color: "#1e293b" }}>{result.carrier ?? "Not available"}</p>
+        <p style={{ margin: "8px 0 0", fontSize: 14, color: "#64748b" }}>{result.deliveryAddress ?? "Delivery details are not available."}</p>
+      </div>
+    </div>
+  </div>;
+}
+
+export function ReadyToGoQueryEditor(block: ReadyToGoEditorProps) {
+  return <section aria-label="Ready-to-go query editor" style={heroStyle}>
+    <div role="region" aria-label="Ready-to-go tracking query" style={formCardStyle}>
+      <h1 style={{ margin: "0 0 24px", textAlign: "center", fontSize: 28, lineHeight: 1.15 }}>
+        <InlineText block={block} name="heading" fallback="Track your order" />
+      </h1>
+      <div style={{ display: "flex", width: "100%", borderBottom: "1px solid #cbd5e1" }}>
+        <div style={{ ...tabStyle(true), display: "flex", alignItems: "center", justifyContent: "center", cursor: "default" }}>
+          <InlineText block={block} name="trackingTabLabel" fallback="Tracking Number" />
+        </div>
+        <div style={{ ...tabStyle(false), display: "flex", alignItems: "center", justifyContent: "center", cursor: "default" }}>
+          <InlineText block={block} name="orderTabLabel" fallback="Order Number" />
+        </div>
+      </div>
+      <div style={{ marginTop: 24, display: "flex", flexDirection: "column", gap: 16, flex: 1 }}>
+        <input
+          aria-label="Canvas default tracking number"
+          readOnly={!block.selected}
+          value={text(block, "defaultTrackingNumber", "BT-2048-DEMO")}
+          onMouseDown={(event) => block.selected && event.stopPropagation()}
+          onClick={(event) => block.selected && event.stopPropagation()}
+          onChange={(event) => block.onPropsChange({ defaultTrackingNumber: event.currentTarget.value })}
+          style={{ ...inputStyle, border: block.selected ? "1px dashed #111" : inputStyle.border }}
+        />
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", width: "100%", minHeight: 58, marginTop: 8, borderRadius: "var(--pb-radius, 8px)", background: "var(--pb-color-primary, #111)", color: "#fff", fontSize: 15, fontWeight: 600 }}>
+          <InlineText block={block} name="submitLabel" fallback="Track Your Order" />
+        </div>
+      </div>
+      <p style={{ marginTop: "auto", paddingTop: 28, textAlign: "center", fontSize: 12, lineHeight: "17px", fontStyle: "italic", color: "#b8b8b8" }}>Powered by BestTrack</p>
+    </div>
   </section>;
 }
 
-export function ReadyToGoProgressBlock(props: Record<string, unknown>) {
+export function ReadyToGoProgressEditor(_block: ReadyToGoEditorProps) {
+  return <section aria-label="Ready-to-go progress editor" style={{ ...pageFont, background: "var(--pb-color-background, #fff)", color: "var(--pb-color-text, #0f172a)", borderBottom: "1px solid #f1f5f9" }}>
+    <div style={{ ...contentWidth, textAlign: "center", width: "min(1248px, 100%)" }}>
+      <ProgressResult showEstimatedDelivery={false} result={previewReadyToGoTracking()} />
+    </div>
+  </section>;
+}
+
+export function ReadyToGoDeliveryEditor(block: ReadyToGoEditorProps) {
+  return <section aria-label="Ready-to-go delivery editor" style={{ ...pageFont, background: "var(--pb-color-background, #fff)", color: "var(--pb-color-text, #0f172a)", borderBottom: "1px solid #f1f5f9" }}>
+    <DeliveryResult
+      heading={<InlineText block={block} name="heading" fallback="Shipping Details" />}
+      contentsHeading={<InlineText block={block} name="contentsHeading" fallback="Package Contents" />}
+      carrierHeading={<InlineText block={block} name="carrierHeading" fallback="Carrier" />}
+      result={previewReadyToGoTracking()}
+    />
+  </section>;
+}
+
+export function ReadyToGoRecommendationsEditor(block: ReadyToGoEditorProps) {
+  const preview = previewReadyToGoTracking();
+  return <section aria-label="Ready-to-go recommendations editor" style={{ ...pageFont, background: "var(--pb-color-background, #fff)", color: "var(--pb-color-text, #0f172a)" }}>
+    <div style={{ ...contentWidth, padding: "48px 24px" }}>
+      <h3 style={{ margin: 0, textAlign: "center", fontSize: 20, lineHeight: "20px", fontWeight: 700 }}><InlineText block={block} name="heading" fallback="You may also like..." /></h3>
+      <div style={{ marginTop: 24 }}><RecommendationCards items={preview.recommendations ?? []} /></div>
+    </div>
+  </section>;
+}
+
+export function ReadyToGoQueryBlock(props: Record<string, unknown>) {
   const runtime = useReadyToGoRuntime();
-  const heading = typeof props.heading === "string" ? props.heading : "Shipment progress";
-  return <ResultCard title={heading}>{runtime.phase === "success" ? <><strong>{runtime.result?.status}</strong><p>{runtime.result?.latestEvent}</p><small>{runtime.result?.updatedAt}</small></> : <p>{runtime.phase === "loading" ? "Loading shipment progress…" : "Enter a tracking number to see shipment progress."}</p>}</ResultCard>;
+  const [mode, setMode] = useState<"tracking" | "order">(text(props, "defaultQueryMode", "tracking") === "order" ? "order" : "tracking");
+  const [trackingNumber, setTrackingNumber] = useState(text(props, "defaultTrackingNumber", "BT-2048-DEMO"));
+  const [orderNumber, setOrderNumber] = useState(text(props, "defaultOrderNumber", ""));
+  const [email, setEmail] = useState("");
+  const [localError, setLocalError] = useState("");
+  const heading = text(props, "heading");
+  const submitLabel = text(props, "submitLabel", "Track Your Order");
+  const trackingTabLabel = text(props, "trackingTabLabel", "Tracking Number");
+  const orderTabLabel = text(props, "orderTabLabel", "Order Number");
+  const submit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setLocalError("");
+    if (mode === "order") {
+      if (!orderNumber.trim() || !email.trim()) {
+        setLocalError("Enter an order number and email.");
+        return;
+      }
+      void runtime.query(orderNumber.trim());
+      return;
+    }
+    void runtime.query(trackingNumber.trim());
+  };
+  const loading = runtime.phase === "loading";
+  return <section style={heroStyle}>
+    <div role="region" aria-label="Ready-to-go tracking query" style={formCardStyle}>
+      {heading ? <h1 style={{ margin: "0 0 24px", textAlign: "center", fontSize: 28, lineHeight: 1.15 }}>{heading}</h1> : null}
+      <div role="tablist" aria-label="Tracking method" style={{ display: "flex", width: "100%", borderBottom: "1px solid #cbd5e1" }}>
+        <button type="button" role="tab" aria-selected={mode === "tracking"} onClick={() => { setMode("tracking"); setLocalError(""); }} style={tabStyle(mode === "tracking")}>{trackingTabLabel}</button>
+        <button type="button" role="tab" aria-selected={mode === "order"} onClick={() => { setMode("order"); setLocalError(""); }} style={tabStyle(mode === "order")}>{orderTabLabel}</button>
+      </div>
+      <form onSubmit={submit} style={{ marginTop: 24, display: "flex", flexDirection: "column", gap: 16, flex: 1 }}>
+        {mode === "order" ? <>
+          <label htmlFor="ready-to-go-order-number" style={{ position: "absolute", width: 1, height: 1, overflow: "hidden", clipPath: "inset(50%)" }}>Order number</label>
+          <input id="ready-to-go-order-number" aria-label="Order number" value={orderNumber} onChange={(event) => setOrderNumber(event.target.value)} required minLength={4} maxLength={64} placeholder="Enter your order number" style={inputStyle} />
+          <label htmlFor="ready-to-go-email" style={{ position: "absolute", width: 1, height: 1, overflow: "hidden", clipPath: "inset(50%)" }}>Email</label>
+          <input id="ready-to-go-email" aria-label="Email" type="email" value={email} onChange={(event) => setEmail(event.target.value)} required placeholder="Enter your email" style={inputStyle} />
+        </> : <>
+          <label htmlFor="ready-to-go-tracking-number" style={{ position: "absolute", width: 1, height: 1, overflow: "hidden", clipPath: "inset(50%)" }}>Tracking number</label>
+          <input id="ready-to-go-tracking-number" aria-label="Tracking number" value={trackingNumber} onChange={(event) => setTrackingNumber(event.target.value)} required minLength={4} maxLength={64} placeholder="Enter your tracking number" style={inputStyle} />
+        </>}
+        {localError ? <p style={{ margin: 0, textAlign: "center", fontSize: 12, color: "#f43f5e" }}>{localError}</p> : null}
+        <button type="submit" disabled={loading} style={{ display: "flex", alignItems: "center", justifyContent: "center", width: "100%", minHeight: 58, marginTop: 8, border: 0, borderRadius: "var(--pb-radius, 8px)", background: loading ? "#475569" : "var(--pb-color-primary, #111)", color: "#fff", font: "inherit", fontSize: 15, fontWeight: 600, cursor: loading ? "wait" : "pointer", opacity: loading ? 0.7 : 1 }}>{loading ? "Tracking…" : submitLabel}</button>
+        {runtime.phase === "error" ? <p role="alert" style={{ margin: 0, textAlign: "center", fontSize: 12, color: "#f43f5e" }}>{runtime.error}</p> : null}
+      </form>
+      <p style={{ marginTop: "auto", paddingTop: 28, textAlign: "center", fontSize: 12, lineHeight: "17px", fontStyle: "italic", color: "#b8b8b8" }}>Powered by BestTrack</p>
+    </div>
+  </section>;
+}
+
+export function ReadyToGoProgressBlock() {
+  const runtime = useReadyToGoRuntime();
+  const result = runtime.result;
+  return <SectionShell title="Shipment progress">
+    <div style={{ ...contentWidth, textAlign: "center", width: "min(1248px, 100%)" }}>
+      {runtime.phase === "loading" ? <div aria-label="Loading shipment progress"><IdleMessage>Loading shipment progress…</IdleMessage><SkeletonRow /></div> : null}
+      {runtime.phase === "error" ? <p style={{ margin: 0, color: "#b42318" }}>Shipment progress is temporarily unavailable.</p> : null}
+      {runtime.phase === "idle" ? <IdleMessage>Enter a tracking number to see shipment progress.</IdleMessage> : null}
+      {runtime.phase === "success" && result ? <ProgressResult result={result} /> : null}
+    </div>
+  </SectionShell>;
 }
 
 export function ReadyToGoDeliveryBlock(props: Record<string, unknown>) {
   const runtime = useReadyToGoRuntime();
-  const heading = typeof props.heading === "string" ? props.heading : "Delivery information";
-  return <ResultCard title={heading}>{runtime.phase === "success" ? <dl><dt>Carrier</dt><dd>{runtime.result?.carrier ?? "Not available"}</dd><dt>Delivery</dt><dd>{runtime.result?.deliveryAddress ?? "Delivery details are not available."}</dd></dl> : <p>Delivery details will appear after a successful query.</p>}</ResultCard>;
+  const heading = text(props, "heading", "Shipping Details");
+  const contentsHeading = text(props, "contentsHeading", "Package Contents");
+  const carrierHeading = text(props, "carrierHeading", "Carrier");
+  const result = runtime.result;
+  return <SectionShell title={heading}>
+    {runtime.phase === "success" && result ? <DeliveryResult heading={heading} contentsHeading={contentsHeading} carrierHeading={carrierHeading} result={result} /> : <div style={{ ...contentWidth, display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 280px), 500px))", gap: 40, justifyContent: "center", alignItems: "start" }}>
+      <div>
+        <h3 style={{ margin: 0, fontSize: 20, lineHeight: "20px", fontWeight: 700 }}>{heading}</h3>
+        {runtime.phase === "loading" ? <IdleMessage>Loading delivery details…</IdleMessage> : null}
+        {runtime.phase === "error" ? <p style={{ margin: "16px 0 0", color: "#b42318" }}>Delivery details are temporarily unavailable.</p> : null}
+        {runtime.phase === "idle" ? <p style={{ margin: "16px 0 0", color: "#64748b" }}>Delivery details will appear after a successful query.</p> : null}
+      </div>
+    </div>}
+  </SectionShell>;
 }
 
 export function ReadyToGoRecommendationsBlock(props: Record<string, unknown>) {
   const runtime = useReadyToGoRuntime();
-  const heading = typeof props.heading === "string" ? props.heading : "You may also like";
+  const heading = text(props, "heading", "You may also like...");
   const recommendations = runtime.result?.recommendations ?? [];
-  return <ResultCard title={heading}>{runtime.phase === "success" && recommendations.length > 0 ? <ul>{recommendations.map((item) => <li key={item.id}><strong>{item.title}</strong><br /><small>{item.description}</small></li>)}</ul> : <p>{runtime.phase === "success" ? "No recommendations are available for this shipment." : "Recommendations appear with your shipment result."}</p>}</ResultCard>;
+  return <SectionShell title={heading} bordered={false}>
+    <div style={{ ...contentWidth, padding: "48px 24px" }}>
+      <h3 style={{ margin: 0, textAlign: "center", fontSize: 20, lineHeight: "20px", fontWeight: 700 }}>{heading}</h3>
+      <div style={{ marginTop: 24 }}>
+        {runtime.phase === "loading" ? <IdleMessage>Loading recommendations…</IdleMessage> : null}
+        {runtime.phase === "error" ? <p style={{ margin: 0, textAlign: "center", color: "#b42318" }}>Recommendations are temporarily unavailable.</p> : null}
+        {runtime.phase === "idle" ? <IdleMessage>Recommendations appear with your shipment result.</IdleMessage> : null}
+        {runtime.phase === "success" && recommendations.length ? <RecommendationCards items={recommendations} /> : null}
+        {runtime.phase === "success" && !recommendations.length ? <IdleMessage>No recommendations are available for this shipment.</IdleMessage> : null}
+      </div>
+    </div>
+  </SectionShell>;
 }

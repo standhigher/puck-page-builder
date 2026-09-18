@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components -- Shared visual primitives intentionally export components and token-aware helpers. */
 import { useState, type CSSProperties, type ReactNode } from "react";
 import type { ReadyToGoOrderItem, ReadyToGoRecommendation, ReadyToGoTrackingEvent, ReadyToGoTrackingStep } from "./ready-to-go";
 

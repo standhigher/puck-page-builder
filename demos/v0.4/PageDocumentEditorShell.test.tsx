@@ -225,17 +225,17 @@ describe("PageDocumentEditorShell V0.4", () => {
     expect(changes.at(-1)?.blocks.find((block) => block.type === "besttrack.ready-to-go.query")?.props).toMatchObject({ heading: "Find your parcel", submitLabel: "Check delivery" });
   });
 
-  it("provides a canvas field fallback for extensions without an editor renderer", async () => {
+  it("synchronizes Sales editor-preview text with the inspector", async () => {
     const registry = createExtensionRegistry([bestTrackSalesExtension]);
     renderEditor({ initialDocument: registry.getTemplate("besttrack.sales")!.create(), registry });
 
-    const canvasFields = screen.getByLabelText("Edit Announcement values in canvas");
-    const messageInput = canvasFields.querySelector("input");
+    expect(screen.queryByLabelText("Edit Announcement values in canvas")).not.toBeInTheDocument();
+    const messageInput = screen.getByLabelText("Canvas message");
     expect(messageInput).toHaveValue("Free delivery on orders over $50");
-    fireEvent.change(messageInput!, { target: { value: "Find an order" } });
+    fireEvent.change(messageInput, { target: { value: "Find an order" } });
 
     await waitFor(() => expect(within(screen.getByTestId("document-inspector")).getByLabelText("Announcement")).toHaveValue("Find an order"));
-    expect(screen.getByLabelText("Sales announcement")).toHaveTextContent("Find an order");
+    expect(screen.getByLabelText("Canvas message")).toHaveValue("Find an order");
   });
 
   it("tracks dirty history, restores properties with undo/redo, and handles editor shortcuts", () => {

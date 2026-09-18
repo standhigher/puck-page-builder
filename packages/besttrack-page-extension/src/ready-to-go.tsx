@@ -225,7 +225,7 @@ export function ReadyToGoQueryEditor(block: ReadyToGoEditorProps) {
   </section>;
 }
 
-export function ReadyToGoProgressEditor(_block: ReadyToGoEditorProps) {
+export function ReadyToGoProgressEditor() {
   return <section aria-label="Ready-to-go progress editor" style={{ ...pageFont, background: "var(--pb-color-background, #fff)", color: "var(--pb-color-text, #0f172a)", borderBottom: "1px solid #f1f5f9" }}>
     <div style={{ ...contentWidth, textAlign: "center", width: "min(1248px, 100%)" }}>
       <ProgressResult showEstimatedDelivery={false} result={previewReadyToGoTracking()} />

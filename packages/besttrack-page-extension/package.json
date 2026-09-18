@@ -1,6 +1,6 @@
 {
   "name": "@standhigher/besttrack-page-extension",
-  "version": "0.1.0",
+  "version": "0.3.0",
   "description": "BestTrack business extension entry point for @standhigher/puck-page-builder.",
   "type": "module",
   "files": ["dist", "README.md"],

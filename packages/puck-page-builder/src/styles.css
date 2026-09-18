@@ -37,6 +37,10 @@ button:focus-visible, [role="button"]:focus-visible { outline: 2px solid var(--b
 .pb-inspector-field input:focus, .pb-inspector-field textarea:focus { border-color: #2563eb; box-shadow: 0 0 0 3px rgb(37 99 235 / 12%); }
 .pb-inspector-field input:disabled, .pb-inspector-field textarea:disabled { color: #94a3b8; background: #f8fafc; cursor: not-allowed; }
 .pb-inspector__hint { margin: 0; padding: 0 var(--builder-space-2); color: #64748b; font-size: 12px; line-height: 1.5; }
+.pb-inspector-actions { padding-top: var(--builder-space-2); border-top: 1px solid #e2e8f0; }
+.pb-delete-confirmation-backdrop { position: fixed; z-index: 1000; inset: 0; display: grid; place-items: center; padding: var(--builder-space-4); background: rgb(15 23 42 / 42%); }
+.pb-delete-confirmation { display: grid; gap: var(--builder-space-4); width: min(100%, 420px); padding: var(--builder-space-5); border-radius: 12px; color: #0f172a; background: #fff; box-shadow: 0 20px 50px rgb(15 23 42 / 25%); }
+.pb-delete-confirmation h2, .pb-delete-confirmation p { margin: 0; }
 .pb-panel--closed { display: none; }
 .pb-block-list { display: flex; flex: 1; flex-direction: column; gap: var(--builder-space-2); min-height: 0; }
 .pb-block-row { display: flex; align-items: center; gap: var(--builder-space-2); padding: var(--builder-space-2); border: 1px solid transparent; border-radius: var(--builder-panel-radius); background: transparent; transition: background-color 120ms ease, border-color 120ms ease; }

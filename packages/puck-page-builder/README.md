@@ -44,6 +44,31 @@ const page = <WebRenderer document={migration.data} registry={registry} />;
 | `@standhigher/puck-page-builder/schema` | schema-specific types and migration helpers |
 | `@standhigher/puck-page-builder/styles.css` | Builder and Web renderer styles |
 
+## Editor policies and field validation
+
+Blocks can declare portable interaction and cardinality rules. `required` keeps at least one instance; `singleton` prevents a second instance. Hosts can supplement those declarations with `PageDocumentEditorShell`'s `policy` prop, including globally disabling add, delete, duplicate, or drag operations. Deletion through the packaged editor always opens its built-in confirmation dialog before changing the document.
+
+```tsx
+const notice = {
+  // ...the normal BlockDefinition fields
+  policy: { singleton: true, allowDuplicate: false },
+  fields: {
+    title: { field: "acme.text", control: "text", required: true, validation: { maxLength: 80 } },
+    color: { field: "acme.color", control: "color" }
+  }
+};
+
+<PageDocumentEditorShell
+  initialDocument={document}
+  registry={registry}
+  policy={{ operations: { allowDrag: false } }}
+/>
+```
+
+Built-in field controls are `text` (single line), `textarea` (multi-line), `url`, and `color`. Their validation runs in the editor before save or publish; custom fields may continue using a block's `validate` function. `validateFieldValue` is exported from `/extensions` when a host needs the same validation outside the editor.
+
+Theme values remain deliberately token-based: template theme → page theme → variant theme → block style. A block resets an inherited token by setting its local token explicitly (for example `{ radius: "0" }`), so no incompatible persisted style-reset shape is needed.
+
 ## Runtime and DataSource boundary
 
 The package can register DataSources but does not automatically resolve `block.binding`, call a Live data source, or inject its result into `WebRenderer`. Implement authorization, data resolution, caching, error handling and temporary render-data projection in the host application's server-side Runtime. Do not persist tokens, credentials or resolved private data in `PageDocument`.

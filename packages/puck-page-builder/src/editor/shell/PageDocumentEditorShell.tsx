@@ -4,10 +4,11 @@ import { DragHandleIcon, LayoutSectionIcon, MenuIcon, RedoIcon, UndoIcon } from 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPageDocumentPuckConfig } from "../../adapters/puck/page-document-config";
 import { fromEngineData, toEngineData } from "../../adapters/puck/page-document";
-import type { ExtensionRegistry, FieldConfig, ValidationIssue } from "../../core/extensions";
+import { validateFieldValue, type ExtensionRegistry, type FieldConfig, type ValidationIssue } from "../../core/extensions";
 import type { BlockNode, JsonValue, PageDocument } from "../../core/schema/page-document";
 import { EditorProvider, useEditorContext, type EditorLoadState } from "../context/EditorContext";
 import { createAdminI18n } from "../i18n/admin";
+import type { PageDocumentEditorPolicy } from "../policy";
 import type { Device } from "../state/types";
 import { blockIdAtRelativeY, nearestBlockIdAtY } from "./drop-position";
 
@@ -15,6 +16,10 @@ export type PageDocumentEditorShellProps = {
   initialDocument: PageDocument;
   iframe?: boolean;
   registry?: ExtensionRegistry;
+  /** Host rules that supplement block-declared operation and cardinality policies. */
+  policy?: PageDocumentEditorPolicy;
+  /** Copy or presentation overrides for the built-in, two-step deletion dialog. */
+  deleteConfirmation?: DeleteConfirmationConfig;
   /** Presentation states are explicit so host applications can provide a consistent Admin experience. */
   loadState?: EditorLoadState;
   adminLocale?: string;
@@ -23,6 +28,13 @@ export type PageDocumentEditorShellProps = {
   onSave?: (document: PageDocument) => Promise<void> | void;
   /** Publish the current document. Hosts should persist it atomically with publication. */
   onPublish?: (document: PageDocument) => Promise<void> | void;
+};
+
+export type DeleteConfirmationConfig = {
+  title?: string;
+  message?: (block: BlockNode) => ReactNode;
+  cancelLabel?: string;
+  confirmLabel?: string;
 };
 
 const deviceLabels: Record<Exclude<Device, "full">, "desktop" | "tablet" | "mobile"> = { desktop: "desktop", tablet: "tablet", mobile: "mobile" };
@@ -42,7 +54,10 @@ function validateDocumentBlocks(document: PageDocument, registry?: ExtensionRegi
   return document.blocks.flatMap((block) => {
     const definition = registry.getBlock(block.type);
     if (!definition) return [];
-    const issues = [...(definition.validate?.(block.props) ?? [])];
+    const issues = [
+      ...(definition.validate?.(block.props) ?? []),
+      ...Object.entries(definition.fields).flatMap(([name, field]) => validateFieldValue(field, block.props[name]).map((issue) => ({ ...issue, path: issue.path ? `${name}.${issue.path}` : name })))
+    ];
     if (definition.variants?.length && !definition.variants.some((variant) => variant.id === block.variant)) {
       issues.push({ path: "variant", message: `Unsupported variant: ${block.variant}.` });
     }
@@ -51,17 +66,18 @@ function validateDocumentBlocks(document: PageDocument, registry?: ExtensionRegi
 }
 
 export function PageDocumentEditorShell(props: PageDocumentEditorShellProps) {
-  return <EditorProvider initialDocument={props.initialDocument} registry={props.registry} loadState={props.loadState} leaveWarning={createAdminI18n(props.adminLocale).t("leaveWarning")} onDocumentChange={props.onDocumentChange}>
+  return <EditorProvider initialDocument={props.initialDocument} registry={props.registry} policy={props.policy} loadState={props.loadState} leaveWarning={createAdminI18n(props.adminLocale).t("leaveWarning")} onDocumentChange={props.onDocumentChange}>
     <PageDocumentEditor {...props} />
   </EditorProvider>;
 }
 
-function PageDocumentEditor({ iframe = true, registry, adminLocale, onSave, onPublish }: PageDocumentEditorShellProps) {
+function PageDocumentEditor({ iframe = true, registry, adminLocale, onSave, onPublish, deleteConfirmation }: PageDocumentEditorShellProps) {
   const editor = useEditorContext();
   const [blockView, setBlockView] = useState<"blocks" | "outline">("blocks");
   const [draggingLibraryType, setDraggingLibraryType] = useState<string | null>(null);
   const canvasFrameRef = useRef<HTMLDivElement>(null);
   const [canvasMutationVersion, setCanvasMutationVersion] = useState(0);
+  const [canvasResetVersion, setCanvasResetVersion] = useState(0);
   const [request, setRequest] = useState<"idle" | "saving" | "publishing">("idle");
   const [notice, setNotice] = useState<"saveFailed" | "publishFailed" | "published" | null>(null);
   const i18n = createAdminI18n(adminLocale);
@@ -145,9 +161,11 @@ function PageDocumentEditor({ iframe = true, registry, adminLocale, onSave, onPu
     }
   };
 
-  return <Puck config={config} data={engineData} iframe={{ enabled: iframe }} onChange={(data) => editor.updateFromCanvas(fromEngineData(data, editor.document, registry))}>
+  return <Puck config={config} data={engineData} iframe={{ enabled: iframe }} onChange={(data) => {
+    if (!editor.updateFromCanvas(fromEngineData(data, editor.document, registry))) setCanvasResetVersion((version) => version + 1);
+  }}>
     <Puck.Layout>
-      <CanvasSelectionBridge data={engineData} requestedBlockId={editor.canvasSelectionRequest} onCanvasSelected={confirmCanvasSelection} canvasMutationVersion={canvasMutationVersion} />
+      <CanvasSelectionBridge data={engineData} requestedBlockId={editor.canvasSelectionRequest} onCanvasSelected={confirmCanvasSelection} canvasMutationVersion={canvasMutationVersion} canvasResetVersion={canvasResetVersion} />
       <div className="pb-shell pb-shell--v04" data-testid="page-document-editor" data-page-id={editor.document.pageId} data-dirty={editor.isDirty} data-editor-state={editor.loadState}>
         <header className="pb-header">
           <InlineStack align="space-between" blockAlign="center" gap="300" wrap={false}>
@@ -172,7 +190,7 @@ function PageDocumentEditor({ iframe = true, registry, adminLocale, onSave, onPu
           <aside className="pb-left-panel" aria-label="PageDocument 区块">
             <InlineStack align="space-between" blockAlign="center"><Text as="h2" variant="headingSm">{blockView === "blocks" ? i18n.t("blocks") : i18n.t("outline")}</Text></InlineStack>
             {blockView === "blocks" ? <div className="pb-block-list" data-testid="blocks-view" aria-label="区块类型库" role="list" onDrop={cancelLibraryDrop}>
-              {blockTypes.map((type) => <div key={type} className={`pb-document-block-row pb-document-block-row--library ${editor.selectedBlock?.type === type ? "pb-document-block-row--selected" : ""}`} data-block-type={type} data-selected={editor.selectedBlock?.type === type} role="listitem" draggable={editor.actionState.canAdd} aria-label={`${blockTypeLabel(type, registry)}，拖拽至画布以添加${editor.selectedBlock?.type === type ? "，当前选中类型" : ""}`} onDragStart={(event) => { event.dataTransfer.setData("application/x-page-document-block", type); event.dataTransfer.effectAllowed = "copy"; setDraggingLibraryType(type); }} onDragEnd={() => setDraggingLibraryType(null)}>
+              {blockTypes.map((type) => <div key={type} className={`pb-document-block-row pb-document-block-row--library ${editor.selectedBlock?.type === type ? "pb-document-block-row--selected" : ""}`} data-block-type={type} data-selected={editor.selectedBlock?.type === type} role="listitem" draggable={editor.canAddBlock(type)} aria-disabled={!editor.canAddBlock(type)} aria-label={`${blockTypeLabel(type, registry)}，拖拽至画布以添加${editor.selectedBlock?.type === type ? "，当前选中类型" : ""}`} onDragStart={(event) => { if (!editor.canAddBlock(type)) { event.preventDefault(); return; } event.dataTransfer.setData("application/x-page-document-block", type); event.dataTransfer.effectAllowed = "copy"; setDraggingLibraryType(type); }} onDragEnd={() => setDraggingLibraryType(null)}>
                 <span className="pb-library-block-title"><Text as="span" variant="bodySm" fontWeight="semibold">{blockTypeLabel(type, registry)}</Text><span className="pb-library-block-drag-hint" aria-hidden="true"><DragHandleIcon /></span></span>
                 <Text as="span" variant="bodySm" tone="subdued">{type}</Text>
               </div>)}
@@ -189,31 +207,35 @@ function PageDocumentEditor({ iframe = true, registry, adminLocale, onSave, onPu
           </main>
           <aside className="pb-right-panel" aria-label="PageDocument 属性">
             <Text as="h2" variant="headingSm">{i18n.t("properties")}</Text>
-            {editor.selectedBlock ? <DocumentInspector block={editor.selectedBlock} registry={registry} disabled={!editor.actionState.canEdit} onChange={(props) => editor.updateBlockProps(editor.selectedBlock!.id, props)} /> : <Text as="p" tone="subdued">{i18n.t("selectBlock")}</Text>}
+            {editor.selectedBlock ? <><DocumentInspector block={editor.selectedBlock} registry={registry} disabled={!editor.actionState.canEdit} onChange={(props) => editor.updateBlockProps(editor.selectedBlock!.id, props)} /><InspectorActions block={editor.selectedBlock} canDuplicate={editor.actionState.canDuplicate} canDelete={editor.actionState.canDelete} canMove={editor.actionState.canReorder} canMoveUp={editor.document.blocks[0]?.id !== editor.selectedBlock.id} canMoveDown={editor.document.blocks.at(-1)?.id !== editor.selectedBlock.id} i18n={i18n} onDuplicate={() => editor.duplicateBlock(editor.selectedBlock!.id)} onDelete={() => editor.requestDeleteBlock(editor.selectedBlock!.id)} onMove={(direction) => editor.moveBlock(editor.selectedBlock!.id, direction)} /></> : <Text as="p" tone="subdued">{i18n.t("selectBlock")}</Text>}
           </aside>
         </div>
+        {editor.pendingDeleteBlock ? <DeleteConfirmation block={editor.pendingDeleteBlock} config={deleteConfirmation} i18n={i18n} onCancel={editor.cancelDeleteBlock} onConfirm={editor.confirmDeleteBlock} /> : null}
       </div>
     </Puck.Layout>
   </Puck>;
 }
 
 /** Bridges list-originated selection requests into Puck, then waits for Puck's selected item before updating the inspector. */
-function CanvasSelectionBridge({ data, requestedBlockId, onCanvasSelected, canvasMutationVersion }: { data: ReturnType<typeof toEngineData>; requestedBlockId: string | null; onCanvasSelected: (id: string | null) => void; canvasMutationVersion: number }) {
+function CanvasSelectionBridge({ data, requestedBlockId, onCanvasSelected, canvasMutationVersion, canvasResetVersion }: { data: ReturnType<typeof toEngineData>; requestedBlockId: string | null; onCanvasSelected: (id: string | null) => void; canvasMutationVersion: number; canvasResetVersion: number }) {
   const puck = usePuck();
   const lastSelectedId = useRef<string | null>(null);
   const lastSyncedData = useRef<string | null>(null);
   const lastCanvasMutationVersion = useRef(0);
+  const lastCanvasResetVersion = useRef(0);
 
   const serializedData = JSON.stringify(data);
   useEffect(() => {
-    if (lastSyncedData.current === serializedData) return;
+    const forceReset = canvasResetVersion > lastCanvasResetVersion.current;
+    if (lastSyncedData.current === serializedData && !forceReset) return;
     lastSyncedData.current = serializedData;
+    if (forceReset) lastCanvasResetVersion.current = canvasResetVersion;
     if (canvasMutationVersion > lastCanvasMutationVersion.current) {
       lastCanvasMutationVersion.current = canvasMutationVersion;
       return;
     }
     puck.dispatch({ type: "setData", data });
-  }, [canvasMutationVersion, data, puck, serializedData]);
+  }, [canvasMutationVersion, canvasResetVersion, data, puck, serializedData]);
 
   useEffect(() => {
     if (!requestedBlockId) return;
@@ -248,16 +270,27 @@ function InspectorSection({ title, children, defaultOpen = true }: { title: stri
 
 function InspectorTextControl({ label, value, control, disabled, onChange }: { label: string; value: unknown; control: NonNullable<FieldConfig["control"]>; disabled: boolean; onChange: (value: string) => void }) {
   const stringValue = typeof value === "string" ? value : "";
+  if (control === "color") return <input aria-label={label} type="color" value={/^#[\da-f]{6}$/i.test(stringValue) ? stringValue : "#000000"} disabled={disabled} onChange={(event) => onChange(event.currentTarget.value)} />;
   return <TextField label={label} labelHidden value={stringValue} onChange={onChange} autoComplete="off" disabled={disabled} multiline={control === "textarea" ? 4 : false} type={control === "url" ? "url" : "text"} />;
 }
 
 function InspectorField({ name, field, value, registry, disabled, onChange }: { name: string; field: FieldConfig; value: unknown; registry?: ExtensionRegistry; disabled: boolean; onChange: (value: JsonValue) => void }) {
   const label = field.label ?? name;
+  const issues = validateFieldValue(field, value);
   const Field = registry?.getField(field.field)?.component;
   return <div className="pb-inspector-field" data-control={field.control ?? "custom"}>
     <div className="pb-inspector-field__heading"><Text as="p" variant="bodySm" fontWeight="semibold">{label}</Text>{field.description ? <Text as="p" variant="bodySm" tone="subdued">{field.description}</Text> : null}</div>
     {field.control ? <InspectorTextControl label={label} value={value} control={field.control} disabled={disabled} onChange={(next) => onChange(next)} /> : Field ? <Field value={value} onChange={onChange} /> : null}
+    {issues.map((issue) => <Text key={issue.message} as="p" variant="bodySm" tone="critical">{issue.message}</Text>)}
   </div>;
+}
+
+function InspectorActions({ block, canDuplicate, canDelete, canMove, canMoveUp, canMoveDown, i18n, onDuplicate, onDelete, onMove }: { block: BlockNode; canDuplicate: boolean; canDelete: boolean; canMove: boolean; canMoveUp: boolean; canMoveDown: boolean; i18n: ReturnType<typeof createAdminI18n>; onDuplicate: () => void; onDelete: () => void; onMove: (direction: -1 | 1) => void }) {
+  return <div className="pb-inspector-actions" aria-label={`Actions for ${block.id}`}><ButtonGroup><Button disabled={!canMove || !canMoveUp} onClick={() => onMove(-1)}>{i18n.t("moveUp")}</Button><Button disabled={!canMove || !canMoveDown} onClick={() => onMove(1)}>{i18n.t("moveDown")}</Button><Button disabled={!canDuplicate} onClick={onDuplicate}>{i18n.t("duplicate")}</Button><Button disabled={!canDelete} tone="critical" onClick={onDelete}>{i18n.t("remove")}</Button></ButtonGroup></div>;
+}
+
+function DeleteConfirmation({ block, config, i18n, onCancel, onConfirm }: { block: BlockNode; config?: DeleteConfirmationConfig; i18n: ReturnType<typeof createAdminI18n>; onCancel: () => void; onConfirm: () => void }) {
+  return <div className="pb-delete-confirmation-backdrop" role="presentation"><section className="pb-delete-confirmation" role="dialog" aria-modal="true" aria-labelledby="pb-delete-confirmation-title"><Text as="h2" variant="headingMd" id="pb-delete-confirmation-title">{config?.title ?? i18n.t("confirmDeleteTitle")}</Text><Text as="p" variant="bodyMd">{config?.message?.(block) ?? i18n.t("confirmDeleteMessage")}</Text><ButtonGroup><Button onClick={onCancel}>{config?.cancelLabel ?? i18n.t("cancel")}</Button><Button tone="critical" onClick={onConfirm}>{config?.confirmLabel ?? i18n.t("confirm")}</Button></ButtonGroup></section></div>;
 }
 
 function inspectorFieldConfig(name: string, field: FieldConfig): FieldConfig {

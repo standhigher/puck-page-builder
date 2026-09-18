@@ -4,6 +4,9 @@ import { createContext, useContext, useState } from "react";
 import { describe, expect, it, vi } from "vitest";
 import { PageDocumentEditorShell } from "../../packages/puck-page-builder/src/editor/shell/PageDocumentEditorShell";
 import { blockIdAtRelativeY, nearestBlockIdAtY } from "../../packages/puck-page-builder/src/editor/shell/drop-position";
+import { bestTrackBrandedExtension } from "../../packages/besttrack-page-extension/src/branded-definition";
+import { bestTrackPageExtension } from "../../packages/besttrack-page-extension/src/ready-to-go-definition";
+import { createExtensionRegistry } from "../../packages/puck-page-builder/src/core/extensions";
 import type { PageDocument } from "../../packages/puck-page-builder/src/core/schema/page-document";
 
 type MockPuckState = {
@@ -47,7 +50,13 @@ vi.mock("@puckeditor/core", () => {
   }
   Puck.Preview = Preview;
   const usePuck = () => useContext(PuckContext)!;
-  return { Puck, usePuck };
+  const registerOverlayPortal = (element: HTMLElement | null | undefined, options?: { disableDrag?: boolean }) => {
+    if (!element || !options?.disableDrag) return undefined;
+    const stopPointerDown = (event: PointerEvent) => event.stopPropagation();
+    element.addEventListener("pointerdown", stopPointerDown, true);
+    return () => element.removeEventListener("pointerdown", stopPointerDown, true);
+  };
+  return { Puck, registerOverlayPortal, usePuck };
 });
 
 const document: PageDocument = {
@@ -154,6 +163,44 @@ describe("PageDocumentEditorShell V0.4", () => {
 
     fireEvent.change(screen.getByLabelText("文本内容"), { target: { value: "Changed in inspector" } });
     await waitFor(() => expect(screen.getAllByText("Changed in inspector").some((element) => element.tagName === "P")).toBe(true));
+  });
+
+  it("synchronizes Branded edit-mode values between the canvas, inspector and PageDocument", async () => {
+    const registry = createExtensionRegistry([bestTrackBrandedExtension]);
+    const changes: PageDocument[] = [];
+    renderEditor({ initialDocument: registry.getTemplate("besttrack.branded")!.create(), registry, onDocumentChange: (next) => changes.push(next) });
+
+    fireEvent.click(screen.getByRole("group", { name: "Select Tracking experience in canvas" }));
+    const headingInput = screen.getByText("Heading", { exact: true }).parentElement?.querySelector("input");
+    expect(headingInput).toHaveValue("Track your order");
+    expect(screen.queryByText("Powered by text", { exact: true })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Canvas poweredBy")).not.toBeInTheDocument();
+
+    fireEvent.change(headingInput!, { target: { value: "Find your parcel" } });
+    const editor = screen.getByTestId("page-document-editor");
+    await waitFor(() => expect(editor.querySelector<HTMLInputElement>('[data-branded-editor-field="heading"]')).toHaveValue("Find your parcel"));
+
+    const submit = editor.querySelector<HTMLInputElement>('[data-branded-editor-field="submitLabel"]');
+    expect(submit).toHaveValue("Track");
+    fireEvent.change(submit!, { target: { value: "Check delivery" } });
+
+    const buttonInput = screen.getByText("Button label", { exact: true }).parentElement?.querySelector("input");
+    await waitFor(() => expect(buttonInput).toHaveValue("Check delivery"));
+    expect(changes.at(-1)?.blocks.find((block) => block.type === "besttrack.branded.tracking-experience")?.props).toMatchObject({ heading: "Find your parcel", submitLabel: "Check delivery" });
+  });
+
+  it("provides a canvas field fallback for extensions without an editor renderer", async () => {
+    const registry = createExtensionRegistry([bestTrackPageExtension]);
+    renderEditor({ initialDocument: registry.getTemplate("besttrack.ready-to-go")!.create(), registry });
+
+    const canvasFields = screen.getByLabelText("Edit Order query values in canvas");
+    const headingInput = canvasFields.querySelector("input");
+    expect(headingInput).toHaveValue("Track your order");
+    fireEvent.change(headingInput!, { target: { value: "Find an order" } });
+
+    const inspectorHeading = screen.getAllByText("Heading", { exact: true }).find((element) => element.tagName === "P");
+    await waitFor(() => expect(inspectorHeading?.parentElement?.querySelector("input")).toHaveValue("Find an order"));
+    expect(screen.getByRole("heading", { name: "Find an order" })).toBeVisible();
   });
 
   it("tracks dirty history, restores properties with undo/redo, and handles editor shortcuts", () => {

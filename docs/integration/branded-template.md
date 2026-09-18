@@ -26,7 +26,8 @@ failure to mock data.
 The template renders inside the Shopify Theme body and deliberately does not
 render the store header or footer. Announcement is a compact promotion strip.
 Before query, the tracking experience renders shipment tabs, hero background,
-query mode, input, CTA and Powered by text. After a successful query it
+query mode, input and CTA. “Powered by BestTrack” is a fixed platform
+identifier and is not editable. After a successful query it
 replaces the hero with the tracking summary, progress, shipping details and
 package contents; “Track another order” restores the query view.
 

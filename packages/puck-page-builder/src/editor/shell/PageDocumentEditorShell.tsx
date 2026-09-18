@@ -54,10 +54,10 @@ function PageDocumentEditor({ iframe = true, registry, adminLocale, onSave, onPu
   const i18n = createAdminI18n(adminLocale);
   const engineData = useMemo(() => toEngineData(editor.document, registry), [editor.document, registry]);
   const { confirmCanvasSelection, selectedBlockId, updateBlockProps } = editor;
-  const updateFromCanvasInput = useCallback((id: string, props: Record<string, JsonValue>) => {
+  const updateFromCanvasInput = useCallback((id: string, props: Record<string, JsonValue>, preserveCanvasValue = false) => {
     // The DOM already contains this value. Sending it back through Puck would reset
     // the contenteditable caret after every keystroke.
-    setCanvasMutationVersion((version) => version + 1);
+    if (preserveCanvasValue) setCanvasMutationVersion((version) => version + 1);
     updateBlockProps(id, props);
   }, [updateBlockProps]);
   const config = useMemo(() => createPageDocumentPuckConfig(confirmCanvasSelection, updateFromCanvasInput, selectedBlockId, registry), [confirmCanvasSelection, registry, selectedBlockId, updateFromCanvasInput]);
@@ -233,7 +233,7 @@ function DocumentInspector({ block, registry, disabled, onChange }: { block: Blo
     {block.type === "core.image" ? <><TextField label="图片 URL" value={typeof block.props.src === "string" ? block.props.src : ""} onChange={(src) => onChange({ src })} autoComplete="off" disabled={disabled} /><TextField label="替代文本" value={typeof block.props.alt === "string" ? block.props.alt : ""} onChange={(alt) => onChange({ alt })} autoComplete="off" disabled={disabled} /></> : null}
     {definition ? Object.entries(definition.fields).map(([name, field]) => {
       const Field = registry?.getField(field.field)?.component;
-      return Field ? <Field key={name} value={block.props[name]} onChange={(value) => onChange({ ...block.props, [name]: value as JsonValue })} /> : null;
+      return Field ? <div key={name}><Text as="p" variant="bodySm" fontWeight="semibold">{field.label ?? name}</Text><Field value={block.props[name]} onChange={(value) => onChange({ ...block.props, [name]: value as JsonValue })} /></div> : null;
     }) : null}
   </BlockStack>;
 }

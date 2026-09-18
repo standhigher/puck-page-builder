@@ -1,5 +1,5 @@
 import type { ComponentType, ReactNode } from "react";
-import type { PageDocument, RenderTarget } from "../schema/page-document";
+import type { JsonValue, PageDocument, RenderTarget } from "../schema/page-document";
 import type { ThemeTokens } from "../theme";
 
 export type ExtensionTarget = RenderTarget | "all";
@@ -19,6 +19,17 @@ export type FieldProps<T = unknown> = {
   onChange(value: T): void;
 };
 
+/**
+ * Props available only to an extension's editor-canvas renderer.
+ * They are separate from Web rendering so editor interaction cannot invoke a
+ * host Runtime or become persisted operational data.
+ */
+export type BlockEditorProps<P = Record<string, unknown>> = P & {
+  blockId: string;
+  selected: boolean;
+  onPropsChange(props: Record<string, JsonValue>): void;
+};
+
 export interface BlockDefinition<P = Record<string, unknown>> {
   type: string;
   version: number;
@@ -27,7 +38,10 @@ export interface BlockDefinition<P = Record<string, unknown>> {
   targets: ExtensionTarget[];
   defaultProps: P;
   fields: Record<string, FieldConfig>;
-  render: Partial<Record<RenderTarget, ComponentType<P>>>;
+  render: Partial<Record<RenderTarget, ComponentType<P>>> & {
+    /** Optional edit-mode renderer. WebRenderer never uses this surface. */
+    editor?: ComponentType<BlockEditorProps<P>>;
+  };
   defaultVariant?: string;
   variants?: BlockVariantDefinition[];
   dataSources?: string[];

@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useMemo, useState, type FormEvent, type ReactNode } from "react";
-import type { FieldProps } from "@standhigher/puck-page-builder/runtime";
+import type { BlockEditorProps, FieldProps } from "@standhigher/puck-page-builder/runtime";
 import type { ReadyToGoRecommendation, ReadyToGoTrackingEvent, ReadyToGoTrackingQuery, ReadyToGoTrackingResult, ReadyToGoTrackingStep } from "./ready-to-go";
 
 export type BrandedRuntimeState = { phase: "idle" | "loading" | "success" | "error"; result?: ReadyToGoTrackingResult; error?: string };
@@ -113,7 +113,7 @@ function QueryHero(props: Record<string, unknown>) {
         <button type="submit" disabled={runtime.phase === "loading"} style={{ width: "100%", minHeight: 48, marginTop: 24, border: 0, borderRadius: 10, background: runtime.phase === "loading" ? "#6b6b6b" : "#000", color: "#fff", font: "inherit", cursor: runtime.phase === "loading" ? "wait" : "pointer" }}>{runtime.phase === "loading" ? "Tracking…" : text(props, "submitLabel", "Track")}</button>
       </form>
       {runtime.phase === "error" ? <p role="alert" style={{ marginBottom: 0, color: "#b42318" }}>{runtime.error}</p> : null}
-      <small style={{ display: "block", marginTop: 10, color: "#8a8a8a", fontSize: 8, textAlign: "right" }}>{text(props, "poweredBy", "Powered by BestTrack")}</small>
+      <small style={{ display: "block", marginTop: 10, color: "#8a8a8a", fontSize: 8, textAlign: "right" }}>Powered by BestTrack</small>
     </div>
   </div>;
 }
@@ -179,6 +179,66 @@ function TrackingResult({ props }: { props: Record<string, unknown> }) {
 
 export function BrandedTextField({ value, onChange }: FieldProps) {
   return <input aria-label="Branded text" value={typeof value === "string" ? value : ""} onChange={(event) => onChange(event.target.value)} />;
+}
+
+type BrandedEditorProps = BlockEditorProps<Record<string, unknown>>;
+
+function InlineText({ block, name, fallback }: { block: BrandedEditorProps; name: string; fallback: string }) {
+  const value = text(block, name, fallback);
+  if (!block.selected) return <span data-branded-editor-field={name}>{value}</span>;
+  return <input
+    aria-label={"Canvas " + name}
+    data-branded-editor-field={name}
+    value={value}
+    onMouseDown={(event) => event.stopPropagation()}
+    onClick={(event) => event.stopPropagation()}
+    onChange={(event) => block.onPropsChange({ [name]: event.currentTarget.value })}
+    style={{ display: "inline-block", width: "100%", minWidth: "5ch", boxSizing: "border-box", border: "1px dashed currentColor", borderRadius: 3, padding: "2px 5px", background: "transparent", color: "inherit", font: "inherit", fontWeight: "inherit", lineHeight: "inherit", letterSpacing: "inherit", textAlign: "inherit" }}
+  />;
+}
+
+function EditorSurface({ block, children }: { block: BrandedEditorProps; children: ReactNode }) {
+  return <section aria-label="Branded editor preview" style={{ ...cardStyle, outline: block.selected ? "2px solid #2563eb" : "1px dashed #cbd5e1", outlineOffset: -2, padding: 24 }}>{children}</section>;
+}
+
+export function BrandedAnnouncementEditor(block: BrandedEditorProps) {
+  return <section aria-label="Branded announcement editor" style={{ minHeight: 36, display: "grid", placeItems: "center", padding: "0 16px", background: "#252525", color: "#fff", fontFamily: "var(--pb-font-family)", fontSize: 12, textAlign: "center" }}><InlineText block={block} name="message" fallback="Check out our summer sale" /></section>;
+}
+
+export function BrandedTrackingExperienceEditor(block: BrandedEditorProps) {
+  const labels = shipmentLabels(block.shipmentLabels);
+  return <section aria-label="Branded tracking experience editor" style={{ background: "#fffdf0", fontFamily: "var(--pb-font-family)" }}>
+    <div style={{ ...contentWidth, minHeight: 56, display: "flex", alignItems: "center", gap: 8, overflowX: "auto" }}>{labels.map((shipment, index) => <span key={shipment.id} style={{ minWidth: 92, padding: "9px 12px", border: index === 0 ? "1px solid #1a1a1a" : "1px solid #e7e7e7", borderRadius: 4, background: "#fff", fontSize: 11, fontWeight: index === 0 ? 700 : 400 }}>{shipment.label}</span>)}</div>
+    <div style={{ minHeight: 360, display: "grid", placeItems: "center", padding: 16, background: "linear-gradient(135deg, #dedbd4, #b9b3aa)" }}>
+      <EditorSurface block={block}>
+        <h1 style={{ margin: "0 0 28px", textAlign: "center", fontSize: 32 }}><InlineText block={block} name="heading" fallback="Track your order" /></h1>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", borderBottom: "1px solid #e7e7e7", marginBottom: 20, textAlign: "center" }}><span style={{ padding: 10 }}>Order Number</span><strong style={{ padding: 10, borderBottom: "2px solid #0a0a0a" }}>Tracking Number</strong></div>
+        <input aria-label="Canvas default tracking number" readOnly={!block.selected} value={text(block, "defaultTrackingNumber", "DEMO-YQTRACK9999")} onMouseDown={(event) => block.selected && event.stopPropagation()} onClick={(event) => block.selected && event.stopPropagation()} onChange={(event) => block.onPropsChange({ defaultTrackingNumber: event.currentTarget.value })} style={{ width: "100%", height: 44, boxSizing: "border-box", padding: "0 12px", border: block.selected ? "1px dashed #0a0a0a" : "1px solid #e2e2e2", borderRadius: 10, background: "#fff", font: "inherit" }} />
+        <div style={{ display: "grid", placeItems: "center", minHeight: 46, marginTop: 16, borderRadius: 10, background: "#000", color: "#fff", fontWeight: 700 }}><InlineText block={block} name="submitLabel" fallback="Track" /></div>
+        <small style={{ display: "block", marginTop: 10, color: "#8a8a8a", fontSize: 9, textAlign: "right" }}>Powered by BestTrack</small>
+      </EditorSurface>
+    </div>
+  </section>;
+}
+
+export function BrandedQueryEditor(block: BrandedEditorProps) {
+  return <BrandedTrackingExperienceEditor {...block} />;
+}
+
+export function BrandedOrderItemsEditor(block: BrandedEditorProps) {
+  return <EditorSurface block={block}><h2 style={{ margin: 0 }}><InlineText block={block} name="heading" fallback="What's Inside" /></h2><p style={{ color: "#6b6b6b" }}>Package contents appear after a consumer tracking query.</p></EditorSurface>;
+}
+
+export function BrandedRecommendationsEditor(block: BrandedEditorProps) {
+  return <EditorSurface block={block}><h2 style={{ margin: 0, textAlign: "center" }}><InlineText block={block} name="heading" fallback="You might also like" /></h2><p style={{ color: "#6b6b6b", textAlign: "center" }}>Recommendations appear with the active shipment.</p></EditorSurface>;
+}
+
+export function BrandedQuickLinksEditor(block: BrandedEditorProps) {
+  return <EditorSurface block={block}><h2><InlineText block={block} name="heading" fallback="Need help?" /></h2><div style={{ display: "flex", gap: 20 }}><InlineText block={block} name="primaryLabel" fallback="Shipping help" /><InlineText block={block} name="secondaryLabel" fallback="Contact us" /></div></EditorSurface>;
+}
+
+export function BrandedBlogEditor(block: BrandedEditorProps) {
+  return <EditorSurface block={block}><h2><InlineText block={block} name="heading" fallback="From our journal" /></h2><article><strong><InlineText block={block} name="articleTitle" fallback="Delivery tips for every season" /></strong><p><InlineText block={block} name="excerpt" fallback="Simple ways to make every delivery feel considered." /></p><InlineText block={block} name="linkLabel" fallback="Read the story" /></article></EditorSurface>;
 }
 
 export function BrandedAnnouncementBlock(props: Record<string, unknown>) {

@@ -13,14 +13,18 @@ import {
   text,
   TrackingProgress
 } from "./track-page-display";
+import { isValidOrderEmail, isValidOrderNumber, isValidTrackingNumber } from "./tracking-page-runtime";
 import type {
   TrackingPageOrderItem,
+  LegacyTrackingPageQuery,
   TrackingPageQuery,
+  TrackingPageQueryRequest,
   TrackingPageQueryResult,
   TrackingPageRecommendation,
   TrackingPageShipment,
   TrackingPageTrackingEvent,
-  TrackingPageTrackingStep
+  TrackingPageTrackingStep,
+  TrackingPageWatermark
 } from "./tracking-page-runtime";
 
 /** Backward-compatible Ready-to-go names for the shared Consumer Runtime contract. */
@@ -30,13 +34,22 @@ export type ReadyToGoTrackingStep = TrackingPageTrackingStep;
 export type ReadyToGoTrackingEvent = TrackingPageTrackingEvent;
 export type ReadyToGoShipment = TrackingPageShipment;
 export type ReadyToGoTrackingResult = TrackingPageQueryResult;
-export type ReadyToGoTrackingQuery = TrackingPageQuery;
+/** @deprecated Use `TrackingPageQuery` and the `query` provider prop. */
+export type ReadyToGoTrackingQuery = LegacyTrackingPageQuery;
 export type ReadyToGoRuntimeState = { phase: "idle" | "loading" | "success" | "error"; result?: ReadyToGoTrackingResult; error?: string };
-type ReadyToGoRuntime = ReadyToGoRuntimeState & { query(trackingNumber: string): Promise<void> };
+type ReadyToGoRuntime = ReadyToGoRuntimeState & { query(request: TrackingPageQueryRequest): Promise<void>; watermark?: TrackingPageWatermark };
 
 const initialRuntime: ReadyToGoRuntime = { phase: "idle", async query() { return undefined; } };
 const ReadyToGoRuntimeContext = createContext<ReadyToGoRuntime>(initialRuntime);
-export type ReadyToGoRuntimeProviderProps = { children: ReactNode; queryTracking?: ReadyToGoTrackingQuery };
+export type ReadyToGoRuntimeProviderProps = {
+  children: ReactNode;
+  /** The discriminated, host-authorized query boundary. */
+  query?: TrackingPageQuery;
+  /** Host-decided display state; no entitlement checks happen in this package. */
+  watermark?: TrackingPageWatermark;
+  /** @deprecated Compatibility bridge for tracking-only integrations. */
+  queryTracking?: ReadyToGoTrackingQuery;
+};
 
 /** Mock is an explicit preview default, never a fallback for an injected live query. */
 function previewReadyToGoTracking(trackingNumber = "BT-2048-DEMO"): ReadyToGoTrackingResult {
@@ -61,22 +74,30 @@ function previewReadyToGoTracking(trackingNumber = "BT-2048-DEMO"): ReadyToGoTra
   };
 }
 
-async function queryMockReadyToGoTracking(trackingNumber: string): Promise<ReadyToGoTrackingResult> {
-  return previewReadyToGoTracking(trackingNumber);
+async function queryMockReadyToGoTracking(request: TrackingPageQueryRequest): Promise<ReadyToGoTrackingResult> {
+  return previewReadyToGoTracking(request.mode === "tracking" ? request.trackingNumber : request.orderNumber);
 }
 
-export function ReadyToGoRuntimeProvider({ children, queryTracking = queryMockReadyToGoTracking }: ReadyToGoRuntimeProviderProps) {
+export function ReadyToGoRuntimeProvider({ children, query: injectedQuery, queryTracking, watermark }: ReadyToGoRuntimeProviderProps) {
   const [state, setState] = useState<ReadyToGoRuntimeState>({ phase: "idle" });
-  const query = useCallback(async (trackingNumber: string) => {
+  const query = useCallback(async (request: TrackingPageQueryRequest) => {
     setState({ phase: "loading" });
-    try { setState({ phase: "success", result: await queryTracking(trackingNumber) }); }
+    try {
+      const result = injectedQuery
+        ? await injectedQuery(request)
+        : queryTracking
+          ? await queryTracking(request.mode === "tracking" ? request.trackingNumber : request.orderNumber)
+          : await queryMockReadyToGoTracking(request);
+      setState({ phase: "success", result });
+    }
     catch (error) { setState({ phase: "error", error: error instanceof Error ? error.message : "tracking-query-failed" }); }
-  }, [queryTracking]);
-  const value = useMemo<ReadyToGoRuntime>(() => ({ ...state, query }), [query, state]);
+  }, [injectedQuery, queryTracking]);
+  const value = useMemo<ReadyToGoRuntime>(() => ({ ...state, query, watermark }), [query, state, watermark]);
   return <ReadyToGoRuntimeContext.Provider value={value}>{children}</ReadyToGoRuntimeContext.Provider>;
 }
 
 function useReadyToGoRuntime() { return useContext(ReadyToGoRuntimeContext); }
+function RuntimeWatermark({ watermark }: { watermark?: TrackingPageWatermark }) { return watermark?.visible ? <small style={{ display: "block", marginTop: "auto", paddingTop: 28, textAlign: "center", fontSize: 12, lineHeight: "17px", fontStyle: "italic", color: "#b8b8b8" }}>{watermark.label || "Powered by BestTrack"}</small> : null; }
 
 const heroStyle: CSSProperties = {
   ...pageFont,
@@ -269,14 +290,22 @@ export function ReadyToGoQueryBlock(props: Record<string, unknown>) {
     event.preventDefault();
     setLocalError("");
     if (mode === "order") {
-      if (!orderNumber.trim() || !email.trim()) {
-        setLocalError("Enter an order number and email.");
+      if (!isValidOrderNumber(orderNumber.trim())) {
+        setLocalError("Enter an order number using 4–64 letters, numbers, or hyphens.");
         return;
       }
-      void runtime.query(orderNumber.trim());
+      if (!isValidOrderEmail(email.trim())) {
+        setLocalError("Enter a valid email address.");
+        return;
+      }
+      void runtime.query({ mode: "order", orderNumber: orderNumber.trim(), email: email.trim() });
       return;
     }
-    void runtime.query(trackingNumber.trim());
+    if (!isValidTrackingNumber(trackingNumber.trim())) {
+      setLocalError("Enter a tracking number using 4–64 letters, numbers, or hyphens.");
+      return;
+    }
+    void runtime.query({ mode: "tracking", trackingNumber: trackingNumber.trim() });
   };
   const loading = runtime.phase === "loading";
   return <section style={heroStyle}>
@@ -300,7 +329,7 @@ export function ReadyToGoQueryBlock(props: Record<string, unknown>) {
         <button type="submit" disabled={loading} style={{ display: "flex", alignItems: "center", justifyContent: "center", width: "100%", minHeight: 58, marginTop: 8, border: 0, borderRadius: "var(--pb-radius, 8px)", background: loading ? "#475569" : "var(--pb-color-primary, #111)", color: "#fff", font: "inherit", fontSize: 15, fontWeight: 600, cursor: loading ? "wait" : "pointer", opacity: loading ? 0.7 : 1 }}>{loading ? "Tracking…" : submitLabel}</button>
         {runtime.phase === "error" ? <p role="alert" style={{ margin: 0, textAlign: "center", fontSize: 12, color: "#f43f5e" }}>{runtime.error}</p> : null}
       </form>
-      <p style={{ marginTop: "auto", paddingTop: 28, textAlign: "center", fontSize: 12, lineHeight: "17px", fontStyle: "italic", color: "#b8b8b8" }}>Powered by BestTrack</p>
+      <RuntimeWatermark watermark={runtime.watermark} />
     </div>
   </section>;
 }

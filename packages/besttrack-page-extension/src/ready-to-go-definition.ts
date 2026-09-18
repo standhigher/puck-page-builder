@@ -1,5 +1,6 @@
 import { createPageDocument, type BlockDefinition, type FieldConfig, type JsonValue, type PageBuilderExtension, type TemplateDefinition } from "@standhigher/puck-page-builder/runtime";
 import { ReadyToGoDeliveryBlock, ReadyToGoDeliveryEditor, ReadyToGoProgressBlock, ReadyToGoProgressEditor, ReadyToGoQueryBlock, ReadyToGoQueryEditor, ReadyToGoRecommendationsBlock, ReadyToGoRecommendationsEditor, ReadyToGoTextField } from "./ready-to-go";
+import { defineTemplatePolicy } from "./template-policy";
 
 const text = (label: string, options: Partial<FieldConfig> = {}) => ({ field: "besttrack.ready-to-go.text", label, control: "text" as const, ...options });
 const readyToGoBlocks: BlockDefinition[] = [
@@ -13,6 +14,7 @@ const readyToGoBlocks: BlockDefinition[] = [
       heading: "Track your order",
       submitLabel: "Track Your Order",
       defaultTrackingNumber: "BT-2048-DEMO",
+      defaultOrderNumber: "",
       defaultQueryMode: "tracking",
       trackingTabLabel: "Tracking Number",
       orderTabLabel: "Order Number"
@@ -23,6 +25,7 @@ const readyToGoBlocks: BlockDefinition[] = [
       heading: text("Heading"),
       submitLabel: text("Button label"),
       defaultTrackingNumber: text("Default tracking number"),
+      defaultOrderNumber: text("Default order number"),
       defaultQueryMode: text("Default query mode"),
       trackingTabLabel: text("Tracking tab label"),
       orderTabLabel: text("Order tab label")
@@ -66,6 +69,13 @@ const readyToGoBlocks: BlockDefinition[] = [
     render: { web: ReadyToGoRecommendationsBlock, editor: ReadyToGoRecommendationsEditor }
   }
 ];
+
+export const readyToGoTemplatePolicy = defineTemplatePolicy(
+  "besttrack.ready-to-go",
+  "Ready-to-go",
+  readyToGoBlocks.map((block) => block.type),
+  ["besttrack.ready-to-go.query"]
+);
 
 export function createReadyToGoTemplate(): TemplateDefinition {
   return {

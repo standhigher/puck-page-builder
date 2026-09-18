@@ -1,13 +1,19 @@
-import { createContext, useCallback, useContext, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import type { BlockEditorProps, FieldProps } from "@standhigher/puck-page-builder/runtime";
 import {
   isEmptyTrackingPageResult,
+  isValidOrderEmail,
+  isValidOrderNumber,
+  isValidTrackingNumber,
+  type LegacyTrackingPageQuery,
   type TrackingPageQuery,
+  type TrackingPageQueryRequest,
   type TrackingPageQueryResult,
   type TrackingPageRecommendation,
   type TrackingPageRuntimePhase,
   type TrackingPageTrackingEvent,
-  type TrackingPageTrackingStep
+  type TrackingPageTrackingStep,
+  type TrackingPageWatermark
 } from "./tracking-page-runtime";
 
 /** Branded uses the shared, display-safe Consumer Runtime result without persisting it. */
@@ -15,33 +21,47 @@ export type BrandedRuntimeState = { phase: TrackingPageRuntimePhase; result?: Tr
 type BrandedRuntime = BrandedRuntimeState & {
   displayedResult?: TrackingPageQueryResult;
   selectedShipmentId: string | null;
-  query(trackingNumber: string): Promise<void>;
+  query(request: TrackingPageQueryRequest): Promise<void>;
   reset(): void;
   selectShipment(id: string): void;
+  watermark?: TrackingPageWatermark;
+  supportsOrderQuery: boolean;
 };
 
 const initialRuntime: BrandedRuntime = {
   phase: "idle",
   selectedShipmentId: null,
+  supportsOrderQuery: false,
   async query() { return undefined; },
   reset() { return undefined; },
   selectShipment() { return undefined; }
 };
 const BrandedRuntimeContext = createContext<BrandedRuntime>(initialRuntime);
-export type BrandedRuntimeProviderProps = { children: ReactNode; queryTracking: TrackingPageQuery };
+export type BrandedRuntimeProviderProps = {
+  children: ReactNode;
+  /** The discriminated request contract for new host integrations. */
+  query?: TrackingPageQuery;
+  /** Host-decided display state; no entitlement checks happen in this package. */
+  watermark?: TrackingPageWatermark;
+  /** @deprecated Tracking-only compatibility bridge. Use `query`. */
+  queryTracking?: LegacyTrackingPageQuery;
+};
 
 const contentWidth = { width: "min(1200px, 100%)", margin: "0 auto", padding: "0 clamp(16px, 4vw, 48px)", boxSizing: "border-box" as const };
 const cardStyle = { background: "#fff", color: "#0a0a0a", border: "1px solid #e7e7e7", borderRadius: 10, fontFamily: "var(--pb-font-family)" };
 
-export function BrandedRuntimeProvider({ children, queryTracking }: BrandedRuntimeProviderProps) {
+export function BrandedRuntimeProvider({ children, query: injectedQuery, queryTracking, watermark }: BrandedRuntimeProviderProps) {
   const [state, setState] = useState<BrandedRuntimeState>({ phase: "idle" });
   const [selectedShipmentId, setSelectedShipmentId] = useState<string | null>(null);
   const requestId = useRef(0);
-  const query = useCallback(async (trackingNumber: string) => {
+  const query = useCallback(async (request: TrackingPageQueryRequest) => {
     const currentRequestId = ++requestId.current;
     setState({ phase: "loading" });
     try {
-      const result = await queryTracking(trackingNumber);
+      if (!injectedQuery && !queryTracking) throw new Error("tracking-query-not-configured");
+      const result = injectedQuery
+        ? await injectedQuery(request)
+        : await queryTracking!(request.mode === "tracking" ? request.trackingNumber : request.orderNumber);
       if (currentRequestId !== requestId.current) return;
       setSelectedShipmentId(result.shipments?.[0]?.id ?? null);
       setState({ phase: isEmptyTrackingPageResult(result) ? "empty" : "success", result });
@@ -49,7 +69,7 @@ export function BrandedRuntimeProvider({ children, queryTracking }: BrandedRunti
       if (currentRequestId !== requestId.current) return;
       setState({ phase: "error", error: "tracking-query-failed" });
     }
-  }, [queryTracking]);
+  }, [injectedQuery, queryTracking]);
   const reset = useCallback(() => {
     requestId.current += 1;
     setSelectedShipmentId(null);
@@ -64,13 +84,14 @@ export function BrandedRuntimeProvider({ children, queryTracking }: BrandedRunti
     if (state.result?.shipments?.some((shipment) => shipment.id === id)) setSelectedShipmentId(id);
   }, [state.result]);
   const value = useMemo<BrandedRuntime>(
-    () => ({ ...state, displayedResult, selectedShipmentId, query, reset, selectShipment }),
-    [displayedResult, query, reset, selectedShipmentId, selectShipment, state]
+    () => ({ ...state, displayedResult, selectedShipmentId, query, reset, selectShipment, watermark: watermark ?? (queryTracking ? { visible: true } : undefined), supportsOrderQuery: Boolean(injectedQuery) }),
+    [displayedResult, injectedQuery, query, queryTracking, reset, selectedShipmentId, selectShipment, state, watermark]
   );
   return <BrandedRuntimeContext.Provider value={value}>{children}</BrandedRuntimeContext.Provider>;
 }
 
 function useBrandedRuntime() { return useContext(BrandedRuntimeContext); }
+function RuntimeWatermark({ watermark }: { watermark?: TrackingPageWatermark }) { return watermark?.visible ? <small style={{ display: "block", marginTop: 10, color: "#8a8a8a", fontSize: 8, textAlign: "right" }}>{watermark.label || "Powered by BestTrack"}</small> : null; }
 function text(props: Record<string, unknown>, key: string, fallback: string) { return typeof props[key] === "string" ? props[key] : fallback; }
 function safeHref(value: unknown) {
   if (typeof value !== "string") return "#";
@@ -111,26 +132,52 @@ function ShipmentSwitcher({ shipmentLabels: configuredLabels }: { shipmentLabels
 function QueryHero(props: Record<string, unknown>) {
   const runtime = useBrandedRuntime();
   const [trackingNumber, setTrackingNumber] = useState(text(props, "defaultTrackingNumber", "DEMO-YQTRACK9999"));
+  const [orderNumber, setOrderNumber] = useState(text(props, "defaultOrderNumber", ""));
+  const [email, setEmail] = useState("");
   const [mode, setMode] = useState<"order" | "tracking">(text(props, "defaultQueryMode", "tracking") === "order" ? "order" : "tracking");
+  const [inputError, setInputError] = useState("");
   const [heroImageFailed, setHeroImageFailed] = useState(false);
-  const submit = (event: FormEvent<HTMLFormElement>) => { event.preventDefault(); void runtime.query(trackingNumber); };
-  return <div style={{ position: "relative", minHeight: "clamp(520px, 44vw, 560px)", display: "grid", placeItems: "center", overflow: "hidden", background: "linear-gradient(135deg, #dedbd4, #b9b3aa)" }}>
+  const resultRef = useRef<HTMLDivElement>(null);
+  const activeMode = runtime.supportsOrderQuery ? mode : "tracking";
+  useEffect(() => { const node = resultRef.current; if (runtime.phase === "success" && typeof node?.scrollIntoView === "function") node.scrollIntoView({ block: "nearest" }); }, [runtime.phase, runtime.result]);
+  const submit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const tracking = trackingNumber.trim();
+    const order = orderNumber.trim();
+    const orderEmail = email.trim();
+    if (activeMode === "tracking") {
+      if (!isValidTrackingNumber(tracking)) { setInputError("Enter a tracking number using 4–64 letters, numbers, or hyphens."); return; }
+      setInputError("");
+      void runtime.query({ mode: "tracking", trackingNumber: tracking });
+      return;
+    }
+    if (!isValidOrderNumber(order)) { setInputError("Enter an order number using 4–64 letters, numbers, or hyphens."); return; }
+    if (!isValidOrderEmail(orderEmail)) { setInputError("Enter a valid email address."); return; }
+    setInputError("");
+    void runtime.query({ mode: "order", orderNumber: order, email: orderEmail });
+  };
+  const result = runtime.displayedResult;
+  return <div style={{ position: "relative", minHeight: "clamp(520px, 44vw, 560px)", display: "grid", overflow: "hidden", background: "linear-gradient(135deg, #dedbd4, #b9b3aa)" }}>
     {!heroImageFailed && safeImageUrl(props.heroImageUrl) ? <img src={safeImageUrl(props.heroImageUrl)} alt="" onError={() => setHeroImageFailed(true)} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} /> : null}
     <div aria-hidden="true" style={{ position: "absolute", inset: 0, background: "rgba(255,255,255,0.12)" }} />
-    <div style={{ ...cardStyle, position: "relative", zIndex: 1, width: "min(560px, calc(100% - 32px))", padding: "clamp(24px, 5vw, 48px)", boxSizing: "border-box", boxShadow: "0 16px 40px rgb(0 0 0 / 8%)" }}>
+    <div style={{ ...contentWidth, position: "relative", zIndex: 1, display: "grid", alignItems: "center", width: "100%", paddingTop: "clamp(24px, 5vw, 48px)", paddingBottom: "clamp(24px, 5vw, 48px)" }}>
+    <div data-branded-query-card style={{ ...cardStyle, width: "min(560px, 100%)", maxHeight: "calc(100vh - 48px)", marginLeft: "auto", padding: "clamp(24px, 5vw, 48px)", boxSizing: "border-box", overflowY: "auto", boxShadow: "0 16px 40px rgb(0 0 0 / 8%)" }}>
       <h1 style={{ margin: "0 0 36px", textAlign: "center", fontSize: "clamp(28px, 3vw, 32px)", lineHeight: 1.15 }}>{text(props, "heading", "Track your order")}</h1>
-      <div role="tablist" aria-label="Tracking method" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", borderBottom: "1px solid #e7e7e7", marginBottom: 24 }}>
-        <button type="button" role="tab" aria-selected={mode === "order"} onClick={() => setMode("order")} style={{ minHeight: 40, border: 0, borderBottom: mode === "order" ? "2px solid #0a0a0a" : "2px solid transparent", background: "transparent", fontWeight: mode === "order" ? 700 : 400, cursor: "pointer" }}>Order Number</button>
-        <button type="button" role="tab" aria-selected={mode === "tracking"} onClick={() => setMode("tracking")} style={{ minHeight: 40, border: 0, borderBottom: mode === "tracking" ? "2px solid #0a0a0a" : "2px solid transparent", background: "transparent", fontWeight: mode === "tracking" ? 700 : 400, cursor: "pointer" }}>Tracking Number</button>
-      </div>
-      <form onSubmit={submit}>
-        <label htmlFor="branded-tracking-number" style={{ position: "absolute", width: 1, height: 1, overflow: "hidden", clipPath: "inset(50%)" }}>{mode === "order" ? "Order number" : "Tracking number"}</label>
-        <input id="branded-tracking-number" aria-label={mode === "order" ? "Order number" : "Tracking number"} value={trackingNumber} onChange={(event) => setTrackingNumber(event.target.value)} required minLength={4} maxLength={64} placeholder={mode === "order" ? "Enter your order number" : "Enter your tracking number"} style={{ width: "100%", height: 48, padding: "0 16px", boxSizing: "border-box", border: "1px solid #e2e2e2", borderRadius: 10, font: "inherit" }} />
+      {runtime.supportsOrderQuery ? <div role="tablist" aria-label="Tracking method" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", borderBottom: "1px solid #e7e7e7", marginBottom: 24 }}>
+        <button type="button" role="tab" aria-selected={activeMode === "order"} onClick={() => { setMode("order"); setInputError(""); }} style={{ minHeight: 40, border: 0, borderBottom: activeMode === "order" ? "2px solid #0a0a0a" : "2px solid transparent", background: "transparent", fontWeight: activeMode === "order" ? 700 : 400, cursor: "pointer" }}>Order Number</button>
+        <button type="button" role="tab" aria-selected={activeMode === "tracking"} onClick={() => { setMode("tracking"); setInputError(""); }} style={{ minHeight: 40, border: 0, borderBottom: activeMode === "tracking" ? "2px solid #0a0a0a" : "2px solid transparent", background: "transparent", fontWeight: activeMode === "tracking" ? 700 : 400, cursor: "pointer" }}>Tracking Number</button>
+      </div> : null}
+      <form noValidate onSubmit={submit} style={{ display: "grid", gap: 12 }}>
+        {activeMode === "order" ? <><label htmlFor="branded-order-number" style={{ position: "absolute", width: 1, height: 1, overflow: "hidden", clipPath: "inset(50%)" }}>Order number</label><input id="branded-order-number" aria-label="Order number" value={orderNumber} onChange={(event) => setOrderNumber(event.target.value)} placeholder="Enter your order number" style={{ width: "100%", height: 48, padding: "0 16px", boxSizing: "border-box", border: "1px solid #e2e2e2", borderRadius: 10, font: "inherit" }} /><label htmlFor="branded-order-email" style={{ position: "absolute", width: 1, height: 1, overflow: "hidden", clipPath: "inset(50%)" }}>Email</label><input id="branded-order-email" aria-label="Email" type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="Enter your email" style={{ width: "100%", height: 48, padding: "0 16px", boxSizing: "border-box", border: "1px solid #e2e2e2", borderRadius: 10, font: "inherit" }} /></> : <><label htmlFor="branded-tracking-number" style={{ position: "absolute", width: 1, height: 1, overflow: "hidden", clipPath: "inset(50%)" }}>Tracking number</label><input id="branded-tracking-number" aria-label="Tracking number" value={trackingNumber} onChange={(event) => setTrackingNumber(event.target.value)} placeholder="Enter your tracking number" style={{ width: "100%", height: 48, padding: "0 16px", boxSizing: "border-box", border: "1px solid #e2e2e2", borderRadius: 10, font: "inherit" }} /></>}
         <button type="submit" disabled={runtime.phase === "loading"} style={{ width: "100%", minHeight: 48, marginTop: 24, border: 0, borderRadius: 10, background: runtime.phase === "loading" ? "#6b6b6b" : "#000", color: "#fff", font: "inherit", cursor: runtime.phase === "loading" ? "wait" : "pointer" }}>{runtime.phase === "loading" ? "Tracking…" : text(props, "submitLabel", "Track")}</button>
       </form>
+      {inputError ? <p role="alert" style={{ marginBottom: 0, color: "#b42318" }}>{inputError}</p> : null}
+      {runtime.phase === "loading" ? <p role="status" style={{ marginBottom: 0, color: "#6b6b6b" }}>Checking your order…</p> : null}
       {runtime.phase === "empty" ? <p role="status" style={{ marginBottom: 0, color: "#6b6b6b" }}>We couldn’t find an order for that number.</p> : null}
       {runtime.phase === "error" ? <p role="alert" style={{ marginBottom: 0, color: "#b42318" }}>We couldn’t retrieve this order right now. Please try again later.</p> : null}
-      <small style={{ display: "block", marginTop: 10, color: "#8a8a8a", fontSize: 8, textAlign: "right" }}>Powered by BestTrack</small>
+      {runtime.phase === "success" && result ? <div ref={resultRef} data-branded-query-result data-testid="branded-result" tabIndex={-1} style={{ marginTop: 20, padding: 16, border: "1px solid #e7e7e7", borderRadius: 8, background: "#fffdf0" }}><strong>Current status: {result.status || "Tracking update"}</strong><p style={{ margin: "6px 0 0", color: "#6b6b6b" }}>Query reference: {result.trackingNumber || "Not available"}</p>{result.latestEvent ? <p style={{ margin: "6px 0 0", color: "#6b6b6b" }}>{result.latestEvent}</p> : null}</div> : null}
+      <RuntimeWatermark watermark={runtime.watermark} />
+    </div>
     </div>
   </div>;
 }
@@ -269,7 +316,8 @@ export function BrandedTrackingExperienceBlock(props: Record<string, unknown>) {
   const runtime = useBrandedRuntime();
   return <section aria-label="Branded tracking experience" style={{ background: "#fffdf0", fontFamily: "var(--pb-font-family)" }}>
     <ShipmentSwitcher shipmentLabels={props.shipmentLabels} />
-    {runtime.phase === "success" ? <TrackingResult props={props} /> : <QueryHero {...props} />}
+    <QueryHero {...props} />
+    {runtime.phase === "success" ? <TrackingResult props={props} /> : null}
   </section>;
 }
 

@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useId, useMemo, useRef, useState, type CSSProperties, type FormEvent, type ReactNode } from "react";
-import type { FieldProps } from "@standhigher/puck-page-builder/runtime";
+import type { BlockEditorProps, FieldProps } from "@standhigher/puck-page-builder/runtime";
 import { isEmptyTrackingPageResult, type TrackingPageQuery, type TrackingPageQueryResult, type TrackingPageRuntimePhase } from "./tracking-page-runtime";
 
 /** Transient, consumer-safe state. The host error is deliberately never retained for display. */
@@ -81,6 +81,60 @@ function HeroAsset({ src }: { src: unknown }) {
 
 export function SalesTextField({ value, onChange }: FieldProps) {
   return <input aria-label="Sales text" value={typeof value === "string" ? value : ""} onChange={(event) => onChange(event.target.value)} />;
+}
+
+type SalesEditorProps = BlockEditorProps<Record<string, unknown>>;
+const editorSurfaceStyle: CSSProperties = { boxSizing: "border-box", border: "1px solid #dfddd7", borderRadius: 10, padding: 24, background: "#ffffff", color: "#0a0a0a", fontFamily: "Arial, Helvetica, sans-serif" };
+const editorCardStyle: CSSProperties = { boxSizing: "border-box", padding: 18, border: "1px solid #dfddd7", borderRadius: 7, background: "#f7f5f0" };
+
+function editorText(block: SalesEditorProps, name: string, fallback: string) { return text(block, name, fallback); }
+function SalesInlineText({ block, name, fallback, style }: { block: SalesEditorProps; name: string; fallback: string; style?: CSSProperties }) {
+  const value = editorText(block, name, fallback);
+  if (!block.selected) return <span data-sales-editor-field={name} style={style}>{value}</span>;
+  return <input aria-label={`Canvas ${name}`} data-sales-editor-field={name} value={value} onMouseDown={(event) => event.stopPropagation()} onClick={(event) => event.stopPropagation()} onChange={(event) => block.onPropsChange({ [name]: event.currentTarget.value })} style={{ boxSizing: "border-box", width: "100%", border: "1px dashed currentColor", borderRadius: 3, padding: "2px 5px", background: "transparent", color: "inherit", font: "inherit", fontWeight: "inherit", lineHeight: "inherit", textAlign: "inherit", ...style }} />;
+}
+function SalesEditorSurface({ block, children }: { block: SalesEditorProps; children: ReactNode }) {
+  return <section aria-label="Sales editor preview" style={{ ...editorSurfaceStyle, outline: block.selected ? "2px solid #2563eb" : undefined, outlineOffset: -2 }}>{children}</section>;
+}
+
+/** Canvas previews use explicit safe colours because WebRenderer Theme Tokens are scoped to consumer output. */
+export function SalesAnnouncementEditor(block: SalesEditorProps) {
+  return <section aria-label="Sales announcement editor" style={{ display: "grid", minHeight: 38, placeItems: "center", boxSizing: "border-box", padding: "10px 16px", borderBottom: "1px solid #dfddd7", background: "#f7f5f0", color: "#0a0a0a", fontFamily: "Arial, Helvetica, sans-serif", fontSize: 13, fontWeight: 700, textAlign: "center" }}><SalesInlineText block={block} name="message" fallback="Free delivery on orders over $50" /></section>;
+}
+
+export function SalesQueryEditor(block: SalesEditorProps) {
+  const imageUrl = safeImageUrl(block.heroImageUrl);
+  const trackingNumber = editorText(block, "defaultTrackingNumber", "BT-2048-DEMO");
+  return <section aria-label="Sales Hero query editor" style={{ position: "relative", display: "grid", minHeight: "clamp(460px, 52vw, 620px)", placeItems: "center", boxSizing: "border-box", overflow: "hidden", padding: "clamp(28px, 6vw, 72px) 16px", background: "#0a0a0a", fontFamily: "Arial, Helvetica, sans-serif" }}>
+    {imageUrl ? <img src={imageUrl} alt="" aria-hidden="true" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", opacity: 0.62 }} /> : null}
+    <div aria-hidden="true" style={{ position: "absolute", inset: 0, background: "rgb(0 0 0 / 42%)" }} />
+    <div style={{ position: "relative", zIndex: 1, boxSizing: "border-box", width: "min(560px, 100%)", padding: "clamp(28px, 5vw, 48px)", borderRadius: 10, background: "#ffffff", color: "#0a0a0a", boxShadow: "0 20px 56px rgb(0 0 0 / 28%)" }}>
+      <h1 style={{ margin: "0 0 28px", fontSize: "clamp(32px, 5vw, 48px)", fontWeight: 800, letterSpacing: "-0.035em", lineHeight: 1.02, textAlign: "center" }}><SalesInlineText block={block} name="heading" fallback="Track your order" /></h1>
+      <input aria-label="Canvas default tracking number" readOnly={!block.selected} value={trackingNumber} onMouseDown={(event) => block.selected && event.stopPropagation()} onClick={(event) => block.selected && event.stopPropagation()} onChange={(event) => block.onPropsChange({ defaultTrackingNumber: event.currentTarget.value })} style={{ boxSizing: "border-box", width: "100%", minHeight: 58, padding: "12px 16px", border: "1px solid #dfddd7", borderRadius: 8, background: "#ffffff", color: "#0a0a0a", font: "inherit", fontSize: 17 }} />
+      <div style={{ display: "grid", minHeight: 58, placeItems: "center", marginTop: 14, padding: "12px 18px", borderRadius: 8, background: "#0a0a0a", color: "#ffffff", fontSize: 16, fontWeight: 700 }}><SalesInlineText block={block} name="submitLabel" fallback="Track order" /></div>
+      <small style={{ display: "block", marginTop: 14, color: "#6b6b6b", fontSize: 11, textAlign: "right" }}>Powered by BestTrack</small>
+    </div>
+  </section>;
+}
+
+export function SalesOrderItemsEditor(block: SalesEditorProps) {
+  return <SalesEditorSurface block={block}><h2 style={{ margin: "0 0 20px" }}><SalesInlineText block={block} name="heading" fallback="Items in your order" /></h2><article style={{ ...editorCardStyle, display: "flex", alignItems: "center", gap: 14 }}><span aria-hidden="true" style={{ width: 68, height: 68, borderRadius: 7, background: "#dfddd7" }} /><span><strong>Order item</strong><br /><small style={{ color: "#6b6b6b" }}>Items appear after a successful tracking query.</small></span></article></SalesEditorSurface>;
+}
+
+export function SalesOtherTrackingEditor(block: SalesEditorProps) {
+  return <SalesEditorSurface block={block}><h2 style={{ margin: "0 0 20px" }}><SalesInlineText block={block} name="heading" fallback="Other shipments" /></h2><p style={{ margin: 0, color: "#6b6b6b" }}><SalesInlineText block={block} name="emptyMessage" fallback="No other shipments are linked to this order." /></p></SalesEditorSurface>;
+}
+
+export function SalesServiceCardsEditor(block: SalesEditorProps) {
+  return <SalesEditorSurface block={block}><h2 style={{ margin: "0 0 20px" }}><SalesInlineText block={block} name="heading" fallback="Shop with confidence" /></h2><div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 180px), 1fr))", gap: 14 }}><article style={editorCardStyle}><strong><SalesInlineText block={block} name="firstTitle" fallback="Easy returns" /></strong><p style={{ marginBottom: 0, color: "#6b6b6b" }}><SalesInlineText block={block} name="firstDescription" fallback="Simple support when plans change." /></p></article><article style={editorCardStyle}><strong><SalesInlineText block={block} name="secondTitle" fallback="Secure delivery" /></strong><p style={{ marginBottom: 0, color: "#6b6b6b" }}><SalesInlineText block={block} name="secondDescription" fallback="Follow every milestone in one place." /></p></article></div></SalesEditorSurface>;
+}
+
+export function SalesProductCategoriesEditor(block: SalesEditorProps) {
+  return <SalesEditorSurface block={block}><h2 style={{ margin: "0 0 20px" }}><SalesInlineText block={block} name="heading" fallback="Shop by category" /></h2><div style={{ ...editorCardStyle, display: "flex", justifyContent: "space-between", fontWeight: 700 }}><SalesInlineText block={block} name="collectionLabel" fallback="Featured collection" /><span aria-hidden="true">→</span></div></SalesEditorSurface>;
+}
+
+export function SalesRecommendationsEditor(block: SalesEditorProps) {
+  return <SalesEditorSurface block={block}><h2 style={{ margin: "0 0 20px" }}><SalesInlineText block={block} name="heading" fallback="Complete your order" /></h2><div style={{ ...editorCardStyle, color: "#6b6b6b" }}>Recommended products appear after a successful tracking query.</div></SalesEditorSurface>;
 }
 
 export function SalesAnnouncementBlock(props: Record<string, unknown>) {

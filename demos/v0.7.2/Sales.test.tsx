@@ -30,6 +30,16 @@ describe("V0.7.2 Sales", () => {
     expect(screen.queryByText("Order Number")).not.toBeInTheDocument();
   });
 
+  it("renders a token-independent Sales Hero editor preview", () => {
+    const registry = createExtensionRegistry([bestTrackSalesExtension]);
+    const query = registry.getBlock("besttrack.sales.query")!;
+    const Editor = query.render.editor!;
+    const { container } = render(<Editor {...query.defaultProps} blockId="sales-2" selected onPropsChange={() => undefined} />);
+    expect(container.querySelector('[aria-label="Sales Hero query editor"]')).toHaveStyle({ background: "rgb(10, 10, 10)" });
+    expect(screen.getByLabelText("Canvas default tracking number")).toHaveStyle({ minHeight: "58px", background: "rgb(255, 255, 255)" });
+    expect(screen.getByText("Powered by BestTrack")).toBeVisible();
+  });
+
   it("continues to render published Sales v1 commerce variants", () => {
     const registry = createExtensionRegistry([bestTrackSalesExtension]);
     const document = registry.getTemplate("besttrack.sales")!.create();

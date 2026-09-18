@@ -3,7 +3,10 @@ export {
   type ReadyToGoRuntimeProviderProps,
   type ReadyToGoTrackingQuery,
   type ReadyToGoTrackingResult,
-  type ReadyToGoRuntimeState
+  type ReadyToGoRuntimeState,
+  type ReadyToGoShipment,
+  type ReadyToGoTrackingEvent,
+  type ReadyToGoTrackingStep
 } from "./ready-to-go";
 export { bestTrackPageExtension, createReadyToGoTemplate } from "./ready-to-go-definition";
 export { bestTrackBrandedExtension, createBrandedTemplate } from "./branded-definition";

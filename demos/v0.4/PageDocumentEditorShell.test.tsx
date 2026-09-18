@@ -6,6 +6,7 @@ import { PageDocumentEditorShell } from "../../packages/puck-page-builder/src/ed
 import { blockIdAtRelativeY, nearestBlockIdAtY } from "../../packages/puck-page-builder/src/editor/shell/drop-position";
 import { bestTrackBrandedExtension } from "../../packages/besttrack-page-extension/src/branded-definition";
 import { bestTrackPageExtension } from "../../packages/besttrack-page-extension/src/ready-to-go-definition";
+import { bestTrackSalesExtension } from "../../packages/besttrack-page-extension/src/sales-definition";
 import { createExtensionRegistry } from "../../packages/puck-page-builder/src/core/extensions";
 import type { PageDocument } from "../../packages/puck-page-builder/src/core/schema/page-document";
 
@@ -200,17 +201,41 @@ describe("PageDocumentEditorShell V0.4", () => {
     expect(changes.at(-1)?.blocks.find((block) => block.type === "besttrack.branded.tracking-experience")?.props).toMatchObject({ heading: "Find your parcel", submitLabel: "Check delivery" });
   });
 
-  it("provides a canvas field fallback for extensions without an editor renderer", async () => {
+  it("synchronizes Ready-to-go edit-mode values between the canvas, inspector and PageDocument", async () => {
     const registry = createExtensionRegistry([bestTrackPageExtension]);
-    renderEditor({ initialDocument: registry.getTemplate("besttrack.ready-to-go")!.create(), registry });
+    const changes: PageDocument[] = [];
+    renderEditor({ initialDocument: registry.getTemplate("besttrack.ready-to-go")!.create(), registry, onDocumentChange: (next) => changes.push(next) });
 
-    const canvasFields = screen.getByLabelText("Edit Order query values in canvas");
-    const headingInput = canvasFields.querySelector("input");
+    fireEvent.click(screen.getByRole("group", { name: "Select Order query in canvas" }));
+    const headingInput = screen.getByLabelText("Heading");
     expect(headingInput).toHaveValue("Track your order");
-    fireEvent.change(headingInput!, { target: { value: "Find an order" } });
+    expect(screen.queryByLabelText("Canvas poweredBy")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Track Your Order" })).not.toBeInTheDocument();
 
-    await waitFor(() => expect(within(screen.getByTestId("document-inspector")).getByLabelText("Heading")).toHaveValue("Find an order"));
-    expect(screen.getByRole("heading", { name: "Find an order" })).toBeVisible();
+    fireEvent.change(headingInput, { target: { value: "Find your parcel" } });
+    const editor = screen.getByTestId("page-document-editor");
+    await waitFor(() => expect(editor.querySelector<HTMLInputElement>('[data-ready-to-go-editor-field="heading"]')).toHaveValue("Find your parcel"));
+
+    const submit = editor.querySelector<HTMLInputElement>('[data-ready-to-go-editor-field="submitLabel"]');
+    expect(submit).toHaveValue("Track Your Order");
+    fireEvent.change(submit!, { target: { value: "Check delivery" } });
+
+    const buttonInput = screen.getByLabelText("Button label");
+    await waitFor(() => expect(buttonInput).toHaveValue("Check delivery"));
+    expect(changes.at(-1)?.blocks.find((block) => block.type === "besttrack.ready-to-go.query")?.props).toMatchObject({ heading: "Find your parcel", submitLabel: "Check delivery" });
+  });
+
+  it("provides a canvas field fallback for extensions without an editor renderer", async () => {
+    const registry = createExtensionRegistry([bestTrackSalesExtension]);
+    renderEditor({ initialDocument: registry.getTemplate("besttrack.sales")!.create(), registry });
+
+    const canvasFields = screen.getByLabelText("Edit Announcement values in canvas");
+    const messageInput = canvasFields.querySelector("input");
+    expect(messageInput).toHaveValue("Free delivery on orders over $50");
+    fireEvent.change(messageInput!, { target: { value: "Find an order" } });
+
+    await waitFor(() => expect(within(screen.getByTestId("document-inspector")).getByLabelText("Announcement")).toHaveValue("Find an order"));
+    expect(screen.getByLabelText("Sales announcement")).toHaveTextContent("Find an order");
   });
 
   it("tracks dirty history, restores properties with undo/redo, and handles editor shortcuts", () => {

@@ -35,26 +35,25 @@ describe("tracking page protocol and URL safety", () => {
       pageId: "sales-validation",
       target: "web",
       templateId: "besttrack.sales",
-      templateVersion: 2,
+      templateVersion: 3,
       blocks: [{
         id: "sales-category",
         type: "besttrack.sales.product-categories",
-        version: 2,
+        version: 3,
         variant: "grid",
         style: {},
         props: {
           heading: "Shop by category",
-          collectionId: "gid://shopify/Collection/1",
-          collectionLabel: "Featured collection"
+          collection: { id: "gid://shopify/Collection/1", kind: "collection", title: "Featured collection", handle: "featured" }
         }
       }]
     });
     expect(validatePageDocumentWithRegistry(document, registry)).toEqual([]);
 
-    document.blocks[0]!.props.collectionId = "https://example.com/collections/featured";
+    document.blocks[0]!.props.collection = { id: "https://example.com/collections/featured", kind: "collection", title: "Featured collection" };
     document.blocks[0]!.props.unexpected = "not allowed";
     expect(validatePageDocumentWithRegistry(document, registry)).toEqual(expect.arrayContaining([
-      expect.objectContaining({ path: "blocks[0].props.collectionId" }),
+      expect.objectContaining({ path: "blocks[0].props.collection" }),
       expect.objectContaining({ path: "blocks[0].props.unexpected" })
     ]));
   });

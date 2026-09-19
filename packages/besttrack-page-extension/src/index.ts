@@ -47,3 +47,22 @@ export {
   type TrackingPageTrackingStep
 } from "./tracking-page-runtime";
 export { isSafeTrackingPageUrl, safeTrackingPageUrl, type TrackingPageUrlOptions } from "./tracking-page-url";
+export {
+  ShopifyCollectionResourceField,
+  ShopifyProductResourceField,
+  ShopifyResourcePickerProvider,
+  getResolvedShopifyResource,
+  getShopifyResourceResolutionError,
+  isShopifyResourceReference,
+  resolveShopifyResources,
+  type ShopifyResolvedResource,
+  type ShopifyResourceAvailability,
+  type ShopifyResourceBrowser,
+  type ShopifyResourceKind,
+  type ShopifyResourceReference,
+  type ShopifyResourceResolution,
+  type ShopifyResourceResolutionError,
+  type ShopifyResourceResolver,
+  type ShopifyResourceSearchInput,
+  type ShopifyResourceSearchPage
+} from "./shopify-resources";

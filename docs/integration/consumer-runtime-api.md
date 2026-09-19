@@ -74,6 +74,32 @@ Consumer Runtime API or another trusted service. Sales blocks do not make
 resource requests themselves. Invalid links and missing images render a
 controlled fallback rather than a broken resource.
 
+## Shopify resource selector and Runtime resolution
+
+The Admin editor receives a `ShopifyResourceBrowser` from its host. That host
+owns resource browse/search/pagination and authorization; the picker component
+does not contain a Shopify Admin API client. A selected product or collection
+is persisted only as JSON:
+
+```ts
+{ id: "gid://shopify/Product/123", kind: "product", title: "T-shirt", handle: "t-shirt" }
+```
+
+The trusted Runtime separately receives the saved references and returns a
+transient `ShopifyResourceResolution`. It may provide a public product or
+collection URL, image URL, and product availability (`available`, `sold-out`,
+`unavailable`, or `unknown`). Results must be scoped by the trusted shop/page
+context, not a browser-supplied shop ID. The Runtime does not write resolved
+values into the `PageDocument`; a failed live resolution becomes a controlled
+missing/unavailable state and never falls back to mock data.
+
+The Shopify Demo route is an authenticated server-side proxy to
+`SHOPIFY_RESOURCE_RUNTIME_URL`. Its BFF request has `mode: "search"` or
+`mode: "resolve"`, trusted `shop` context, and either search input or resource
+references. The optional `SHOPIFY_RESOURCE_RUNTIME_TOKEN` stays server-only.
+Configure that BFF to call Shopify Admin APIs or another authorized catalog
+service; do not move that call into the browser or template block.
+
 ## Host integration checklist
 
 - Read the published document and call `migratePageDocument` at the boundary.

@@ -1,16 +1,16 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import { bestTrackSalesExtension, SalesRuntimeProvider, type TrackingPageQuery, type TrackingPageQueryResult } from "../../packages/besttrack-page-extension/src";
+import { bestTrackSalesExtension, SalesRuntimeProvider, type ShopifyResourceResolution, type TrackingPageQuery, type TrackingPageQueryResult } from "../../packages/besttrack-page-extension/src";
 import { createExtensionRegistry } from "../../packages/puck-page-builder/src/core/extensions";
 import { WebRenderer } from "../../packages/puck-page-builder/src/renderer/web/WebRenderer";
 
-describe("V0.7.2 Sales", () => {
-  it("registers sales@1.0.0 with the seven commerce blocks", () => {
+describe("V0.8 Sales", () => {
+  it("registers the eight commerce blocks, including persistent resource references", () => {
     const registry = createExtensionRegistry([bestTrackSalesExtension]);
     const template = registry.getTemplate("besttrack.sales");
-    expect(template).toMatchObject({ source: "built-in", version: 2, theme: { "color.primary": "#000000" } });
-    expect(template?.create().blocks.map((block) => block.type)).toEqual(["besttrack.sales.announcement", "besttrack.sales.query", "besttrack.sales.order-items", "besttrack.sales.other-tracking", "besttrack.sales.service-cards", "besttrack.sales.product-categories", "besttrack.sales.recommendations"]);
-    expect(template?.create().blocks.map((block) => block.id)).toEqual(["sales-1", "sales-2", "sales-3", "sales-4", "sales-5", "sales-6", "sales-7"]);
+    expect(template).toMatchObject({ source: "built-in", version: 3, theme: { "color.primary": "#000000" } });
+    expect(template?.create().blocks.map((block) => block.type)).toEqual(["besttrack.sales.announcement", "besttrack.sales.query", "besttrack.sales.order-items", "besttrack.sales.other-tracking", "besttrack.sales.service-cards", "besttrack.sales.product-categories", "besttrack.sales.featured-product", "besttrack.sales.recommendations"]);
+    expect(template?.create().blocks.map((block) => block.id)).toEqual(["sales-1", "sales-2", "sales-3", "sales-4", "sales-5", "sales-6", "sales-7", "sales-8"]);
     expect(template?.create().blocks.every((block) => block.variant === "hero")).toBe(true);
     expect(registry.getBlock("besttrack.sales.query")?.variants?.some((variant) => variant.id === "commerce")).toBe(true);
   });
@@ -67,8 +67,8 @@ describe("V0.7.2 Sales", () => {
       expect.objectContaining({ path: "props.heroImageUrl" })
     ]));
     const categories = registry.getBlock("besttrack.sales.product-categories")!;
-    expect(categories.validate?.({ heading: "Shop", collectionId: "collection-1", collectionLabel: "Featured" })).toEqual(expect.arrayContaining([
-      expect.objectContaining({ path: "props.collectionId" })
+    expect(categories.validate?.({ heading: "Shop", collection: { id: "collection-1", kind: "collection", title: "Featured" } })).toEqual(expect.arrayContaining([
+      expect.objectContaining({ path: "props.collection" })
     ]));
   });
 
@@ -87,7 +87,7 @@ describe("V0.7.2 Sales", () => {
     const registry = createExtensionRegistry([bestTrackSalesExtension]);
     const document = registry.getTemplate("besttrack.sales")!.create();
     const categories = document.blocks.find((block) => block.type === "besttrack.sales.product-categories")!;
-    categories.props = { ...categories.props, collectionId: "" };
+    categories.props = { ...categories.props, collection: null };
     render(<SalesRuntimeProvider query={async () => ({ trackingNumber: "BT-1000", status: "idle" })}><WebRenderer document={document} registry={registry} /></SalesRuntimeProvider>);
     expect(screen.getByText("No collection selected. Choose a collection through an authorized resource integration.")).toBeVisible();
   });
@@ -132,7 +132,7 @@ describe("V0.7.2 Sales", () => {
     const query = vi.fn<TrackingPageQuery>(() => new Promise<TrackingPageQueryResult>((resolve) => { resolveQuery = resolve; }));
     const document = registry.getTemplate("besttrack.sales")!.create();
     const categories = document.blocks.find((block) => block.type === "besttrack.sales.product-categories")!;
-    categories.props = { ...categories.props, collectionId: "collection-1" };
+    categories.props = { ...categories.props, collection: { id: "collection-1", kind: "collection", title: "Broken" } };
     render(<SalesRuntimeProvider query={query}><WebRenderer document={document} registry={registry} /></SalesRuntimeProvider>);
 
     fireEvent.click(screen.getByRole("button", { name: "Track order" }));
@@ -142,6 +142,22 @@ describe("V0.7.2 Sales", () => {
 
     resolveQuery({ trackingNumber: "BT-2048-DEMO", status: "In transit" });
     expect(await screen.findByText("No recommendations are available for this order.")).toBeVisible();
+  });
+
+  it("uses transient resolution for collection links and product availability", () => {
+    const registry = createExtensionRegistry([bestTrackSalesExtension]);
+    const document = registry.getTemplate("besttrack.sales")!.create();
+    const resources: ShopifyResourceResolution = {
+      resources: {
+        "collection:gid://shopify/Collection/1": { id: "gid://shopify/Collection/1", kind: "collection", title: "Featured collection", status: "resolved", availability: "unknown", href: "https://example.com/collections/featured" },
+        "product:gid://shopify/Product/1": { id: "gid://shopify/Product/1", kind: "product", title: "Travel case", status: "resolved", availability: "sold-out", href: "https://example.com/products/travel-case" }
+      },
+      errors: {}
+    };
+    render(<SalesRuntimeProvider query={async () => ({ trackingNumber: "BT-1000", status: "idle" })} resourceResolution={resources}><WebRenderer document={document} registry={registry} /></SalesRuntimeProvider>);
+    expect(screen.getByRole("link", { name: /featured collection/i })).toHaveAttribute("href", "https://example.com/collections/featured");
+    expect(screen.getByText("Sold out")).toBeVisible();
+    expect(screen.queryByRole("link", { name: "Travel case" })).not.toBeInTheDocument();
   });
 
 });

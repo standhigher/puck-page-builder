@@ -3,10 +3,11 @@ import type { BlockEditorProps, FieldProps } from "@standhigher/puck-page-builde
 import { formatTrackingPageMoney, isEmptyTrackingPageResult, type TrackingPageQuery, type TrackingPageQueryRequest, type TrackingPageQueryResult, type TrackingPageRuntimePhase, type TrackingPageWatermark } from "./tracking-page-runtime";
 import { safeTrackingPageUrl } from "./tracking-page-url";
 import { TrackingQueryCard, TrackingQueryResultDetails } from "./tracking-query-experience";
+import { getResolvedShopifyResource, getShopifyResourceResolutionError, isShopifyResourceReference, type ShopifyResourceResolution } from "./shopify-resource-contract";
 
 /** Transient, consumer-safe state. The host error is deliberately never retained for display. */
 export type SalesRuntimeState = { phase: TrackingPageRuntimePhase; result?: TrackingPageQueryResult };
-type SalesRuntime = SalesRuntimeState & { query(request: TrackingPageQueryRequest): Promise<void>; watermark?: TrackingPageWatermark };
+type SalesRuntime = SalesRuntimeState & { query(request: TrackingPageQueryRequest): Promise<void>; watermark?: TrackingPageWatermark; resourceResolution?: ShopifyResourceResolution };
 const initialRuntime: SalesRuntime = { phase: "idle", async query() { return undefined; } };
 const SalesRuntimeContext = createContext<SalesRuntime>(initialRuntime);
 export type SalesRuntimeProviderProps = {
@@ -15,6 +16,8 @@ export type SalesRuntimeProviderProps = {
   query?: TrackingPageQuery;
   /** Host-decided display state; no entitlement checks happen in this package. */
   watermark?: TrackingPageWatermark;
+  /** Server-resolved and transient; this provider never resolves Shopify resources. */
+  resourceResolution?: ShopifyResourceResolution;
 };
 
 const contentWidth: CSSProperties = { boxSizing: "border-box", width: "min(1120px, calc(100% - 32px))", margin: "0 auto" };
@@ -23,7 +26,7 @@ const panelStyle: CSSProperties = { boxSizing: "border-box", border: "1px solid 
 const gridStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 220px), 1fr))", gap: "clamp(16px, 2vw, 24px)" };
 
 /** The host injects a validated query; Sales never calls a DataSource itself. */
-export function SalesRuntimeProvider({ children, query: injectedQuery, watermark }: SalesRuntimeProviderProps) {
+export function SalesRuntimeProvider({ children, query: injectedQuery, watermark, resourceResolution }: SalesRuntimeProviderProps) {
   const [state, setState] = useState<SalesRuntimeState>({ phase: "idle" });
   const requestId = useRef(0);
   const query = useCallback(async (request: TrackingPageQueryRequest) => {
@@ -39,7 +42,7 @@ export function SalesRuntimeProvider({ children, query: injectedQuery, watermark
       setState({ phase: "error" });
     }
   }, [injectedQuery]);
-  const value = useMemo<SalesRuntime>(() => ({ ...state, query, watermark }), [query, state, watermark]);
+  const value = useMemo<SalesRuntime>(() => ({ ...state, query, watermark, resourceResolution }), [query, resourceResolution, state, watermark]);
   return <SalesRuntimeContext.Provider value={value}>{children}</SalesRuntimeContext.Provider>;
 }
 
@@ -51,11 +54,6 @@ function text(props: object, key: string, fallback: string) {
 }
 const safeHref = safeTrackingPageUrl;
 const safeImageUrl = safeTrackingPageUrl;
-function resourceState(value: unknown): "ready" | "empty" | "invalid" {
-  if (typeof value !== "string") return "invalid";
-  if (!value.trim()) return "empty";
-  return /^gid:\/\/shopify\/Collection\/\d+$/.test(value) ? "ready" : "invalid";
-}
 function Status({ children, alert = false }: { children: ReactNode; alert?: boolean }) {
   return <p role={alert ? "alert" : "status"} aria-live={alert ? "assertive" : "polite"} style={{ margin: "16px 0 0", color: alert ? "#a61b1b" : "var(--pb-color-muted)" }}>{children}</p>;
 }
@@ -126,7 +124,13 @@ export function SalesServiceCardsEditor(block: SalesEditorProps) {
 }
 
 export function SalesProductCategoriesEditor(block: SalesEditorProps) {
-  return <SalesEditorSurface block={block}><h2 style={{ margin: "0 0 20px" }}><SalesInlineText block={block} name="heading" fallback="Shop by category" /></h2><div style={{ ...editorCardStyle, display: "flex", justifyContent: "space-between", fontWeight: 700 }}><SalesInlineText block={block} name="collectionLabel" fallback="Featured collection" /><span aria-hidden="true">→</span></div></SalesEditorSurface>;
+  const collection = isShopifyResourceReference(block.collection, "collection") ? block.collection : undefined;
+  return <SalesEditorSurface block={block}><h2 style={{ margin: "0 0 20px" }}><SalesInlineText block={block} name="heading" fallback="Shop by category" /></h2><div style={{ ...editorCardStyle, display: "flex", justifyContent: "space-between", fontWeight: 700 }}><span>{collection?.title ?? "Choose a collection in the inspector"}</span><span aria-hidden="true">→</span></div></SalesEditorSurface>;
+}
+
+export function SalesFeaturedProductEditor(block: SalesEditorProps) {
+  const product = isShopifyResourceReference(block.product, "product") ? block.product : undefined;
+  return <SalesEditorSurface block={block}><h2 style={{ margin: "0 0 20px" }}><SalesInlineText block={block} name="heading" fallback="Featured product" /></h2><div style={{ ...editorCardStyle, display: "flex", justifyContent: "space-between", fontWeight: 700 }}><span>{product?.title ?? "Choose a product in the inspector"}</span><span aria-hidden="true">→</span></div><small style={{ display: "block", marginTop: 10, color: "#6b6b6b" }}>Availability is supplied by the authorized runtime.</small></SalesEditorSurface>;
 }
 
 export function SalesRecommendationsEditor(block: SalesEditorProps) {
@@ -200,8 +204,33 @@ export function SalesServiceCardsBlock(props: Record<string, unknown>) {
 
 export function SalesProductCategoriesBlock(props: Record<string, unknown>) {
   const title = text(props, "heading", "Shop by category");
-  const state = resourceState(props.collectionId);
-  return <Section title={title}>{state === "invalid" ? <Status alert>Collection reference is invalid.</Status> : state === "empty" ? <Status>No collection selected. Choose a collection through an authorized resource integration.</Status> : <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", minHeight: 74, boxSizing: "border-box", padding: "14px 18px", border: "1px solid var(--pb-color-border)", borderRadius: "calc(var(--pb-radius) / 1.5)", background: "var(--pb-color-background)", color: "var(--pb-color-text)", fontWeight: 700 }}><span>{text(props, "collectionLabel", "Featured collection")}</span></div>}</Section>;
+  const runtime = useSalesRuntime();
+  if (props.collection !== undefined && props.collection !== null && !isShopifyResourceReference(props.collection, "collection")) return <Section title={title}><Status alert>Collection reference is invalid.</Status></Section>;
+  const collection = isShopifyResourceReference(props.collection, "collection") ? props.collection : undefined;
+  if (!collection) return <Section title={title}><Status>No collection selected. Choose a collection through an authorized resource integration.</Status></Section>;
+  const resolved = getResolvedShopifyResource(collection, runtime.resourceResolution);
+  const error = getShopifyResourceResolutionError(collection, runtime.resourceResolution);
+  if (error) return <Section title={title}><Status alert>{error.code === "missing" ? "This collection is no longer available." : "Collection details are temporarily unavailable."}</Status></Section>;
+  if (!resolved) return <Section title={title}><Status>Collection details are resolved by the authorized runtime.</Status></Section>;
+  const content = <><span>{resolved.title}</span><span aria-hidden="true">→</span></>;
+  const style: CSSProperties = { display: "flex", minHeight: 72, alignItems: "center", justifyContent: "space-between", gap: 16, padding: 18, border: "1px solid var(--pb-color-border)", borderRadius: "calc(var(--pb-radius) / 1.5)", background: "var(--pb-color-background)", color: "inherit", fontWeight: 700, textDecoration: "none" };
+  return <Section title={title}>{resolved.href ? <a href={resolved.href} style={style}>{content}</a> : <div style={style}>{content}</div>}</Section>;
+}
+
+export function SalesFeaturedProductBlock(props: Record<string, unknown>) {
+  const runtime = useSalesRuntime();
+  const title = text(props, "heading", "Featured product");
+  if (props.product !== undefined && props.product !== null && !isShopifyResourceReference(props.product, "product")) return <Section title={title}><Status alert>Product reference is invalid.</Status></Section>;
+  const product = isShopifyResourceReference(props.product, "product") ? props.product : undefined;
+  if (!product) return <Section title={title}><Status>No product selected. Choose a product through an authorized resource integration.</Status></Section>;
+  const resolved = getResolvedShopifyResource(product, runtime.resourceResolution);
+  const error = getShopifyResourceResolutionError(product, runtime.resourceResolution);
+  if (error) return <Section title={title}><Status alert>{error.code === "missing" ? "This product is no longer available." : "Product details are temporarily unavailable."}</Status></Section>;
+  if (!resolved) return <Section title={title}><Status>Product details and availability are resolved by the authorized runtime.</Status></Section>;
+  const available = resolved.availability === "available";
+  const body = <><ProductImage src={resolved.imageUrl} alt={resolved.title} /><span style={{ minWidth: 0, flex: 1 }}><strong>{resolved.title}</strong><br /><small style={{ color: "var(--pb-color-muted)" }}>{available ? "Available" : resolved.availability === "sold-out" ? "Sold out" : "Unavailable"}</small></span></>;
+  const style: CSSProperties = { display: "flex", alignItems: "center", gap: 16, padding: 14, border: "1px solid var(--pb-color-border)", borderRadius: "calc(var(--pb-radius) / 1.5)", background: "var(--pb-color-background)", color: "inherit", textDecoration: "none" };
+  return <Section title={title}>{available && resolved.href ? <a href={resolved.href} style={style}>{body}</a> : <div style={style}>{body}</div>}</Section>;
 }
 
 export function SalesRecommendationsBlock(props: Record<string, unknown>) {

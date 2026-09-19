@@ -1,6 +1,7 @@
 import type { BlockDefinition, FieldConfig, PageBuilderExtension, TemplateDefinition, ValidationIssue } from "@standhigher/puck-page-builder/runtime";
 import { isValidTrackingNumber } from "./tracking-page-runtime";
 import { isSafeTrackingPageUrl } from "./tracking-page-url";
+import { isShopifyResourceReference } from "./shopify-resource-contract";
 
 const textField: FieldConfig = { field: "besttrack.validation.text", control: "text" };
 const strictUrlField: FieldConfig = {
@@ -9,11 +10,11 @@ const strictUrlField: FieldConfig = {
   validation: { allowRelativeUrl: false, allowedUrlProtocols: ["https:"], allowLocalhost: true }
 };
 
-function fields(keys: readonly string[], urlKeys: readonly string[] = []) {
-  return Object.fromEntries(keys.map((key) => [key, urlKeys.includes(key) ? strictUrlField : textField]));
+function fields(keys: readonly string[], urlKeys: readonly string[] = [], resourceKeys: readonly string[] = []) {
+  return Object.fromEntries(keys.map((key) => [key, resourceKeys.includes(key) ? { field: "besttrack.validation.resource" } : urlKeys.includes(key) ? strictUrlField : textField]));
 }
 
-function block(type: string, version: number, keys: readonly string[], variants: readonly string[], validate?: BlockDefinition["validate"], urlKeys: readonly string[] = []): BlockDefinition {
+function block(type: string, version: number, keys: readonly string[], variants: readonly string[], validate?: BlockDefinition["validate"], urlKeys: readonly string[] = [], resourceKeys: readonly string[] = []): BlockDefinition {
   return {
     type,
     version,
@@ -21,7 +22,7 @@ function block(type: string, version: number, keys: readonly string[], variants:
     category: "BestTrack",
     targets: ["web"],
     defaultProps: {},
-    fields: fields(keys, urlKeys),
+    fields: fields(keys, urlKeys, resourceKeys),
     defaultVariant: variants[0],
     variants: variants.map((id) => ({ id, label: id })),
     validate,
@@ -55,9 +56,16 @@ function validateSalesQuery(props: Record<string, unknown>) {
 }
 
 function validateCategories(props: Record<string, unknown>) {
-  const issues = textProps([["heading", 120], ["collectionId", 256], ["collectionLabel", 120]])(props);
-  if (typeof props.collectionId !== "string" || !/^gid:\/\/shopify\/Collection\/\d+$/.test(props.collectionId)) {
-    issues.push({ path: "props.collectionId", message: "Use a Shopify collection GID selected by an authorized integration." });
+  const issues = textProps([["heading", 120]])(props);
+  if (!isShopifyResourceReference(props.collection, "collection")) {
+    issues.push({ path: "props.collection", message: "Select a Shopify collection through an authorized resource integration." });
+  }
+  return issues;
+}
+function validateFeaturedProduct(props: Record<string, unknown>) {
+  const issues = textProps([["heading", 120]])(props);
+  if (!isShopifyResourceReference(props.product, "product")) {
+    issues.push({ path: "props.product", message: "Select a Shopify product through an authorized resource integration." });
   }
   return issues;
 }
@@ -85,7 +93,8 @@ const salesContracts: BlockDefinition[] = [
   block("besttrack.sales.order-items", 1, ["heading"], ["hero", "commerce"], textProps([["heading", 120]])),
   block("besttrack.sales.other-tracking", 1, ["heading", "emptyMessage"], ["hero", "commerce"], textProps([["heading", 120], ["emptyMessage", 280]])),
   block("besttrack.sales.service-cards", 1, ["heading", "firstTitle", "firstDescription", "secondTitle", "secondDescription"], ["hero", "commerce"], textProps([["heading", 120], ["firstTitle", 120], ["firstDescription", 280], ["secondTitle", 120], ["secondDescription", 280]])),
-  block("besttrack.sales.product-categories", 2, ["heading", "collectionId", "collectionLabel"], ["hero", "commerce", "grid"], validateCategories),
+  block("besttrack.sales.product-categories", 3, ["heading", "collection"], ["hero", "commerce", "grid"], validateCategories, [], ["collection"]),
+  block("besttrack.sales.featured-product", 1, ["heading", "product"], ["hero", "commerce"], validateFeaturedProduct, [], ["product"]),
   block("besttrack.sales.recommendations", 1, ["heading"], ["hero", "commerce", "grid"], textProps([["heading", 120]]))
 ];
 
@@ -119,5 +128,5 @@ function extension(name: string, contracts: BlockDefinition[], templateVersion: 
 export const bestTrackDocumentValidationExtensions: PageBuilderExtension[] = [
   extension("besttrack.ready-to-go", readyToGoContracts, 1),
   extension("besttrack.branded", brandedContracts, 1, brandedContracts.filter((contract) => !["besttrack.branded.query", "besttrack.branded.order-items"].includes(contract.type))),
-  extension("besttrack.sales", salesContracts, 2)
+  extension("besttrack.sales", salesContracts, 3)
 ];

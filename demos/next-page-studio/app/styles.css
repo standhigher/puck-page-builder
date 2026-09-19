@@ -13,6 +13,7 @@ button, input { font: inherit; }
 .studio-page { max-width: 1180px; margin: 0 auto; padding: 56px 24px 80px; }
 .studio-page__header, .preview-bar, .studio-editor-bar { display: flex; align-items: center; justify-content: space-between; gap: 20px; }
 .studio-page__header { margin-bottom: 40px; }
+.studio-page__actions { display: flex; align-items: center; gap: 10px; }
 .studio-page h1 { margin: 4px 0 10px; font-size: clamp(32px, 5vw, 52px); letter-spacing: -.045em; }
 .studio-page h2 { margin: 0; }
 .studio-page p { color: #566075; }
@@ -25,12 +26,20 @@ button, input { font: inherit; }
 .template-card__cover { display: grid; min-height: 188px; place-items: center; padding: 24px; background: linear-gradient(145deg, #f0eeff, #d9d6ff); color: #32298d; font-size: 24px; font-weight: 800; letter-spacing: -.04em; text-align: center; }
 .template-card__cover--branded { background: linear-gradient(145deg, #fff8db, #ffd5be); color: #523228; }
 .template-card__cover--sales { background: linear-gradient(145deg, #202337, #3e466f); color: #fff; }
+.template-card__cover--custom { background: linear-gradient(145deg, #e6fbf4, #b9ece0); color: #075c50; }
 .template-card__body { flex: 1; padding: 22px; }
 .template-card__body h2 { margin: 5px 0 8px; }
 .template-card__body p { min-height: 50px; margin: 0 0 18px; line-height: 1.55; }
 .template-card__body small { color: #7a8294; }
 .template-card footer { display: flex; gap: 10px; padding: 0 22px 22px; }
 .template-card footer > * { flex: 1; }
+.template-section-title { margin: 46px 0 16px; font-size: 22px; letter-spacing: -.025em; }
+.template-creator { display: grid; grid-template-columns: minmax(180px, 1fr) minmax(180px, 1fr) auto; align-items: end; gap: 14px; margin: -12px 0 34px; padding: 20px; border: 1px solid #d9d6ff; border-radius: 14px; background: #f8f7ff; }
+.template-creator h2 { grid-column: 1 / -1; margin: 0; font-size: 18px; }
+.template-creator label { display: grid; gap: 6px; color: #4f5870; font-size: 13px; font-weight: 650; }
+.template-creator input, .template-creator select { min-height: 40px; border: 1px solid #cdd0df; border-radius: 8px; padding: 8px 10px; background: #fff; color: #20293c; }
+.template-creator > div { display: flex; gap: 8px; }
+.empty-template-state { padding: 22px; border: 1px dashed #ccd0de; border-radius: 14px; background: #fff; color: #657087; }
 .empty-state, .studio-message { max-width: 580px; margin: 12vh auto; padding: 38px; border: 1px solid #e1e3ec; border-radius: 16px; background: #fff; text-align: center; }
 .empty-state .studio-button { margin-top: 10px; }
 .page-list { display: grid; gap: 14px; }
@@ -49,4 +58,4 @@ button, input { font: inherit; }
 .history-list { display: grid; gap: 10px; }
 .history-list > div { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 12px; border: 1px solid #e1e3ec; border-radius: 8px; }
 .history-list small { display: block; margin-top: 3px; color: #6b7487; }
-@media (max-width: 820px) { .studio-route-nav { gap: 10px; padding: 7px 12px; } .studio-route-nav__brand { display: none; } .studio-route-nav__picker span { display: none; } .studio-route-nav__picker select { max-width: 145px; } .template-grid { grid-template-columns: 1fr; } .studio-page__header, .page-list article { align-items: flex-start; flex-direction: column; } .page-list__actions { flex-wrap: wrap; } .studio-editor-bar { flex-wrap: wrap; } .studio-editor-bar .Polaris-TextField { flex: 1 1 180px; min-width: 0; } .preview-bar { padding: 10px 14px; } .preview-bar > span { display: none; } }
+@media (max-width: 820px) { .studio-route-nav { gap: 10px; padding: 7px 12px; } .studio-route-nav__brand { display: none; } .studio-route-nav__picker span { display: none; } .studio-route-nav__picker select { max-width: 145px; } .template-grid { grid-template-columns: 1fr; } .studio-page__header, .page-list article { align-items: flex-start; flex-direction: column; } .studio-page__actions { width: 100%; } .template-creator { grid-template-columns: 1fr; } .template-creator > div { justify-content: flex-end; } .page-list__actions { flex-wrap: wrap; } .studio-editor-bar { flex-wrap: wrap; } .studio-editor-bar .Polaris-TextField { flex: 1 1 180px; min-width: 0; } .preview-bar { padding: 10px 14px; } .preview-bar > span { display: none; } }

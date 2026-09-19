@@ -2,6 +2,7 @@
 
 import { usePathname, useRouter } from "next/navigation";
 import { useSyncExternalStore } from "react";
+import { customTemplateListSnapshot, subscribeToCustomTemplates } from "../lib/custom-template-repository";
 import { pageListSnapshot, subscribeToPages } from "../lib/local-page-repository";
 
 const templatePreviews = [
@@ -14,6 +15,7 @@ export function RouteNavigator() {
   const pathname = usePathname();
   const router = useRouter();
   const pages = useSyncExternalStore(subscribeToPages, pageListSnapshot, () => []);
+  const templates = useSyncExternalStore(subscribeToCustomTemplates, customTemplateListSnapshot, () => []);
   return <nav className="studio-route-nav" aria-label="Studio 页面导航">
     <a className="studio-route-nav__brand" href="/templates">BestTrack Studio</a>
     <div className="studio-route-nav__links">
@@ -27,6 +29,10 @@ export function RouteNavigator() {
         <option value={`/pages/${page.pageId}/edit`}>编辑草稿</option>
         <option value={`/pages/${page.pageId}/preview`}>草稿预览</option>
         {page.publishedDocument ? <option value={`/p/${page.pageId}`}>已发布页 v{page.publishedVersion}</option> : null}
+      </optgroup>)}
+      {templates.map((template) => <optgroup key={template.id} label={`模板：${template.name}`}>
+        <option value={`/template-studio/${template.id}/edit`}>编辑模板</option>
+        <option value={`/template-studio/${template.id}/preview`}>模板预览</option>
       </optgroup>)}
     </select></label>
   </nav>;

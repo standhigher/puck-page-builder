@@ -103,12 +103,14 @@ export function getPage(pageId: string) {
   return record ? clone(record) : null;
 }
 export function createPage(template: TemplateDefinition): PageRecord {
+  return createPageFromDocument(template.create(), template.name);
+}
+export function createPageFromDocument(sourceDocument: PageDocument, title: string): PageRecord {
   const pageId = `page-${crypto.randomUUID().slice(0, 8)}`;
-  const created = template.create();
-  const draftDocument = ensureDocument({ ...created, pageId });
+  const draftDocument = ensureDocument({ ...clone(sourceDocument), pageId });
   if (!draftDocument) throw new Error("Template generated an invalid PageDocument.");
   const createdAt = now();
-  return replace({ pageId, title: template.name, createdAt, updatedAt: createdAt, publishedVersion: 0, draftDocument, history: [snapshot(draftDocument, "created")] });
+  return replace({ pageId, title, createdAt, updatedAt: createdAt, publishedVersion: 0, draftDocument, history: [snapshot(draftDocument, "created")] });
 }
 export function saveDraft(pageId: string, document: PageDocument, title?: string): PageRecord {
   const current = getPage(pageId);

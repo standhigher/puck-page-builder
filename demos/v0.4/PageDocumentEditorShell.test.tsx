@@ -252,7 +252,10 @@ describe("PageDocumentEditorShell V0.4", () => {
 
   it("provides desktop, tablet, mobile preview and English Admin copy independently of page locale", () => {
     renderEditor({ adminLocale: "en" });
-    fireEvent.click(screen.getByRole("button", { name: "Mobile" }));
+    const mobileButton = screen.getByRole("button", { name: "Mobile" });
+    expect(mobileButton.closest(".pb-header")).not.toBeNull();
+    expect(screen.getByTestId("page-document-editor").querySelector(".pb-canvas-toolbar")).toBeNull();
+    fireEvent.click(mobileButton);
     expect(screen.getByTestId("page-document-editor").querySelector(".pb-canvas-frame")).toHaveAttribute("data-device", "mobile");
     expect(screen.getByTestId("blocks-view").querySelector('[data-block-type="core.text"]')).toBeVisible();
     expect(screen.getByRole("button", { name: "Undo" })).toHaveAttribute("aria-disabled", "true");

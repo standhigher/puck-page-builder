@@ -6,8 +6,11 @@ body { margin: 0; min-width: 320px; }
 button:focus-visible, [role="button"]:focus-visible { outline: 2px solid var(--builder-accent); outline-offset: 2px; }
 .pb-shell { min-height: 100vh; color: var(--builder-text); background: var(--builder-canvas-bg); }
 .pb-header { position: sticky; top: 0; z-index: 20; min-height: 56px; padding: var(--builder-space-2) var(--builder-space-4); border-bottom: 1px solid var(--builder-border); background: var(--builder-surface); }
+.pb-header-content { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: var(--builder-space-3); }
 .pb-page-title { display: grid; gap: 0; min-width: 0; }
 .pb-page-title p { margin: 0; }
+.pb-header-device-toolbar { justify-self: center; }
+.pb-header-actions { justify-self: end; min-width: 0; }
 .pb-workspace { display: grid; grid-template-columns: 64px minmax(260px, 300px) minmax(640px, 1fr) minmax(300px, 320px); min-height: calc(100vh - 56px); }
 .pb-tool-rail { display: flex; flex-direction: column; align-items: center; gap: var(--builder-space-2); padding: var(--builder-space-2); border-right: 1px solid var(--builder-border); background: var(--builder-surface-subtle); }
 .pb-tool-rail .Polaris-Button { min-width: 44px; min-height: 44px; }
@@ -115,4 +118,4 @@ button:focus-visible, [role="button"]:focus-visible { outline: 2px solid var(--b
 .bt-storefront__form button { padding: 13px 18px; border: 0; border-radius: 8px; color: white; background: #203e54; font: inherit; font-weight: 600; }
 @media (max-width: 1180px) { .pb-workspace { grid-template-columns: 64px minmax(260px, 300px) minmax(0, 1fr); } .pb-right-panel { grid-column: 2 / -1; border-top: 1px solid var(--builder-border); border-left: 0; } }
 @media (max-width: 1023px) { .pb-header { position: static; overflow: auto; } .pb-workspace { grid-template-columns: 64px minmax(0, 1fr); } .pb-left-panel, .pb-right-panel { grid-column: 2; border-left: 0; border-right: 0; border-bottom: 1px solid var(--builder-border); } .pb-canvas-area { grid-column: 2; } }
-@media (max-width: 640px) { .pb-header, .pb-canvas-area { padding: var(--builder-space-2); } .pb-header > .Polaris-InlineStack { min-width: 680px; } .pb-canvas-stage { padding: var(--builder-space-3) 0; } .pb-canvas-frame--tablet, .pb-canvas-frame--mobile { width: 100%; } .bt-storefront { padding: 28px 20px; } .bt-storefront__form { flex-direction: column; } }
+@media (max-width: 640px) { .pb-header, .pb-canvas-area { padding: var(--builder-space-2); } .pb-header-content { min-width: 680px; } .pb-canvas-stage { padding: var(--builder-space-3) 0; } .pb-canvas-frame--tablet, .pb-canvas-frame--mobile { width: 100%; } .bt-storefront { padding: 28px 20px; } .bt-storefront__form { flex-direction: column; } }

@@ -121,7 +121,7 @@ describe("V0.7.2 Sales", () => {
     render(<SalesRuntimeProvider query={query}><WebRenderer document={registry.getTemplate("besttrack.sales")!.create()} registry={registry} /></SalesRuntimeProvider>);
     fireEvent.change(screen.getByLabelText("Sales tracking number"), { target: { value: "not valid!" } });
     fireEvent.click(screen.getByRole("button", { name: "Track order" }));
-    expect(screen.getByRole("alert")).toHaveTextContent("Enter a tracking number using 6–64 letters, numbers, hyphens, or underscores.");
+    expect(screen.getByRole("alert")).toHaveTextContent("Enter a valid tracking number.");
     expect(query).not.toHaveBeenCalled();
   });
 

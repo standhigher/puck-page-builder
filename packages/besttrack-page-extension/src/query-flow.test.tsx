@@ -21,7 +21,10 @@ describe("discriminated query cards", () => {
     render(<SalesRuntimeProvider query={query}><SalesQueryBlock heading="Track" submitLabel="Find" /></SalesRuntimeProvider>);
     fireEvent.click(screen.getByRole("tab", { name: "Order Number" }));
     fireEvent.click(screen.getByRole("button", { name: "Find" }));
-    expect(screen.getByRole("alert").textContent).toContain("Enter an order number");
+    expect(screen.getAllByRole("alert").map((element) => element.textContent)).toEqual(expect.arrayContaining([
+      "Enter a valid order number.",
+      "Enter a valid email address."
+    ]));
     fireEvent.click(screen.getByRole("tab", { name: "Tracking Number" }));
     fireEvent.change(screen.getByLabelText("Sales tracking number"), { target: { value: "BT-2048" } });
     fireEvent.click(screen.getByRole("button", { name: "Find" }));

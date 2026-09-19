@@ -32,8 +32,11 @@ uses the dark hero fallback. Product images have the same HTTPS-only fallback.
 
 The Consumer Runtime contract supports two explicit modes: tracking number, or
 order number plus email. Sales renders both tabs and preserves each tab's
-inputs. `defaultTrackingNumber` remains a preview-only, non-sensitive
-placeholder.
+inputs. Both Sales and Branded use the same field-level validation, first-error
+focus, loading lock and card-internal smooth scrolling behavior. The submitted
+result, empty state or generic failure remains inside the query card; the page
+itself does not scroll or navigate. `defaultTrackingNumber` remains a
+preview-only, non-sensitive placeholder.
 
 ## Consumer Runtime dependency
 

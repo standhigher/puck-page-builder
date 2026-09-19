@@ -24,15 +24,26 @@ generic storefront states; the raw host error is not displayed. The template
 does not register a second DataSource and never falls back from a live failure
 to mock data.
 
+## Shared query card
+
+Branded and Sales use the same consumer query interaction. The card always
+shows tracking-number and order-number tabs, preserves values while switching,
+validates each field before calling the host, and focuses the first invalid
+field. A valid submit disables the CTA while loading. Success, empty and
+generic-error states appear inside the original scrollable card; the card, not
+the document page, smoothly scrolls to the new state. The order-number path
+always requires the email field.
+
 ## Brand configuration
 
 The template renders inside the Shopify Theme body and deliberately does not
 render the store header or footer. Announcement is a compact promotion strip.
 Before query, the tracking experience renders shipment tabs, hero background,
 query mode, input and CTA. “Powered by BestTrack” is a fixed platform
-identifier and is not editable. After a successful query it
-replaces the hero with the tracking summary, progress, shipping details and
-package contents; “Track another order” restores the query view.
+identifier and is not editable. After a successful query the card retains the
+form and appends its compact tracking summary; the surrounding tracking
+experience exposes progress, shipping details and package contents. “Track
+another order” restores the idle tracking view.
 
 Hosts may provide progress and events on each shipment. Progress is an ordered
 array of { id, label, state }, where state is complete, current or upcoming;

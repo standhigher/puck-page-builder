@@ -1,12 +1,13 @@
-import { createContext, useCallback, useContext, useEffect, useId, useMemo, useRef, useState, type CSSProperties, type FormEvent, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import type { BlockEditorProps, FieldProps } from "@standhigher/puck-page-builder/runtime";
-import { formatTrackingPageMoney, isEmptyTrackingPageResult, isValidOrderEmail, isValidOrderNumber, isValidTrackingNumber, type TrackingPageQuery, type TrackingPageQueryRequest, type TrackingPageQueryResult, type TrackingPageRuntimePhase, type TrackingPageWatermark } from "./tracking-page-runtime";
+import { formatTrackingPageMoney, isEmptyTrackingPageResult, type TrackingPageQuery, type TrackingPageQueryRequest, type TrackingPageQueryResult, type TrackingPageRuntimePhase, type TrackingPageWatermark } from "./tracking-page-runtime";
 import { safeTrackingPageUrl } from "./tracking-page-url";
+import { TrackingQueryCard, TrackingQueryResultSummary } from "./tracking-query-experience";
 
 /** Transient, consumer-safe state. The host error is deliberately never retained for display. */
 export type SalesRuntimeState = { phase: TrackingPageRuntimePhase; result?: TrackingPageQueryResult };
-type SalesRuntime = SalesRuntimeState & { query(request: TrackingPageQueryRequest): Promise<void>; watermark?: TrackingPageWatermark; supportsOrderQuery: boolean };
-const initialRuntime: SalesRuntime = { phase: "idle", supportsOrderQuery: false, async query() { return undefined; } };
+type SalesRuntime = SalesRuntimeState & { query(request: TrackingPageQueryRequest): Promise<void>; watermark?: TrackingPageWatermark };
+const initialRuntime: SalesRuntime = { phase: "idle", async query() { return undefined; } };
 const SalesRuntimeContext = createContext<SalesRuntime>(initialRuntime);
 export type SalesRuntimeProviderProps = {
   children: ReactNode;
@@ -38,7 +39,7 @@ export function SalesRuntimeProvider({ children, query: injectedQuery, watermark
       setState({ phase: "error" });
     }
   }, [injectedQuery]);
-  const value = useMemo<SalesRuntime>(() => ({ ...state, query, watermark, supportsOrderQuery: Boolean(injectedQuery) }), [injectedQuery, query, state, watermark]);
+  const value = useMemo<SalesRuntime>(() => ({ ...state, query, watermark }), [query, state, watermark]);
   return <SalesRuntimeContext.Provider value={value}>{children}</SalesRuntimeContext.Provider>;
 }
 
@@ -138,51 +139,38 @@ export function SalesAnnouncementBlock(props: Record<string, unknown>) {
 
 export function SalesQueryBlock(props: Record<string, unknown>) {
   const runtime = useSalesRuntime();
-  const trackingInputId = useId();
-  const orderInputId = useId();
-  const emailInputId = useId();
-  const errorId = useId();
-  const [trackingNumber, setTrackingNumber] = useState(text(props, "defaultTrackingNumber", "BT-2048-DEMO"));
-  const [orderNumber, setOrderNumber] = useState(text(props, "defaultOrderNumber", ""));
-  const [email, setEmail] = useState("");
-  const [mode, setMode] = useState<"tracking" | "order">("tracking");
-  const [inputError, setInputError] = useState<string | null>(null);
-  const resultRef = useRef<HTMLDivElement>(null);
-  const activeMode = runtime.supportsOrderQuery ? mode : "tracking";
-  useEffect(() => { const node = resultRef.current; if (runtime.phase === "success" && typeof node?.scrollIntoView === "function") node.scrollIntoView({ block: "nearest" }); }, [runtime.phase, runtime.result]);
-  const submit = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    const normalizedTrackingNumber = trackingNumber.trim();
-    const normalizedOrderNumber = orderNumber.trim();
-    const normalizedEmail = email.trim();
-    if (activeMode === "tracking" && !isValidTrackingNumber(normalizedTrackingNumber)) {
-      setInputError("Enter a tracking number using 6–64 letters, numbers, hyphens, or underscores.");
-      return;
-    }
-    if (activeMode === "order" && !isValidOrderNumber(normalizedOrderNumber)) { setInputError("Enter an order number using 1–64 non-space characters."); return; }
-    if (activeMode === "order" && !isValidOrderEmail(normalizedEmail)) { setInputError("Enter a valid email address."); return; }
-    setInputError(null);
-    void runtime.query(activeMode === "tracking" ? { mode: activeMode, trackingNumber: normalizedTrackingNumber } : { mode: activeMode, orderNumber: normalizedOrderNumber, email: normalizedEmail });
-  };
-  const description = inputError ?? (runtime.phase === "empty" ? "We couldn’t find an order for that number." : runtime.phase === "error" ? "We couldn’t retrieve this order right now. Please try again later." : undefined);
-  const result = runtime.result;
   return <section aria-label="Sales tracking query" aria-busy={runtime.phase === "loading" || undefined} data-sales-hero style={{ position: "relative", display: "grid", minHeight: "clamp(460px, 52vw, 620px)", boxSizing: "border-box", overflow: "hidden", padding: "clamp(28px, 6vw, 72px) 16px", background: "var(--pb-color-text)", color: "var(--pb-color-surface)", fontFamily: "var(--pb-font-family)" }}>
     <HeroAsset src={props.heroImageUrl} />
     <div aria-hidden="true" style={{ position: "absolute", inset: 0, background: "rgb(0 0 0 / 42%)" }} />
-    <div style={{ ...contentWidth, position: "relative", zIndex: 1, display: "grid", alignItems: "center", width: "100%" }}><div data-sales-query-card style={{ boxSizing: "border-box", width: "min(560px, 100%)", maxHeight: "calc(100vh - 48px)", marginLeft: "auto", padding: "clamp(28px, 5vw, 48px)", borderRadius: "var(--pb-radius)", overflowY: "auto", background: "var(--pb-color-surface)", color: "var(--pb-color-text)", boxShadow: "0 20px 56px rgb(0 0 0 / 28%)" }}>
-      <h1 style={{ margin: "0 0 28px", color: "var(--pb-color-text)", fontSize: "clamp(32px, 5vw, 48px)", fontWeight: 800, letterSpacing: "-0.035em", lineHeight: 1.02, textAlign: "center" }}>{text(props, "heading", "Track an order")}</h1>
-      {runtime.supportsOrderQuery ? <div role="tablist" aria-label="Tracking method" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", borderBottom: "1px solid var(--pb-color-border)", marginBottom: 18 }}><button type="button" role="tab" aria-selected={activeMode === "tracking"} onClick={() => { setMode("tracking"); setInputError(null); }} style={{ minHeight: 40, border: 0, borderBottom: activeMode === "tracking" ? "2px solid currentColor" : "2px solid transparent", background: "transparent", color: "inherit", font: "inherit", fontWeight: activeMode === "tracking" ? 700 : 400, cursor: "pointer" }}>Tracking Number</button><button type="button" role="tab" aria-selected={activeMode === "order"} onClick={() => { setMode("order"); setInputError(null); }} style={{ minHeight: 40, border: 0, borderBottom: activeMode === "order" ? "2px solid currentColor" : "2px solid transparent", background: "transparent", color: "inherit", font: "inherit", fontWeight: activeMode === "order" ? 700 : 400, cursor: "pointer" }}>Order Number</button></div> : null}
-      <form noValidate onSubmit={submit} style={{ display: "grid", gap: 14 }}>
-        {activeMode === "tracking" ? <><label htmlFor={trackingInputId} style={{ position: "absolute", width: 1, height: 1, padding: 0, margin: -1, overflow: "hidden", clip: "rect(0, 0, 0, 0)", whiteSpace: "nowrap", border: 0 }}>Tracking number</label><input id={trackingInputId} aria-describedby={description ? errorId : undefined} aria-invalid={Boolean(inputError) || undefined} aria-label="Sales tracking number" value={trackingNumber} onChange={(event) => { setTrackingNumber(event.target.value); if (inputError) setInputError(null); }} inputMode="text" autoComplete="off" placeholder="Enter your tracking number" style={{ boxSizing: "border-box", width: "100%", minHeight: 58, padding: "12px 16px", border: "1px solid var(--pb-color-border)", borderRadius: "calc(var(--pb-radius) / 1.25)", background: "var(--pb-color-surface)", color: "var(--pb-color-text)", font: "inherit", fontSize: 17 }} /></> : <><label htmlFor={orderInputId} style={{ position: "absolute", width: 1, height: 1, padding: 0, margin: -1, overflow: "hidden", clip: "rect(0, 0, 0, 0)", whiteSpace: "nowrap", border: 0 }}>Order number</label><input id={orderInputId} aria-label="Sales order number" value={orderNumber} onChange={(event) => { setOrderNumber(event.target.value); if (inputError) setInputError(null); }} autoComplete="off" placeholder="Enter your order number" style={{ boxSizing: "border-box", width: "100%", minHeight: 58, padding: "12px 16px", border: "1px solid var(--pb-color-border)", borderRadius: "calc(var(--pb-radius) / 1.25)", background: "var(--pb-color-surface)", color: "var(--pb-color-text)", font: "inherit", fontSize: 17 }} /><label htmlFor={emailInputId} style={{ position: "absolute", width: 1, height: 1, padding: 0, margin: -1, overflow: "hidden", clip: "rect(0, 0, 0, 0)", whiteSpace: "nowrap", border: 0 }}>Email</label><input id={emailInputId} aria-label="Sales order email" type="email" value={email} onChange={(event) => { setEmail(event.target.value); if (inputError) setInputError(null); }} autoComplete="email" placeholder="Enter your email" style={{ boxSizing: "border-box", width: "100%", minHeight: 58, padding: "12px 16px", border: "1px solid var(--pb-color-border)", borderRadius: "calc(var(--pb-radius) / 1.25)", background: "var(--pb-color-surface)", color: "var(--pb-color-text)", font: "inherit", fontSize: 17 }} /></>}
-        <button type="submit" disabled={runtime.phase === "loading"} style={{ width: "100%", minHeight: 58, padding: "12px 18px", border: 0, borderRadius: "calc(var(--pb-radius) / 1.25)", background: "var(--pb-color-text)", color: "var(--pb-color-surface)", font: "inherit", fontSize: 16, fontWeight: 700, cursor: runtime.phase === "loading" ? "wait" : "pointer" }}>{runtime.phase === "loading" ? "Checking…" : text(props, "submitLabel", "Track order")}</button>
-      </form>
-      {runtime.phase === "loading" ? <Status>Checking your order…</Status> : null}
-      {inputError ? <p id={errorId} role="alert">{inputError}</p> : null}
-      {!inputError && runtime.phase === "empty" ? <p id={errorId} role="status">We couldn’t find an order for that number.</p> : null}
-      {!inputError && runtime.phase === "error" ? <p id={errorId} role="alert">We couldn’t retrieve this order right now. Please try again later.</p> : null}
-      {runtime.phase === "success" && result ? <div ref={resultRef} data-sales-query-result data-testid="sales-result" tabIndex={-1} style={{ marginTop: 18, padding: 16, border: "1px solid var(--pb-color-border)", borderRadius: "calc(var(--pb-radius) / 1.25)", background: "var(--pb-color-background)" }}><strong>{result.status || "Tracking update"}</strong><p style={{ margin: "6px 0 0", color: "var(--pb-color-muted)" }}>Tracking: {result.trackingNumber || "Not available"}</p>{result.latestEvent ? <p style={{ margin: "6px 0 0", color: "var(--pb-color-muted)" }}>{result.latestEvent}</p> : null}</div> : null}
-      <RuntimeWatermark watermark={runtime.watermark} />
-    </div></div>
+    <div style={{ ...contentWidth, position: "relative", zIndex: 1, display: "grid", alignItems: "center", width: "100%" }}>
+      <TrackingQueryCard
+        phase={runtime.phase}
+        onQuery={runtime.query}
+        heading={text(props, "heading", "Track an order")}
+        submitLabel={text(props, "submitLabel", "Track order")}
+        initialTrackingNumber={text(props, "defaultTrackingNumber", "BT-2048-DEMO")}
+        initialOrderNumber={text(props, "defaultOrderNumber", "")}
+        loadingLabel="Checking..."
+        loadingMessage="Checking your order…"
+        emptyMessage="We couldn’t find an order for that number."
+        errorMessage="We couldn’t retrieve this order right now. Please try again later."
+        trackingInputLabel="Sales tracking number"
+        orderInputLabel="Sales order number"
+        emailInputLabel="Sales order email"
+        cardDataAttribute="data-sales-query-card"
+        resultDataAttribute="data-sales-query-result"
+        resultTestId="sales-result"
+        cardStyle={{ boxSizing: "border-box", width: "min(560px, 100%)", maxHeight: "calc(100vh - 48px)", marginLeft: "auto", padding: "clamp(28px, 5vw, 48px)", borderRadius: "var(--pb-radius)", background: "var(--pb-color-surface)", color: "var(--pb-color-text)", boxShadow: "0 20px 56px rgb(0 0 0 / 28%)" }}
+        headingStyle={{ color: "var(--pb-color-text)", fontSize: "clamp(32px, 5vw, 48px)", fontWeight: 800, letterSpacing: "-0.035em", lineHeight: 1.02 }}
+        tabListStyle={{ borderBottomColor: "var(--pb-color-border)" }}
+        formStyle={{ gap: 14 }}
+        inputStyle={{ boxSizing: "border-box", width: "100%", minHeight: 58, padding: "12px 16px", border: "1px solid var(--pb-color-border)", borderRadius: "calc(var(--pb-radius) / 1.25)", background: "var(--pb-color-surface)", color: "var(--pb-color-text)", font: "inherit", fontSize: 17 }}
+        submitStyle={(loading) => ({ width: "100%", minHeight: 58, padding: "12px 18px", border: 0, borderRadius: "calc(var(--pb-radius) / 1.25)", background: loading ? "#64748b" : "var(--pb-color-text)", color: "var(--pb-color-surface)", font: "inherit", fontSize: 16, fontWeight: 700, cursor: loading ? "wait" : "pointer" })}
+        result={runtime.result ? <TrackingQueryResultSummary result={runtime.result} /> : null}
+        resultStyle={{ padding: 16, border: "1px solid var(--pb-color-border)", borderRadius: "calc(var(--pb-radius) / 1.25)", background: "var(--pb-color-background)" }}
+        watermark={<RuntimeWatermark watermark={runtime.watermark} />}
+      />
+    </div>
   </section>;
 }
 

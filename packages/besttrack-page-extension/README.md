@@ -3,10 +3,9 @@
 This package provides the built-in Ready-to-go, Branded, and Sales tracking
 templates for `@standhigher/puck-page-builder`. Each template has stable
 namespaced v1 block IDs, default block order, theme tokens, and exported
-`TemplatePolicy` metadata. All default blocks are singleton; the protected
-query/structure blocks declare `deletable: false`. Current core APIs do not
-enforce this metadata, so a template-aware editor host must enforce it until a
-core policy API is available.
+`TemplatePolicy` metadata. All default blocks are singleton. Protected
+query/structure blocks now use the core `BlockDefinition.policy` contract
+(`required`, `singleton`, and `allowDelete: false`), which the editor enforces.
 
 ## Query provider
 

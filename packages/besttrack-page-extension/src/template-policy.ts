@@ -1,10 +1,9 @@
 /**
  * Compatibility metadata for template-aware hosts.
  *
- * The current Page Builder core registers template dependencies but does not
- * yet enforce block cardinality or deletion rules. Hosts may consume this
- * immutable declaration in their editor shell until those capabilities become
- * first-class core APIs.
+ * Block cardinality and deletion are now enforced by the matching native
+ * `BlockDefinition.policy` declarations. This remains an ergonomic template
+ * overview for hosts that need to present the default composition.
  */
 export type TemplateBlockPolicy = Readonly<{
   blockType: string;
@@ -17,7 +16,7 @@ export type TemplatePolicy = Readonly<{
   displayName: string;
   defaultBlockOrder: readonly string[];
   blocks: readonly TemplateBlockPolicy[];
-  enforcement: "host-compatibility";
+  enforcement: "core-block-policy";
 }>;
 
 export function defineTemplatePolicy(templateId: string, displayName: string, defaultBlockOrder: readonly string[], lockedBlockTypes: readonly string[]): TemplatePolicy {
@@ -26,6 +25,6 @@ export function defineTemplatePolicy(templateId: string, displayName: string, de
     displayName,
     defaultBlockOrder: Object.freeze([...defaultBlockOrder]),
     blocks: Object.freeze(defaultBlockOrder.map((blockType) => Object.freeze({ blockType, singleton: true, deletable: !lockedBlockTypes.includes(blockType) }))),
-    enforcement: "host-compatibility"
+    enforcement: "core-block-policy"
   });
 }

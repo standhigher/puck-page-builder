@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { brandedTemplatePolicy } from "./branded-definition";
+import { bestTrackBrandedExtension } from "./branded-definition";
 import { readyToGoTemplatePolicy } from "./ready-to-go-definition";
+import { bestTrackPageExtension } from "./ready-to-go-definition";
 import { salesTemplatePolicy } from "./sales-definition";
+import { bestTrackSalesExtension } from "./sales-definition";
 import { isValidOrderEmail, isValidOrderNumber, isValidTrackingNumber } from "./tracking-page-runtime";
 
 describe("BestTrack template PRD compatibility metadata", () => {
@@ -14,7 +17,10 @@ describe("BestTrack template PRD compatibility metadata", () => {
     ]);
     expect(brandedTemplatePolicy.blocks.find((block) => block.blockType === "besttrack.branded.tracking-experience")).toMatchObject({ singleton: true, deletable: false });
     expect(salesTemplatePolicy.blocks.find((block) => block.blockType === "besttrack.sales.query")).toMatchObject({ singleton: true, deletable: false });
-    expect(salesTemplatePolicy.enforcement).toBe("host-compatibility");
+    expect(salesTemplatePolicy.enforcement).toBe("core-block-policy");
+    expect(bestTrackPageExtension.blocks?.find((block) => block.type === "besttrack.ready-to-go.query")?.policy).toMatchObject({ required: true, singleton: true, allowDelete: false });
+    expect(bestTrackBrandedExtension.blocks?.find((block) => block.type === "besttrack.branded.tracking-experience")?.policy).toMatchObject({ required: true, singleton: true, allowDelete: false });
+    expect(bestTrackSalesExtension.blocks?.find((block) => block.type === "besttrack.sales.query")?.policy).toMatchObject({ required: true, singleton: true, allowDelete: false });
   });
 
   it("keeps query validation local and deterministic", () => {

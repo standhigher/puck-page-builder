@@ -3,7 +3,10 @@ import { ReadyToGoDeliveryBlock, ReadyToGoDeliveryEditor, ReadyToGoProgressBlock
 import { defineTemplatePolicy } from "./template-policy";
 
 const text = (label: string, options: Partial<FieldConfig> = {}) => ({ field: "besttrack.ready-to-go.text", label, control: "text" as const, ...options });
-const readyToGoBlocks: BlockDefinition[] = [
+function withTemplatePolicy(blocks: BlockDefinition[], protectedBlocks: readonly string[]): BlockDefinition[] {
+  return blocks.map((block) => ({ ...block, policy: { singleton: true, ...(protectedBlocks.includes(block.type) ? { required: true, allowDelete: false } : {}) } }));
+}
+const readyToGoBlocks: BlockDefinition[] = withTemplatePolicy([
   {
     type: "besttrack.ready-to-go.query",
     version: 1,
@@ -68,7 +71,7 @@ const readyToGoBlocks: BlockDefinition[] = [
     fields: { heading: text("Heading") },
     render: { web: ReadyToGoRecommendationsBlock, editor: ReadyToGoRecommendationsEditor }
   }
-];
+], ["besttrack.ready-to-go.query"]);
 
 export const readyToGoTemplatePolicy = defineTemplatePolicy(
   "besttrack.ready-to-go",

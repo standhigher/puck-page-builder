@@ -72,6 +72,7 @@ export type EditorContextValue = {
   moveBlock(id: string, direction: -1 | 1): void;
   reorderBlock(id: string, beforeId: string): void;
   updateBlockProps(id: string, props: Record<string, JsonValue>): void;
+  updateBlockPresentation(id: string, presentation: Pick<BlockNode, "variant" | "style">): void;
   undo(): void;
   redo(): void;
   markSaved(): void;
@@ -122,6 +123,12 @@ export function EditorProvider({ initialDocument, registry, policy, loadState = 
     if (!editable) return;
     const current = historyRef.current;
     const blocks = current.document.blocks.map((block) => block.id === id ? { ...block, props: { ...block.props, ...props } } : block);
+    replace({ ...current.document, blocks }, id);
+  }, [editable, replace]);
+  const updateBlockPresentation = useCallback((id: string, presentation: Pick<BlockNode, "variant" | "style">) => {
+    if (!editable) return;
+    const current = historyRef.current;
+    const blocks = current.document.blocks.map((block) => block.id === id ? { ...block, ...presentation } : block);
     replace({ ...current.document, blocks }, id);
   }, [editable, replace]);
 
@@ -227,6 +234,7 @@ export function EditorProvider({ initialDocument, registry, policy, loadState = 
         replace({ ...history.document, blocks }, id);
       },
       updateBlockProps,
+      updateBlockPresentation,
       requestDeleteBlock: (id) => {
         const block = history.document.blocks.find((item) => item.id === id);
         if (editable && canDeleteBlock(block, history.document.blocks, registry?.getBlock(block?.type ?? ""), policy)) setPendingDeleteBlockId(id);
@@ -247,7 +255,7 @@ export function EditorProvider({ initialDocument, registry, policy, loadState = 
       redo: () => { if (editable) dispatch({ type: "redo" }); },
       markSaved: () => dispatch({ type: "saved" })
     };
-  }, [canvasSelectionRequest, confirmCanvasSelection, editable, history, isDirty, loadState, pendingDeleteBlock, pendingDeleteBlockId, policy, registry, replace, requestCanvasSelection, selectedBlock, updateBlockProps, updateFromCanvas]);
+  }, [canvasSelectionRequest, confirmCanvasSelection, editable, history, isDirty, loadState, pendingDeleteBlock, pendingDeleteBlockId, policy, registry, replace, requestCanvasSelection, selectedBlock, updateBlockPresentation, updateBlockProps, updateFromCanvas]);
 
   return <EditorContext.Provider value={value}>{children}</EditorContext.Provider>;
 }

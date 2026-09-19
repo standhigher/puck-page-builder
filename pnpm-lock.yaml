@@ -75,6 +75,46 @@ importers:
         specifier: ^4.0.14
         version: 4.1.11(@types/node@24.13.4)(happy-dom@20.14.5)(jsdom@27.4.0(supports-color@7.2.0))(vite@7.3.6(@types/node@24.13.4))
 
+  demos/next-page-studio:
+    dependencies:
+      '@puckeditor/core':
+        specifier: ^0.23.0
+        version: 0.23.0(@floating-ui/dom@1.8.0)(@types/react-dom@18.3.7(@types/react@18.3.31))(@types/react@18.3.31)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(use-sync-external-store@1.7.0(react@18.3.1))
+      '@shopify/polaris':
+        specifier: ^13.9.5
+        version: 13.9.5(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      '@shopify/polaris-icons':
+        specifier: ^9.3.1
+        version: 9.3.1(react@18.3.1)
+      '@standhigher/besttrack-page-extension':
+        specifier: workspace:*
+        version: link:../../packages/besttrack-page-extension
+      '@standhigher/puck-page-builder':
+        specifier: workspace:*
+        version: link:../../packages/puck-page-builder
+      next:
+        specifier: ^16.3.5
+        version: 16.3.5(@babel/core@7.29.7(supports-color@7.2.0))(@types/node@24.13.4)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      react:
+        specifier: ^18.3.1
+        version: 18.3.1
+      react-dom:
+        specifier: ^18.3.1
+        version: 18.3.1(react@18.3.1)
+    devDependencies:
+      '@types/node':
+        specifier: ^24.10.1
+        version: 24.13.4
+      '@types/react':
+        specifier: ^18.3.28
+        version: 18.3.31
+      '@types/react-dom':
+        specifier: ^18.3.7
+        version: 18.3.7(@types/react@18.3.31)
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+
   demos/shopify-app:
     dependencies:
       '@puckeditor/core':

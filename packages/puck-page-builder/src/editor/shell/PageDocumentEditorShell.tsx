@@ -1,11 +1,12 @@
 import { Puck, usePuck } from "@puckeditor/core";
-import { Badge, Banner, Button, ButtonGroup, InlineStack, Text, TextField } from "@shopify/polaris";
+import { Badge, Banner, Button, ButtonGroup, InlineStack, Select, Text, TextField } from "@shopify/polaris";
 import { DragHandleIcon, LayoutSectionIcon, MenuIcon, RedoIcon, UndoIcon } from "@shopify/polaris-icons";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPageDocumentPuckConfig } from "../../adapters/puck/page-document-config";
 import { fromEngineData, toEngineData } from "../../adapters/puck/page-document";
 import { validateFieldValue, type ExtensionRegistry, type FieldConfig, type ValidationIssue } from "../../core/extensions";
 import type { BlockNode, JsonValue, PageDocument } from "../../core/schema/page-document";
+import type { ThemeTokenName, ThemeTokens } from "../../core/theme";
 import { EditorProvider, useEditorContext, type EditorLoadState } from "../context/EditorContext";
 import { createAdminI18n } from "../i18n/admin";
 import type { PageDocumentEditorPolicy } from "../policy";
@@ -16,6 +17,10 @@ export type PageDocumentEditorShellProps = {
   initialDocument: PageDocument;
   iframe?: boolean;
   registry?: ExtensionRegistry;
+  /** Limits the add-block library; existing document blocks remain editable. */
+  availableBlockTypes?: readonly string[];
+  /** Enables generic Variant and token-only style editing in the inspector. */
+  appearanceControls?: boolean;
   /** Host rules that supplement block-declared operation and cardinality policies. */
   policy?: PageDocumentEditorPolicy;
   /** Copy or presentation overrides for the built-in, two-step deletion dialog. */
@@ -71,7 +76,7 @@ export function PageDocumentEditorShell(props: PageDocumentEditorShellProps) {
   </EditorProvider>;
 }
 
-function PageDocumentEditor({ iframe = true, registry, adminLocale, onSave, onPublish, deleteConfirmation }: PageDocumentEditorShellProps) {
+function PageDocumentEditor({ iframe = true, registry, adminLocale, onSave, onPublish, deleteConfirmation, availableBlockTypes, appearanceControls = false }: PageDocumentEditorShellProps) {
   const editor = useEditorContext();
   const [blockView, setBlockView] = useState<"blocks" | "outline">("blocks");
   const [draggingLibraryType, setDraggingLibraryType] = useState<string | null>(null);
@@ -83,7 +88,7 @@ function PageDocumentEditor({ iframe = true, registry, adminLocale, onSave, onPu
   const i18n = createAdminI18n(adminLocale);
   const engineData = useMemo(() => toEngineData(editor.document, registry), [editor.document, registry]);
   const validationIssues = useMemo(() => validateDocumentBlocks(editor.document, registry), [editor.document, registry]);
-  const { confirmCanvasSelection, selectedBlockId, updateBlockProps } = editor;
+  const { confirmCanvasSelection, selectedBlockId, updateBlockProps, updateBlockPresentation } = editor;
   const updateFromCanvasInput = useCallback((id: string, props: Record<string, JsonValue>, preserveCanvasValue = false) => {
     // The DOM already contains this value. Sending it back through Puck would reset
     // the contenteditable caret after every keystroke.
@@ -94,7 +99,8 @@ function PageDocumentEditor({ iframe = true, registry, adminLocale, onSave, onPu
 
   if (editor.loadState !== "ready" && editor.loadState !== "success") return <EditorStatus state={editor.loadState} />;
 
-  const blockTypes = ["core.text", "core.image", ...(registry?.blocks.map((block) => block.type) ?? [])];
+  const allBlockTypes = ["core.text", "core.image", ...(registry?.blocks.map((block) => block.type) ?? [])];
+  const blockTypes = availableBlockTypes ? allBlockTypes.filter((type) => availableBlockTypes.includes(type)) : allBlockTypes;
   const addFromLibrary = (type: string, beforeId?: string) => {
     const id = editor.addBlock(type, beforeId);
     if (id) editor.requestCanvasSelection(id);
@@ -207,7 +213,7 @@ function PageDocumentEditor({ iframe = true, registry, adminLocale, onSave, onPu
           </main>
           <aside className="pb-right-panel" aria-label="PageDocument 属性">
             <Text as="h2" variant="headingSm">{i18n.t("properties")}</Text>
-            {editor.selectedBlock ? <><DocumentInspector block={editor.selectedBlock} registry={registry} disabled={!editor.actionState.canEdit} onChange={(props) => editor.updateBlockProps(editor.selectedBlock!.id, props)} /><InspectorActions block={editor.selectedBlock} canDuplicate={editor.actionState.canDuplicate} canDelete={editor.actionState.canDelete} canMove={editor.actionState.canReorder} canMoveUp={editor.document.blocks[0]?.id !== editor.selectedBlock.id} canMoveDown={editor.document.blocks.at(-1)?.id !== editor.selectedBlock.id} i18n={i18n} onDuplicate={() => editor.duplicateBlock(editor.selectedBlock!.id)} onDelete={() => editor.requestDeleteBlock(editor.selectedBlock!.id)} onMove={(direction) => editor.moveBlock(editor.selectedBlock!.id, direction)} /></> : <Text as="p" tone="subdued">{i18n.t("selectBlock")}</Text>}
+            {editor.selectedBlock ? <><DocumentInspector block={editor.selectedBlock} registry={registry} disabled={!editor.actionState.canEdit} appearanceControls={appearanceControls} onChange={(props) => editor.updateBlockProps(editor.selectedBlock!.id, props)} onPresentationChange={(presentation) => updateBlockPresentation(editor.selectedBlock!.id, presentation)} /><InspectorActions block={editor.selectedBlock} canDuplicate={editor.actionState.canDuplicate} canDelete={editor.actionState.canDelete} canMove={editor.actionState.canReorder} canMoveUp={editor.document.blocks[0]?.id !== editor.selectedBlock.id} canMoveDown={editor.document.blocks.at(-1)?.id !== editor.selectedBlock.id} i18n={i18n} onDuplicate={() => editor.duplicateBlock(editor.selectedBlock!.id)} onDelete={() => editor.requestDeleteBlock(editor.selectedBlock!.id)} onMove={(direction) => editor.moveBlock(editor.selectedBlock!.id, direction)} /></> : <Text as="p" tone="subdued">{i18n.t("selectBlock")}</Text>}
           </aside>
         </div>
         {editor.pendingDeleteBlock ? <DeleteConfirmation block={editor.pendingDeleteBlock} config={deleteConfirmation} i18n={i18n} onCancel={editor.cancelDeleteBlock} onConfirm={editor.confirmDeleteBlock} /> : null}
@@ -308,7 +314,9 @@ function inspectorFieldConfig(name: string, field: FieldConfig): FieldConfig {
   return { ...field, group: field.group ?? group, description };
 }
 
-function DocumentInspector({ block, registry, disabled, onChange }: { block: BlockNode; registry?: ExtensionRegistry; disabled: boolean; onChange: (props: Record<string, JsonValue>) => void }) {
+const appearanceTokens: Array<[ThemeTokenName, string]> = [["color.primary", "主色"], ["color.surface", "表面色"], ["radius", "圆角"], ["spacing", "间距"]];
+
+function DocumentInspector({ block, registry, disabled, appearanceControls, onChange, onPresentationChange }: { block: BlockNode; registry?: ExtensionRegistry; disabled: boolean; appearanceControls: boolean; onChange: (props: Record<string, JsonValue>) => void; onPresentationChange: (presentation: Pick<BlockNode, "variant" | "style">) => void }) {
   const definition = registry?.getBlock(block.type);
   const groupedFields = definition ? Object.entries(definition.fields).reduce<Record<string, Array<[string, FieldConfig]>>>((groups, entry) => {
     const [name, field] = entry;
@@ -322,6 +330,13 @@ function DocumentInspector({ block, registry, disabled, onChange }: { block: Blo
     {block.type === "core.text" ? <InspectorSection title="Content"><InspectorField name="content" field={{ field: "", label: "文本内容", control: "textarea", description: "支持较长的正文内容。" }} value={block.props.content} registry={registry} disabled={disabled} onChange={(content) => onChange({ content })} /></InspectorSection> : null}
     {block.type === "core.image" ? <InspectorSection title="Image"><InspectorField name="src" field={{ field: "", label: "图片 URL", control: "url", description: "使用 HTTPS 图片地址。" }} value={block.props.src} registry={registry} disabled={disabled} onChange={(src) => onChange({ src })} /><InspectorField name="alt" field={{ field: "", label: "替代文本", control: "text", description: "用于无障碍阅读和图片加载失败场景。" }} value={block.props.alt} registry={registry} disabled={disabled} onChange={(alt) => onChange({ alt })} /></InspectorSection> : null}
     {Object.entries(groupedFields).map(([group, fields]) => <InspectorSection key={group} title={group} defaultOpen={group !== "Advanced"}>{fields.map(([name, field]) => <InspectorField key={name} name={name} field={field} value={block.props[name]} registry={registry} disabled={disabled} onChange={(value) => onChange({ ...block.props, [name]: value })} />)}</InspectorSection>)}
+    {appearanceControls && definition?.variants?.length ? <InspectorSection title="外观"><Select label="样式变体" options={definition.variants.map((variant) => ({ label: variant.label, value: variant.id }))} value={block.variant} disabled={disabled} onChange={(variant) => onPresentationChange({ variant, style: block.style })} /></InspectorSection> : null}
+    {appearanceControls && definition ? <InspectorSection title="样式覆盖" defaultOpen={false}>{appearanceTokens.map(([token, label]) => <TextField key={token} label={label} value={block.style[token] ?? ""} placeholder="继承页面或模板设置" autoComplete="off" disabled={disabled} onChange={(value) => {
+      const style: ThemeTokens = { ...block.style };
+      if (value.trim()) style[token] = value;
+      else delete style[token];
+      onPresentationChange({ variant: block.variant, style });
+    }} />)}</InspectorSection> : null}
     {definition ? <p className="pb-inspector__hint">画布中带虚线边框的内容可直接编辑。</p> : null}
   </div>;
 }

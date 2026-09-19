@@ -4,10 +4,10 @@
   "type": "module",
   "packageManager": "pnpm@11.19.0",
   "scripts": {
-    "dev": "pnpm --filter @standhigher/puck-page-builder build && pnpm --filter @standhigher/demo-shopify-app dev",
-    "build": "pnpm --filter @standhigher/puck-page-builder build && pnpm --filter @standhigher/besttrack-page-extension build && pnpm --filter @standhigher/demo-shopify-app build",
+    "dev": "pnpm --filter @standhigher/puck-page-builder build && pnpm --filter @standhigher/demo-next-page-studio dev",
+    "build": "pnpm --filter @standhigher/puck-page-builder build && pnpm --filter @standhigher/besttrack-page-extension build && pnpm --filter @standhigher/demo-shopify-app build && pnpm --filter @standhigher/demo-next-page-studio build",
     "lint": "eslint . --max-warnings=0",
-    "typecheck": "pnpm --filter @standhigher/puck-page-builder build && pnpm --filter @standhigher/besttrack-page-extension build && tsc --noEmit && pnpm --filter @standhigher/puck-page-builder typecheck && pnpm --filter @standhigher/besttrack-page-extension typecheck && pnpm --filter @standhigher/demo-shopify-app typecheck",
+    "typecheck": "pnpm --filter @standhigher/puck-page-builder build && pnpm --filter @standhigher/besttrack-page-extension build && tsc --noEmit && pnpm --filter @standhigher/puck-page-builder typecheck && pnpm --filter @standhigher/besttrack-page-extension typecheck && pnpm --filter @standhigher/demo-shopify-app typecheck && pnpm --filter @standhigher/demo-next-page-studio typecheck",
     "test": "vitest run",
     "npm:login": "npm login && npm whoami",
     "release:core:version": "npm --prefix packages/puck-page-builder version --no-git-tag-version --ignore-scripts",

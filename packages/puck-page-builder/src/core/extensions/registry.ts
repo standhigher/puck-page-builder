@@ -1,7 +1,8 @@
 import type { BlockDefinition, DataSourceDefinition, EditorAction, ExtensionRegistryOptions, FieldDefinition, LifecycleHooks, PageBuilderExtension, RendererDefinition, TemplateDefinition, UISlotContribution, UISlotName } from "./types";
+import { validateBlockPolicy } from "./validation";
 import type { PageDocument } from "../schema/page-document";
 
-export type ExtensionRegistryErrorCode = "duplicate-extension" | "duplicate-definition" | "invalid-identifier" | "invalid-target" | "missing-dependency" | "missing-template-dependency" | "dependency-cycle";
+export type ExtensionRegistryErrorCode = "duplicate-extension" | "duplicate-definition" | "invalid-identifier" | "invalid-target" | "invalid-block-policy" | "missing-dependency" | "missing-template-dependency" | "dependency-cycle";
 
 export class ExtensionRegistryError extends Error {
   constructor(public readonly code: ExtensionRegistryErrorCode, message: string) {
@@ -138,7 +139,11 @@ export class ExtensionRegistry {
     const slots = new Map<UISlotName, Registered<UISlotContribution>[]>();
 
     for (const extension of resolved) {
-      for (const block of extension.blocks ?? []) assertTargets(block.targets, `Block ${block.type}`);
+      for (const block of extension.blocks ?? []) {
+        assertTargets(block.targets, `Block ${block.type}`);
+        const policyIssue = validateBlockPolicy(block.policy);
+        if (policyIssue) throw new ExtensionRegistryError("invalid-block-policy", `Block ${block.type} 的策略无效：${policyIssue}`);
+      }
       register(blockItems, extension.blocks, extension.name, blocks, "Block");
       register(fieldItems, extension.fields, extension.name, fields, "Field");
       register(actionItems, extension.actions, extension.name, actions, "Action");

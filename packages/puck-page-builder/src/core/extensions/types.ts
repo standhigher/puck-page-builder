@@ -8,14 +8,47 @@ export type UISlotName = "toolbar.left" | "toolbar.center" | "toolbar.right" | "
 
 export type ValidationIssue = { path: string; message: string };
 
+/** Operations that can be enabled globally or constrained for one block type. */
+export type BlockOperation = "add" | "delete" | "duplicate" | "drag";
+
+/**
+ * Reusable limits for a block type.
+ *
+ * `required` is shorthand for `minInstances: 1`; `singleton` is shorthand for
+ * `maxInstances: 1`. Explicit numeric limits can be used when a page needs
+ * more than one required instance.
+ */
+export type BlockPolicy = Partial<Record<`allow${Capitalize<BlockOperation>}`, boolean>> & {
+  required?: boolean;
+  singleton?: boolean;
+  minInstances?: number;
+  maxInstances?: number;
+};
+
+/** Global editor switches. Per-block policies can only further specialize them. */
+export type EditorOperationPolicy = Partial<Record<`allow${Capitalize<BlockOperation>}`, boolean>>;
+
+/**
+ * Field validation for string controls. URL controls accept same-origin paths
+ * by default and HTTP(S) URLs; color controls accept CSS hexadecimal colors.
+ */
+export type FieldValidation = {
+  minLength?: number;
+  maxLength?: number;
+  allowRelativeUrl?: boolean;
+  allowedUrlProtocols?: Array<"http:" | "https:">;
+};
+
 export type FieldConfig = {
   field: string;
   label?: string;
   /** Product-facing editor metadata. Custom field components remain supported. */
-  control?: "text" | "textarea" | "url";
+  control?: "text" | "textarea" | "url" | "color";
   description?: string;
   group?: string;
+  /** Kept for compatibility; it participates in the built-in validation. */
   required?: boolean;
+  validation?: FieldValidation;
 };
 
 export type FieldProps<T = unknown> = {
@@ -48,6 +81,8 @@ export interface BlockDefinition<P = Record<string, unknown>> {
   };
   defaultVariant?: string;
   variants?: BlockVariantDefinition[];
+  /** Default interaction and cardinality rules for this block type. */
+  policy?: BlockPolicy;
   dataSources?: string[];
   validate?: (props: P) => ValidationIssue[];
 }

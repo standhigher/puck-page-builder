@@ -1,6 +1,8 @@
 export { EditorShell, type EditorShellProps } from "./editor/shell/EditorShell";
 export { PageDocumentEditorShell, type DeleteConfirmationConfig, type PageDocumentEditorShellProps } from "./editor/shell/PageDocumentEditorShell";
 export { EditorProvider, useEditorContext, type EditorActionState, type EditorLoadState } from "./editor/context/EditorContext";
+export { PageStatusCard, type PageStatusCardProps } from "./editor/components/PageStatusCard";
+export type { AssetPickerAdapter, AssetReference, AssetStatus, DraftPersistenceAdapter, DraftSaveInput, DraftSaveResult, EditorSession, EditorSessionAcquireResult, EditorSessionAdapter, EditorSessionState, PagePublicationStatus, PageStatus, PublishAction, PublishActionInput, PublishActionResult } from "./editor/contracts";
 export { type PageDocumentEditorPolicy } from "./editor/policy";
 export { createAdminI18n, type AdminLocale, type AdminMessageKey } from "./editor/i18n/admin";
 export type { DemoBlock, Device, EditorState, PreviewMode, PublishState, SaveState, Zoom } from "./editor/state/types";

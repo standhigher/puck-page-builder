@@ -7,10 +7,14 @@ button:focus-visible, [role="button"]:focus-visible { outline: 2px solid var(--b
 .pb-shell { min-height: 100vh; color: var(--builder-text); background: var(--builder-canvas-bg); }
 .pb-header { position: sticky; top: 0; z-index: 20; min-height: 56px; padding: var(--builder-space-2) var(--builder-space-4); border-bottom: 1px solid var(--builder-border); background: var(--builder-surface); }
 .pb-header-content { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: var(--builder-space-3); }
+.pb-header-title-group { display: flex; align-items: flex-start; gap: var(--builder-space-2); min-width: 0; }
 .pb-page-title { display: grid; gap: 0; min-width: 0; }
 .pb-page-title p { margin: 0; }
-.pb-header-device-toolbar { justify-self: center; }
+.pb-header-device-toolbar { display: flex; align-items: center; justify-self: center; gap: var(--builder-space-2); }
 .pb-header-actions { justify-self: end; min-width: 0; }
+.pb-zoom-control { width: 112px; }
+.pb-page-status-card { display: grid; gap: 2px; margin-top: var(--builder-space-1); }
+.pb-page-status-card p { margin: 0; }
 .pb-workspace { display: grid; grid-template-columns: 64px minmax(260px, 300px) minmax(640px, 1fr) minmax(300px, 320px); min-height: calc(100vh - 56px); }
 .pb-tool-rail { display: flex; flex-direction: column; align-items: center; gap: var(--builder-space-2); padding: var(--builder-space-2); border-right: 1px solid var(--builder-border); background: var(--builder-surface-subtle); }
 .pb-tool-rail .Polaris-Button { min-width: 44px; min-height: 44px; }

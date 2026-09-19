@@ -3,6 +3,7 @@ import type { ExtensionRegistry } from "../../core/extensions";
 import type { BlockNode, JsonValue, PageDocument } from "../../core/schema/page-document";
 import type { Device } from "../state/types";
 import { canAddBlock, canApplyCanvasDocument, canDeleteBlock, canDragBlock, canDuplicateBlock, type PageDocumentEditorPolicy } from "../policy";
+import type { EditorSession, EditorSessionState } from "../contracts";
 
 export type EditorLoadState = "loading" | "ready" | "empty" | "error" | "disabled" | "success";
 
@@ -22,7 +23,7 @@ type HistoryAction =
   | { type: "select"; id: string | null }
   | { type: "device"; device: Device }
   | { type: "replace"; document: PageDocument; selectedBlockId: string | null }
-  | { type: "saved" }
+  | { type: "saved"; document: PageDocument }
   | { type: "undo" }
   | { type: "redo" };
 
@@ -39,7 +40,7 @@ function historyReducer(state: EditorHistory, action: HistoryAction): EditorHist
     if (!next) return state;
     return { ...state, ...next, past: [...state.past, { document: state.document, selectedBlockId: state.selectedBlockId }], future: state.future.slice(1) };
   }
-  if (action.type === "saved") return { ...state, savedDocument: state.document };
+  if (action.type === "saved") return { ...state, savedDocument: action.document };
   const current = { document: state.document, selectedBlockId: state.selectedBlockId };
   return { ...state, document: action.document, selectedBlockId: action.selectedBlockId, past: [...state.past, current], future: [] };
 }
@@ -52,6 +53,10 @@ export type EditorContextValue = {
   canvasSelectionRequest: string | null;
   device: Device;
   loadState: EditorLoadState;
+  sessionState: EditorSessionState;
+  session?: EditorSession;
+  sessionMessage?: string;
+  isEditable: boolean;
   isDirty: boolean;
   actionState: EditorActionState;
   canAddBlock(type: string): boolean;
@@ -75,7 +80,8 @@ export type EditorContextValue = {
   updateBlockPresentation(id: string, presentation: Pick<BlockNode, "variant" | "style">): void;
   undo(): void;
   redo(): void;
-  markSaved(): void;
+  /** Marks the persisted snapshot clean without discarding edits made while saving. */
+  markSaved(document?: PageDocument): void;
 };
 
 const EditorContext = createContext<EditorContextValue | null>(null);
@@ -95,13 +101,13 @@ function defaultBlock(type: string, blocks: BlockNode[], registry?: ExtensionReg
   return { id: uniqueBlockId(type, blocks), type, version: definition.version, props: definition.defaultProps as Record<string, JsonValue>, variant: definition.defaultVariant ?? "default", style: {} };
 }
 
-export function EditorProvider({ initialDocument, registry, policy, loadState = "ready", leaveWarning = "You have unsaved changes.", onDocumentChange, children }: { initialDocument: PageDocument; registry?: ExtensionRegistry; policy?: PageDocumentEditorPolicy; loadState?: EditorLoadState; leaveWarning?: string; onDocumentChange?: (document: PageDocument) => void; children: ReactNode }) {
+export function EditorProvider({ initialDocument, registry, policy, loadState = "ready", sessionState = "active", session, sessionMessage, leaveWarning = "You have unsaved changes.", onDocumentChange, children }: { initialDocument: PageDocument; registry?: ExtensionRegistry; policy?: PageDocumentEditorPolicy; loadState?: EditorLoadState; sessionState?: EditorSessionState; session?: EditorSession; sessionMessage?: string; leaveWarning?: string; onDocumentChange?: (document: PageDocument) => void; children: ReactNode }) {
   const [history, dispatch] = useReducer(historyReducer, initialDocument, (document): EditorHistory => ({ document, selectedBlockId: document.blocks[0]?.id ?? null, past: [], future: [], device: "desktop", savedDocument: document }));
   const historyRef = useRef(history);
   useEffect(() => { historyRef.current = history; }, [history]);
   const [canvasSelectionRequest, setCanvasSelectionRequest] = useState<string | null>(null);
   const [pendingDeleteBlockId, setPendingDeleteBlockId] = useState<string | null>(null);
-  const editable = loadState === "ready" || loadState === "success";
+  const editable = (loadState === "ready" || loadState === "success") && sessionState === "active";
   const selectedBlock = history.document.blocks.find((block) => block.id === history.selectedBlockId) ?? null;
   const pendingDeleteBlock = history.document.blocks.find((block) => block.id === pendingDeleteBlockId) ?? null;
   const replace = useCallback((document: PageDocument, selectedBlockId: string | null) => dispatch({ type: "replace", document, selectedBlockId }), []);
@@ -175,6 +181,10 @@ export function EditorProvider({ initialDocument, registry, policy, loadState = 
       canvasSelectionRequest,
       device: history.device,
       loadState,
+      sessionState,
+      session,
+      sessionMessage,
+      isEditable: editable,
       isDirty,
       actionState,
       canAddBlock: (type) => editable && canAddBlock(type, history.document.blocks, registry?.getBlock(type), policy),
@@ -253,9 +263,9 @@ export function EditorProvider({ initialDocument, registry, policy, loadState = 
       },
       undo: () => { if (editable) dispatch({ type: "undo" }); },
       redo: () => { if (editable) dispatch({ type: "redo" }); },
-      markSaved: () => dispatch({ type: "saved" })
+      markSaved: (document = historyRef.current.document) => dispatch({ type: "saved", document })
     };
-  }, [canvasSelectionRequest, confirmCanvasSelection, editable, history, isDirty, loadState, pendingDeleteBlock, pendingDeleteBlockId, policy, registry, replace, requestCanvasSelection, selectedBlock, updateBlockPresentation, updateBlockProps, updateFromCanvas]);
+  }, [canvasSelectionRequest, confirmCanvasSelection, editable, history, isDirty, loadState, pendingDeleteBlock, pendingDeleteBlockId, policy, registry, replace, requestCanvasSelection, selectedBlock, session, sessionMessage, sessionState, updateBlockPresentation, updateBlockProps, updateFromCanvas]);
 
   return <EditorContext.Provider value={value}>{children}</EditorContext.Provider>;
 }

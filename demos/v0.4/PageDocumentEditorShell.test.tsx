@@ -1,5 +1,5 @@
 import { AppProvider } from "@shopify/polaris";
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { createContext, useContext, useState } from "react";
 import { describe, expect, it, vi } from "vitest";
 import { PageDocumentEditorShell } from "../../packages/puck-page-builder/src/editor/shell/PageDocumentEditorShell";
@@ -291,5 +291,60 @@ describe("PageDocumentEditorShell V0.4", () => {
     await waitFor(() => expect(screen.getByTestId("page-document-editor")).toHaveAttribute("data-dirty", "false"));
     fireEvent.keyDown(window, { key: "z", ctrlKey: true });
     expect(screen.getByTestId("page-document-editor")).toHaveAttribute("data-dirty", "true");
+  });
+
+  it("autosaves the latest draft after 800ms and preserves the persisted snapshot", async () => {
+    vi.useFakeTimers();
+    try {
+      const saveDraft = vi.fn().mockResolvedValue({ revision: 4 });
+      renderEditor({ draftRevision: 3, draftPersistence: { saveDraft } });
+      fireEvent.change(screen.getByLabelText("文本内容"), { target: { value: "Autosaved" } });
+      await act(async () => { await vi.advanceTimersByTimeAsync(800); });
+      expect(saveDraft).toHaveBeenCalledWith(expect.objectContaining({ expectedRevision: 3, document: expect.objectContaining({ pageId: "v04-demo" }) }));
+      expect(screen.getByTestId("page-document-editor")).toHaveAttribute("data-dirty", "false");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("surfaces a failed save as an explicit retry action", async () => {
+    const save = vi.fn().mockRejectedValueOnce(new Error("offline")).mockResolvedValueOnce(undefined);
+    renderEditor({ autoSave: false, onSave: save });
+    fireEvent.change(screen.getByLabelText("文本内容"), { target: { value: "Retry me" } });
+    fireEvent.click(screen.getByRole("button", { name: "保存草稿" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "重试保存" })).toBeVisible());
+    fireEvent.click(screen.getByRole("button", { name: "重试保存" }));
+    await waitFor(() => expect(save).toHaveBeenCalledTimes(2));
+    expect(screen.getByTestId("page-document-editor")).toHaveAttribute("data-dirty", "false");
+  });
+
+  it("does not open an editable canvas when the host reports an existing editor lock", async () => {
+    renderEditor({ sessionAdapter: { acquire: vi.fn().mockResolvedValue({ state: "locked", editorName: "Ada" }) } });
+    await waitFor(() => expect(screen.getByTestId("page-document-editor-session-state")).toHaveAttribute("data-editor-session-state", "locked"));
+    expect(screen.getByText("Ada 正在编辑")).toBeVisible();
+    expect(screen.queryByTestId("page-document-editor")).not.toBeInTheDocument();
+  });
+
+  it("passes edit-session metadata to a publish action", async () => {
+    const publish = vi.fn().mockResolvedValue({ versionId: "version-2" });
+    renderEditor({ draftRevision: 6, publishAction: { publish } });
+    fireEvent.click(screen.getByRole("button", { name: "发布" }));
+    await waitFor(() => expect(publish).toHaveBeenCalledWith(expect.objectContaining({ expectedRevision: 6, validationIssues: [] })));
+  });
+
+  it("uses the host asset picker and persists its stable asset reference", async () => {
+    const changed: PageDocument[] = [];
+    renderEditor({ initialDocument: { ...document, blocks: [{ id: "image-1", type: "core.image", version: 1, props: { src: "https://old.example/image.png", alt: "Old" }, variant: "default", style: {} }] }, onDocumentChange: (next) => changed.push(next), assetPicker: { selectAsset: vi.fn().mockResolvedValue({ id: "asset-2", url: "https://cdn.example/image.png", alt: "New" }) } });
+    fireEvent.click(screen.getByRole("button", { name: "Select Image in canvas" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "选择素材" })).toBeVisible());
+    fireEvent.click(screen.getByRole("button", { name: "选择素材" }));
+    await waitFor(() => expect(changed.at(-1)?.blocks[0]?.props).toMatchObject({ assetId: "asset-2", src: "https://cdn.example/image.png", alt: "New" }));
+  });
+
+  it("renders the reusable page lifecycle summary in the editor header", () => {
+    renderEditor({ pageStatus: { publicationStatus: "published", draftLabel: "草稿已保存", publishedVersionLabel: "v3", lastSavedAt: "2026-09-19 20:00" } });
+    expect(screen.getByTestId("page-status-card")).toHaveAttribute("data-publication-status", "published");
+    expect(screen.getByText("草稿已保存")).toBeVisible();
+    expect(screen.getByText("最后保存：2026-09-19 20:00")).toBeVisible();
   });
 });

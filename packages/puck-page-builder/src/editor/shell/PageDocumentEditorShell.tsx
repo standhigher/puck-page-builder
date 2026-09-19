@@ -8,6 +8,8 @@ import { validateFieldValue, type ExtensionRegistry, type FieldConfig, type Vali
 import type { BlockNode, JsonValue, PageDocument } from "../../core/schema/page-document";
 import type { ThemeTokenName, ThemeTokens } from "../../core/theme";
 import { EditorProvider, useEditorContext, type EditorLoadState } from "../context/EditorContext";
+import { PageStatusCard } from "../components/PageStatusCard";
+import type { AssetPickerAdapter, DraftPersistenceAdapter, DraftSaveResult, EditorSession, EditorSessionAdapter, EditorSessionState, PageStatus, PublishAction } from "../contracts";
 import { createAdminI18n } from "../i18n/admin";
 import type { PageDocumentEditorPolicy } from "../policy";
 import type { Device } from "../state/types";
@@ -29,10 +31,27 @@ export type PageDocumentEditorShellProps = {
   loadState?: EditorLoadState;
   adminLocale?: string;
   onDocumentChange?: (document: PageDocument) => void;
-  /** Persist the current draft. The shell marks the document clean only after this resolves. */
+  /** @deprecated Prefer draftPersistence so revision and edit-session metadata are preserved. */
   onSave?: (document: PageDocument) => Promise<void> | void;
-  /** Publish the current document. Hosts should persist it atomically with publication. */
+  /** @deprecated Prefer publishAction so revision and edit-session metadata are preserved. */
   onPublish?: (document: PageDocument) => Promise<void> | void;
+  /** Host-owned single-editor lock. Without this adapter the package stays backwards-compatible and editable. */
+  sessionAdapter?: EditorSessionAdapter;
+  onSessionStateChange?: (state: EditorSessionState) => void;
+  /** Host-owned draft persistence shared by the manual-save and 800ms autosave paths. */
+  draftPersistence?: DraftPersistenceAdapter;
+  draftRevision?: number;
+  autoSave?: boolean;
+  autoSaveDelayMs?: number;
+  /** Host-owned atomic publish transaction. */
+  publishAction?: PublishAction;
+  /** Host-owned picker/uploader for shop-scoped assets. */
+  assetPicker?: AssetPickerAdapter;
+  /** Optional reusable page lifecycle summary. */
+  pageStatus?: PageStatus;
+  onBack?: () => void;
+  onPreview?: (input: { document: PageDocument; draftRevision?: number; session?: EditorSession }) => Promise<void> | void;
+  onAddToStore?: (input: { document: PageDocument; session?: EditorSession }) => Promise<void> | void;
 };
 
 export type DeleteConfirmationConfig = {
@@ -70,13 +89,62 @@ function validateDocumentBlocks(document: PageDocument, registry?: ExtensionRegi
   });
 }
 
+type ManagedSession = { state: EditorSessionState; session?: EditorSession; message?: string };
+
+function useEditorSession(adapter: EditorSessionAdapter | undefined, pageId: string): ManagedSession {
+  const [managed, setManaged] = useState<ManagedSession>(() => adapter ? { state: "acquiring" } : { state: "active" });
+
+  useEffect(() => {
+    let cancelled = false;
+    let session: EditorSession | undefined;
+    let heartbeatTimer: ReturnType<typeof setInterval> | undefined;
+    const stopHeartbeat = () => {
+      if (heartbeatTimer) clearInterval(heartbeatTimer);
+      heartbeatTimer = undefined;
+    };
+    if (!adapter) return;
+    void adapter.acquire({ pageId }).then((result) => {
+      if (cancelled) return;
+      if (result.state !== "active") {
+        setManaged({ state: result.state, message: result.message ?? (result.state === "locked" && result.editorName ? `${result.editorName} 正在编辑` : undefined) });
+        return;
+      }
+      session = result.session;
+      setManaged({ state: "active", session });
+      if (!adapter.heartbeat) return;
+      const heartbeat = () => {
+        if (typeof navigator !== "undefined" && !navigator.onLine) return;
+        void adapter.heartbeat?.({ pageId, session: result.session }).catch(() => {
+          if (!cancelled) {
+            stopHeartbeat();
+            setManaged({ state: "lost", message: "编辑锁已失效，请恢复网络后重新进入编辑器。" });
+          }
+        });
+      };
+      heartbeatTimer = setInterval(heartbeat, adapter.heartbeatIntervalMs ?? 30_000);
+    }).catch(() => {
+      if (!cancelled) setManaged({ state: "lost", message: "无法获取编辑锁，请稍后重试。" });
+    });
+    return () => {
+      cancelled = true;
+      stopHeartbeat();
+      if (session) void adapter.release?.({ pageId, session });
+    };
+  }, [adapter, pageId]);
+
+  return managed;
+}
+
 export function PageDocumentEditorShell(props: PageDocumentEditorShellProps) {
-  return <EditorProvider initialDocument={props.initialDocument} registry={props.registry} policy={props.policy} loadState={props.loadState} leaveWarning={createAdminI18n(props.adminLocale).t("leaveWarning")} onDocumentChange={props.onDocumentChange}>
+  const { sessionAdapter, initialDocument, onSessionStateChange } = props;
+  const managedSession = useEditorSession(sessionAdapter, initialDocument.pageId);
+  useEffect(() => { onSessionStateChange?.(managedSession.state); }, [managedSession.state, onSessionStateChange]);
+  return <EditorProvider initialDocument={props.initialDocument} registry={props.registry} policy={props.policy} loadState={props.loadState} sessionState={managedSession.state} session={managedSession.session} sessionMessage={managedSession.message} leaveWarning={createAdminI18n(props.adminLocale).t("leaveWarning")} onDocumentChange={props.onDocumentChange}>
     <PageDocumentEditor {...props} />
   </EditorProvider>;
 }
 
-function PageDocumentEditor({ iframe = true, registry, adminLocale, onSave, onPublish, deleteConfirmation, availableBlockTypes, appearanceControls = false }: PageDocumentEditorShellProps) {
+function PageDocumentEditor({ iframe = true, registry, adminLocale, onSave, onPublish, draftPersistence, draftRevision: initialDraftRevision, autoSave = true, autoSaveDelayMs = 800, publishAction, assetPicker, pageStatus, onBack, onPreview, onAddToStore, deleteConfirmation, availableBlockTypes, appearanceControls = false }: PageDocumentEditorShellProps) {
   const editor = useEditorContext();
   const [blockView, setBlockView] = useState<"blocks" | "outline">("blocks");
   const [draggingLibraryType, setDraggingLibraryType] = useState<string | null>(null);
@@ -85,6 +153,11 @@ function PageDocumentEditor({ iframe = true, registry, adminLocale, onSave, onPu
   const [canvasResetVersion, setCanvasResetVersion] = useState(0);
   const [request, setRequest] = useState<"idle" | "saving" | "publishing">("idle");
   const [notice, setNotice] = useState<"saveFailed" | "publishFailed" | "published" | null>(null);
+  const [draftRevision, setDraftRevision] = useState(initialDraftRevision);
+  const [isOnline, setIsOnline] = useState(() => typeof navigator === "undefined" || navigator.onLine);
+  const [saveState, setSaveState] = useState<"dirty" | "saving" | "saved" | "failed" | "offline">("saved");
+  const [zoom, setZoom] = useState<"auto" | "50" | "70" | "100">("auto");
+  const [confirmBack, setConfirmBack] = useState(false);
   const i18n = createAdminI18n(adminLocale);
   const engineData = useMemo(() => toEngineData(editor.document, registry), [editor.document, registry]);
   const validationIssues = useMemo(() => validateDocumentBlocks(editor.document, registry), [editor.document, registry]);
@@ -97,7 +170,74 @@ function PageDocumentEditor({ iframe = true, registry, adminLocale, onSave, onPu
   }, [updateBlockProps]);
   const config = useMemo(() => createPageDocumentPuckConfig(confirmCanvasSelection, updateFromCanvasInput, selectedBlockId, registry), [confirmCanvasSelection, registry, selectedBlockId, updateFromCanvasInput]);
 
+  useEffect(() => {
+    const online = () => setIsOnline(true);
+    const offline = () => setIsOnline(false);
+    window.addEventListener("online", online);
+    window.addEventListener("offline", offline);
+    return () => { window.removeEventListener("online", online); window.removeEventListener("offline", offline); };
+  }, []);
+
+  const resolvedSaveState = !isOnline && editor.isDirty
+    ? "offline"
+    : saveState === "offline" && editor.isDirty
+      ? "dirty"
+      : saveState === "saved" && editor.isDirty
+        ? "dirty"
+        : saveState;
+
+  const canPersistDraft = Boolean(draftPersistence || onSave);
+  const save = useCallback(async () => {
+    if (!canPersistDraft || request !== "idle" || validationIssues.length > 0) return;
+    if (!isOnline) {
+      setSaveState("offline");
+      return;
+    }
+    const document = editor.document;
+    setRequest("saving");
+    setSaveState("saving");
+    setNotice(null);
+    try {
+      const result: DraftSaveResult | void = draftPersistence
+        ? await draftPersistence.saveDraft({ document, expectedRevision: draftRevision, session: editor.session })
+        : await onSave?.(document);
+      if (result?.revision !== undefined) setDraftRevision(result.revision);
+      editor.markSaved(document);
+      setSaveState("saved");
+    } catch {
+      setNotice("saveFailed");
+      setSaveState(typeof navigator !== "undefined" && !navigator.onLine ? "offline" : "failed");
+    } finally {
+      setRequest("idle");
+    }
+  }, [canPersistDraft, draftPersistence, draftRevision, editor, isOnline, onSave, request, validationIssues.length]);
+
+  useEffect(() => {
+    if (!autoSave || !canPersistDraft || !editor.isDirty || resolvedSaveState !== "dirty" || !isOnline || request !== "idle" || validationIssues.length > 0 || editor.sessionState !== "active") return;
+    const timer = window.setTimeout(() => { void save(); }, autoSaveDelayMs);
+    return () => window.clearTimeout(timer);
+  }, [autoSave, autoSaveDelayMs, canPersistDraft, editor.isDirty, editor.sessionState, isOnline, request, resolvedSaveState, save, validationIssues.length]);
+
+  const publish = async () => {
+    if ((!publishAction && !onPublish) || request !== "idle" || validationIssues.length > 0 || !isOnline) return;
+    const document = editor.document;
+    setRequest("publishing");
+    setNotice(null);
+    try {
+      if (publishAction) await publishAction.publish({ document, expectedRevision: draftRevision, session: editor.session, validationIssues });
+      else await onPublish?.(document);
+      editor.markSaved(document);
+      setSaveState("saved");
+      setNotice("published");
+    } catch {
+      setNotice("publishFailed");
+    } finally {
+      setRequest("idle");
+    }
+  };
+
   if (editor.loadState !== "ready" && editor.loadState !== "success") return <EditorStatus state={editor.loadState} />;
+  if (editor.sessionState !== "active") return <EditorSessionStatus state={editor.sessionState} message={editor.sessionMessage} />;
 
   const allBlockTypes = ["core.text", "core.image", ...(registry?.blocks.map((block) => block.type) ?? [])];
   const blockTypes = availableBlockTypes ? allBlockTypes.filter((type) => availableBlockTypes.includes(type)) : allBlockTypes;
@@ -139,48 +279,30 @@ function PageDocumentEditor({ iframe = true, registry, adminLocale, onSave, onPu
     event.stopPropagation();
     setDraggingLibraryType(null);
   };
-  const save = async () => {
-    if (!onSave || request !== "idle" || validationIssues.length > 0) return;
-    setRequest("saving");
-    setNotice(null);
-    try {
-      await onSave(editor.document);
-      editor.markSaved();
-    } catch {
-      setNotice("saveFailed");
-    } finally {
-      setRequest("idle");
-    }
+  const saveBadgeTone = resolvedSaveState === "failed" ? "critical" : resolvedSaveState === "offline" || resolvedSaveState === "dirty" ? "attention" : "success";
+  const saveBadgeLabel = resolvedSaveState === "saving" ? i18n.t("saving") : resolvedSaveState === "failed" ? i18n.t("saveFailed") : resolvedSaveState === "offline" ? i18n.t("offline") : resolvedSaveState === "dirty" ? i18n.t("unsaved") : i18n.t("saved");
+  const saveButtonLabel = request === "saving" ? i18n.t("saving") : resolvedSaveState === "failed" ? i18n.t("retrySave") : i18n.t("save");
+  const requestBack = () => {
+    if (!onBack) return;
+    if (editor.isDirty || request === "saving") setConfirmBack(true);
+    else onBack();
   };
-  const publish = async () => {
-    if (!onPublish || request !== "idle" || validationIssues.length > 0) return;
-    setRequest("publishing");
-    setNotice(null);
-    try {
-      await onPublish(editor.document);
-      editor.markSaved();
-      setNotice("published");
-    } catch {
-      setNotice("publishFailed");
-    } finally {
-      setRequest("idle");
-    }
-  };
-
   return <Puck config={config} data={engineData} iframe={{ enabled: iframe }} onChange={(data) => {
     if (!editor.updateFromCanvas(fromEngineData(data, editor.document, registry))) setCanvasResetVersion((version) => version + 1);
   }}>
     <Puck.Layout>
       <CanvasSelectionBridge data={engineData} requestedBlockId={editor.canvasSelectionRequest} onCanvasSelected={confirmCanvasSelection} canvasMutationVersion={canvasMutationVersion} canvasResetVersion={canvasResetVersion} />
-      <div className="pb-shell pb-shell--v04" data-testid="page-document-editor" data-page-id={editor.document.pageId} data-dirty={editor.isDirty} data-editor-state={editor.loadState}>
+      <div className="pb-shell pb-shell--v04" data-testid="page-document-editor" data-page-id={editor.document.pageId} data-dirty={editor.isDirty} data-editor-state={editor.loadState} data-editor-session-state={editor.sessionState} data-save-state={resolvedSaveState}>
         <header className="pb-header">
           <div className="pb-header-content">
-            <div className="pb-page-title"><Text as="h1" variant="headingSm">{editor.document.settings.seoTitle ?? editor.document.pageId}</Text><Text as="p" variant="bodySm" tone="subdued">PageDocument V{editor.document.schemaVersion} · {editor.document.target}</Text></div>
-            <div className="pb-header-device-toolbar"><ButtonGroup variant="segmented">{(Object.keys(deviceLabels) as Array<keyof typeof deviceLabels>).map((device) => <Button key={device} pressed={editor.device === device} onClick={() => editor.setDevice(device)}>{i18n.t(deviceLabels[device])}</Button>)}</ButtonGroup></div>
+            <div className="pb-header-title-group">{onBack ? <Button variant="tertiary" onClick={requestBack}>{i18n.t("back")}</Button> : null}<div className="pb-page-title"><Text as="h1" variant="headingSm">{editor.document.settings.seoTitle ?? editor.document.pageId}</Text><Text as="p" variant="bodySm" tone="subdued">PageDocument V{editor.document.schemaVersion} · {editor.document.target}</Text>{pageStatus ? <PageStatusCard status={pageStatus} sessionState={editor.sessionState} /> : null}</div></div>
+            <div className="pb-header-device-toolbar"><ButtonGroup variant="segmented">{(Object.keys(deviceLabels) as Array<keyof typeof deviceLabels>).map((device) => <Button key={device} pressed={editor.device === device} onClick={() => editor.setDevice(device)}>{i18n.t(deviceLabels[device])}</Button>)}</ButtonGroup><div className="pb-zoom-control"><Select label={i18n.t("zoom")} labelHidden options={[{ label: i18n.t("zoomAuto"), value: "auto" }, { label: "50%", value: "50" }, { label: "70%", value: "70" }, { label: "100%", value: "100" }]} value={zoom} onChange={(value) => setZoom(value as typeof zoom)} /></div></div>
             <div className="pb-header-actions"><InlineStack gap="150" blockAlign="center" wrap={false}>
-              <Badge tone={editor.isDirty ? "attention" : "success"}>{editor.isDirty ? i18n.t("unsaved") : i18n.t("saved")}</Badge>
-              <Button disabled={!onSave || !editor.isDirty || request !== "idle" || validationIssues.length > 0} onClick={() => void save()}>{request === "saving" ? i18n.t("saving") : i18n.t("save")}</Button>
-              <Button variant="primary" disabled={!onPublish || request !== "idle" || validationIssues.length > 0} onClick={() => void publish()}>{request === "publishing" ? i18n.t("publishing") : i18n.t("publish")}</Button>
+              <Badge tone={saveBadgeTone}>{saveBadgeLabel}</Badge>
+              <Button disabled={!canPersistDraft || !editor.isDirty || request !== "idle" || validationIssues.length > 0 || !isOnline} onClick={() => void save()}>{saveButtonLabel}</Button>
+              {onPreview ? <Button disabled={request !== "idle" || !isOnline} onClick={() => void onPreview({ document: editor.document, draftRevision, session: editor.session })}>{i18n.t("preview")}</Button> : null}
+              {onAddToStore ? <Button disabled={request !== "idle" || pageStatus?.publicationStatus === "unpublished"} onClick={() => void onAddToStore({ document: editor.document, session: editor.session })}>{i18n.t("addToStore")}</Button> : null}
+              <Button variant="primary" disabled={(!publishAction && !onPublish) || request !== "idle" || validationIssues.length > 0 || !isOnline} onClick={() => void publish()}>{request === "publishing" ? i18n.t("publishing") : i18n.t("publish")}</Button>
               <Button accessibilityLabel={i18n.t("undo")} icon={UndoIcon} variant="tertiary" disabled={!editor.actionState.canUndo} onClick={editor.undo} />
               <Button accessibilityLabel={i18n.t("redo")} icon={RedoIcon} variant="tertiary" disabled={!editor.actionState.canRedo} onClick={editor.redo} />
             </InlineStack></div>
@@ -209,14 +331,15 @@ function PageDocumentEditor({ iframe = true, registry, adminLocale, onSave, onPu
             </div>}
           </aside>
           <main className="pb-canvas-area">
-            <div className="pb-canvas-stage"><div ref={canvasFrameRef} className={`pb-canvas-frame pb-canvas-frame--${editor.device}`} data-device={editor.device}><Puck.Preview /></div>{draggingLibraryType ? <div className="pb-canvas-drop-target" data-testid="canvas-drop-target" role="region" aria-label="区块投放区" onDragOver={(event) => event.preventDefault()} onDrop={dropFromLibrary}>松开以添加 {blockTypeLabel(draggingLibraryType, registry)}</div> : null}{editor.selectedBlock ? <div className="pb-canvas-overlay" aria-label={`已选择 ${blockLabel(editor.selectedBlock, registry)}`}><span>{blockLabel(editor.selectedBlock, registry)}</span><span>Selected</span></div> : null}</div>
+            <div className="pb-canvas-stage"><div ref={canvasFrameRef} className={`pb-canvas-frame pb-canvas-frame--${editor.device}${zoom === "auto" ? "" : ` pb-canvas-frame--zoom-${zoom}`}`} data-device={editor.device} data-zoom={zoom}><Puck.Preview /></div>{draggingLibraryType ? <div className="pb-canvas-drop-target" data-testid="canvas-drop-target" role="region" aria-label="区块投放区" onDragOver={(event) => event.preventDefault()} onDrop={dropFromLibrary}>松开以添加 {blockTypeLabel(draggingLibraryType, registry)}</div> : null}{editor.selectedBlock ? <div className="pb-canvas-overlay" aria-label={`已选择 ${blockLabel(editor.selectedBlock, registry)}`}><span>{blockLabel(editor.selectedBlock, registry)}</span><span>Selected</span></div> : null}</div>
           </main>
           <aside className="pb-right-panel" aria-label="PageDocument 属性">
             <Text as="h2" variant="headingSm">{i18n.t("properties")}</Text>
-            {editor.selectedBlock ? <><DocumentInspector block={editor.selectedBlock} registry={registry} disabled={!editor.actionState.canEdit} appearanceControls={appearanceControls} onChange={(props) => editor.updateBlockProps(editor.selectedBlock!.id, props)} onPresentationChange={(presentation) => updateBlockPresentation(editor.selectedBlock!.id, presentation)} /><InspectorActions block={editor.selectedBlock} canDuplicate={editor.actionState.canDuplicate} canDelete={editor.actionState.canDelete} canMove={editor.actionState.canReorder} canMoveUp={editor.document.blocks[0]?.id !== editor.selectedBlock.id} canMoveDown={editor.document.blocks.at(-1)?.id !== editor.selectedBlock.id} i18n={i18n} onDuplicate={() => editor.duplicateBlock(editor.selectedBlock!.id)} onDelete={() => editor.requestDeleteBlock(editor.selectedBlock!.id)} onMove={(direction) => editor.moveBlock(editor.selectedBlock!.id, direction)} /></> : <Text as="p" tone="subdued">{i18n.t("selectBlock")}</Text>}
+            {editor.selectedBlock ? <><DocumentInspector pageId={editor.document.pageId} assetPicker={assetPicker} block={editor.selectedBlock} registry={registry} disabled={!editor.actionState.canEdit} appearanceControls={appearanceControls} onChange={(props) => editor.updateBlockProps(editor.selectedBlock!.id, props)} onPresentationChange={(presentation) => updateBlockPresentation(editor.selectedBlock!.id, presentation)} /><InspectorActions block={editor.selectedBlock} canDuplicate={editor.actionState.canDuplicate} canDelete={editor.actionState.canDelete} canMove={editor.actionState.canReorder} canMoveUp={editor.document.blocks[0]?.id !== editor.selectedBlock.id} canMoveDown={editor.document.blocks.at(-1)?.id !== editor.selectedBlock.id} i18n={i18n} onDuplicate={() => editor.duplicateBlock(editor.selectedBlock!.id)} onDelete={() => editor.requestDeleteBlock(editor.selectedBlock!.id)} onMove={(direction) => editor.moveBlock(editor.selectedBlock!.id, direction)} /></> : <Text as="p" tone="subdued">{i18n.t("selectBlock")}</Text>}
           </aside>
         </div>
         {editor.pendingDeleteBlock ? <DeleteConfirmation block={editor.pendingDeleteBlock} config={deleteConfirmation} i18n={i18n} onCancel={editor.cancelDeleteBlock} onConfirm={editor.confirmDeleteBlock} /> : null}
+        {confirmBack ? <LeaveConfirmation i18n={i18n} onCancel={() => setConfirmBack(false)} onConfirm={() => { setConfirmBack(false); onBack?.(); }} /> : null}
       </div>
     </Puck.Layout>
   </Puck>;
@@ -267,6 +390,13 @@ function EditorStatus({ state }: { state: Exclude<EditorLoadState, "ready" | "su
   return <div className="pb-editor-status" data-testid="page-document-editor-state" data-editor-state={state}><Banner tone={tone} title={message}>{state === "disabled" ? i18n.t("disabled") : message}</Banner></div>;
 }
 
+function EditorSessionStatus({ state, message }: { state: Exclude<EditorSessionState, "active">; message?: string }) {
+  const i18n = createAdminI18n();
+  const tone = state === "locked" ? "warning" : state === "readonly" ? "info" : "critical";
+  const title = state === "acquiring" ? i18n.t("acquiringLock") : state === "locked" ? i18n.t("locked") : state === "readonly" ? i18n.t("readonly") : i18n.t("lockLost");
+  return <div className="pb-editor-status" data-testid="page-document-editor-session-state" data-editor-session-state={state}><Banner tone={tone} title={title}>{message ?? title}</Banner></div>;
+}
+
 function InspectorSection({ title, children, defaultOpen = true }: { title: string; children: ReactNode; defaultOpen?: boolean }) {
   return <details className="pb-inspector-section" open={defaultOpen}>
     <summary><span>{title}</span><span aria-hidden="true">⌄</span></summary>
@@ -299,6 +429,10 @@ function DeleteConfirmation({ block, config, i18n, onCancel, onConfirm }: { bloc
   return <div className="pb-delete-confirmation-backdrop" role="presentation"><section className="pb-delete-confirmation" role="dialog" aria-modal="true" aria-labelledby="pb-delete-confirmation-title"><Text as="h2" variant="headingMd" id="pb-delete-confirmation-title">{config?.title ?? i18n.t("confirmDeleteTitle")}</Text><Text as="p" variant="bodyMd">{config?.message?.(block) ?? i18n.t("confirmDeleteMessage")}</Text><ButtonGroup><Button onClick={onCancel}>{config?.cancelLabel ?? i18n.t("cancel")}</Button><Button tone="critical" onClick={onConfirm}>{config?.confirmLabel ?? i18n.t("confirm")}</Button></ButtonGroup></section></div>;
 }
 
+function LeaveConfirmation({ i18n, onCancel, onConfirm }: { i18n: ReturnType<typeof createAdminI18n>; onCancel: () => void; onConfirm: () => void }) {
+  return <div className="pb-delete-confirmation-backdrop" role="presentation"><section className="pb-delete-confirmation" role="dialog" aria-modal="true" aria-labelledby="pb-leave-confirmation-title"><Text as="h2" variant="headingMd" id="pb-leave-confirmation-title">{i18n.t("confirmLeaveTitle")}</Text><Text as="p" variant="bodyMd">{i18n.t("leaveWarning")}</Text><ButtonGroup><Button onClick={onCancel}>{i18n.t("cancel")}</Button><Button tone="critical" onClick={onConfirm}>{i18n.t("leave")}</Button></ButtonGroup></section></div>;
+}
+
 function inspectorFieldConfig(name: string, field: FieldConfig): FieldConfig {
   const key = name.toLowerCase();
   const group = /(?:href|url)/.test(key) ? "Links" : /(?:default|shipment|query|hide)/.test(key) ? "Tracking settings" : /(?:id|variant|theme)/.test(key) ? "Advanced" : "Content";
@@ -316,7 +450,9 @@ function inspectorFieldConfig(name: string, field: FieldConfig): FieldConfig {
 
 const appearanceTokens: Array<[ThemeTokenName, string]> = [["color.primary", "主色"], ["color.surface", "表面色"], ["radius", "圆角"], ["spacing", "间距"]];
 
-function DocumentInspector({ block, registry, disabled, appearanceControls, onChange, onPresentationChange }: { block: BlockNode; registry?: ExtensionRegistry; disabled: boolean; appearanceControls: boolean; onChange: (props: Record<string, JsonValue>) => void; onPresentationChange: (presentation: Pick<BlockNode, "variant" | "style">) => void }) {
+function DocumentInspector({ pageId, assetPicker, block, registry, disabled, appearanceControls, onChange, onPresentationChange }: { pageId: string; assetPicker?: AssetPickerAdapter; block: BlockNode; registry?: ExtensionRegistry; disabled: boolean; appearanceControls: boolean; onChange: (props: Record<string, JsonValue>) => void; onPresentationChange: (presentation: Pick<BlockNode, "variant" | "style">) => void }) {
+  const [assetError, setAssetError] = useState<string | null>(null);
+  const [selectingAsset, setSelectingAsset] = useState(false);
   const definition = registry?.getBlock(block.type);
   const groupedFields = definition ? Object.entries(definition.fields).reduce<Record<string, Array<[string, FieldConfig]>>>((groups, entry) => {
     const [name, field] = entry;
@@ -328,7 +464,18 @@ function DocumentInspector({ block, registry, disabled, appearanceControls, onCh
   return <div className="pb-inspector" data-testid="document-inspector">
     <header className="pb-inspector__header"><Badge>{block.type}</Badge><div><Text as="p" variant="headingSm">{blockLabel(block, registry)}</Text><Text as="p" variant="bodySm" tone="subdued">{definition?.category ?? "Core block"}</Text></div></header>
     {block.type === "core.text" ? <InspectorSection title="Content"><InspectorField name="content" field={{ field: "", label: "文本内容", control: "textarea", description: "支持较长的正文内容。" }} value={block.props.content} registry={registry} disabled={disabled} onChange={(content) => onChange({ content })} /></InspectorSection> : null}
-    {block.type === "core.image" ? <InspectorSection title="Image"><InspectorField name="src" field={{ field: "", label: "图片 URL", control: "url", description: "使用 HTTPS 图片地址。" }} value={block.props.src} registry={registry} disabled={disabled} onChange={(src) => onChange({ src })} /><InspectorField name="alt" field={{ field: "", label: "替代文本", control: "text", description: "用于无障碍阅读和图片加载失败场景。" }} value={block.props.alt} registry={registry} disabled={disabled} onChange={(alt) => onChange({ alt })} /></InspectorSection> : null}
+    {block.type === "core.image" ? <InspectorSection title="Image"><InspectorField name="src" field={{ field: "", label: "图片 URL", control: "url", description: "使用 HTTPS 图片地址。" }} value={block.props.src} registry={registry} disabled={disabled} onChange={(src) => onChange({ src })} /><InspectorField name="alt" field={{ field: "", label: "替代文本", control: "text", description: "用于无障碍阅读和图片加载失败场景。" }} value={block.props.alt} registry={registry} disabled={disabled} onChange={(alt) => onChange({ alt })} />{assetPicker ? <><Button disabled={disabled || selectingAsset} onClick={() => void (async () => {
+      setSelectingAsset(true);
+      setAssetError(null);
+      try {
+        const asset = await assetPicker.selectAsset({ pageId, blockId: block.id, current: { id: typeof block.props.assetId === "string" ? block.props.assetId : undefined, url: typeof block.props.src === "string" ? block.props.src : undefined, alt: typeof block.props.alt === "string" ? block.props.alt : undefined } });
+        if (asset) onChange({ ...block.props, assetId: asset.id, src: asset.url, alt: asset.alt ?? (typeof block.props.alt === "string" ? block.props.alt : "") });
+      } catch {
+        setAssetError("无法选择素材，请重试。");
+      } finally {
+        setSelectingAsset(false);
+      }
+    })()}>{selectingAsset ? "正在选择素材…" : "选择素材"}</Button>{assetError ? <Text as="p" variant="bodySm" tone="critical">{assetError}</Text> : null}</> : null}</InspectorSection> : null}
     {Object.entries(groupedFields).map(([group, fields]) => <InspectorSection key={group} title={group} defaultOpen={group !== "Advanced"}>{fields.map(([name, field]) => <InspectorField key={name} name={name} field={field} value={block.props[name]} registry={registry} disabled={disabled} onChange={(value) => onChange({ ...block.props, [name]: value })} />)}</InspectorSection>)}
     {appearanceControls && definition?.variants?.length ? <InspectorSection title="外观"><Select label="样式变体" options={definition.variants.map((variant) => ({ label: variant.label, value: variant.id }))} value={block.variant} disabled={disabled} onChange={(variant) => onPresentationChange({ variant, style: block.style })} /></InspectorSection> : null}
     {appearanceControls && definition ? <InspectorSection title="样式覆盖" defaultOpen={false}>{appearanceTokens.map(([token, label]) => <TextField key={token} label={label} value={block.style[token] ?? ""} placeholder="继承页面或模板设置" autoComplete="off" disabled={disabled} onChange={(value) => {

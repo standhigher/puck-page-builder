@@ -146,7 +146,7 @@ export function SalesQueryBlock(props: Record<string, unknown>) {
   return <section aria-label="Sales tracking query" aria-busy={runtime.phase === "loading" || undefined} data-sales-hero style={{ position: "relative", display: "grid", minHeight: "clamp(460px, 52vw, 620px)", boxSizing: "border-box", overflow: "hidden", padding: "clamp(28px, 6vw, 72px) 16px", background: "var(--pb-color-text)", color: "var(--pb-color-surface)", fontFamily: "var(--pb-font-family)" }}>
     <HeroAsset src={props.heroImageUrl} />
     <div aria-hidden="true" style={{ position: "absolute", inset: 0, background: "rgb(0 0 0 / 42%)" }} />
-    <div style={{ ...contentWidth, position: "relative", zIndex: 1, display: "grid", alignItems: "center", width: "100%" }}>
+    <div style={{ ...contentWidth, position: "relative", zIndex: 1, display: "grid", alignItems: "center", width: "100%", minWidth: 0 }}>
       <TrackingQueryCard
         phase={runtime.phase}
         onQuery={runtime.query}
@@ -164,7 +164,7 @@ export function SalesQueryBlock(props: Record<string, unknown>) {
         cardDataAttribute="data-sales-query-card"
         resultDataAttribute="data-sales-query-result"
         resultTestId="sales-result"
-        cardStyle={{ boxSizing: "border-box", width: "min(560px, 100%)", maxHeight: "calc(100vh - 48px)", marginLeft: "auto", padding: "clamp(28px, 5vw, 48px)", borderRadius: "var(--pb-radius)", background: "var(--pb-color-surface)", color: "var(--pb-color-text)", boxShadow: "0 20px 56px rgb(0 0 0 / 28%)" }}
+        cardStyle={{ boxSizing: "border-box", width: "min(560px, 100%)", maxHeight: "min(560px, calc(100dvh - 32px))", marginLeft: "auto", padding: "clamp(28px, 5vw, 48px)", borderRadius: "var(--pb-radius)", background: "var(--pb-color-surface)", color: "var(--pb-color-text)", boxShadow: "0 20px 56px rgb(0 0 0 / 28%)" }}
         headingStyle={{ color: "var(--pb-color-text)", fontSize: "clamp(32px, 5vw, 48px)", fontWeight: 800, letterSpacing: "-0.035em", lineHeight: 1.02 }}
         tabListStyle={{ borderBottomColor: "var(--pb-color-border)" }}
         formStyle={{ gap: 14 }}

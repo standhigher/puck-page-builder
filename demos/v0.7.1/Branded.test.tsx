@@ -52,6 +52,14 @@ describe("V0.7.1 Branded", () => {
     expect(screen.getByRole("tab", { name: "Parcel code" })).toBeVisible();
   });
 
+  it("keeps the Branded phone query card constrained and shipment controls touch-sized", () => {
+    const registry = createExtensionRegistry([bestTrackBrandedExtension]);
+    const { container } = render(<BrandedRuntimeProvider query={async () => ({ trackingNumber: "BT-2048-DEMO", status: "idle" })}><WebRenderer document={registry.getTemplate("besttrack.branded")!.create()} registry={registry} /></BrandedRuntimeProvider>);
+    const card = container.querySelector<HTMLElement>("[data-branded-query-card]")!;
+    expect(card).toHaveStyle({ width: "min(560px, 100%)", maxHeight: "min(560px, calc(100dvh - 32px))", overflowX: "hidden", overflowY: "auto" });
+    expect(screen.getByRole("tab", { name: "Tracking Number" })).toHaveStyle({ minHeight: "44px" });
+  });
+
   it("uses the shared Consumer Runtime empty and error states without exposing host errors", async () => {
     const registry = createExtensionRegistry([bestTrackBrandedExtension]);
     const emptyQuery = vi.fn<TrackingPageQuery>().mockResolvedValue({ trackingNumber: "BT-empty", status: "Not found", outcome: "empty" });

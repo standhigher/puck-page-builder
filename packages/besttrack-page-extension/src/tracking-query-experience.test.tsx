@@ -46,6 +46,49 @@ describe("TrackingQueryCard", () => {
 
     rerender(<TrackingQueryCard {...sharedProps} onQuery={onQuery} phase="success" result={<p>Delivered</p>} />);
     expect(scrollTo).toHaveBeenCalledWith(expect.objectContaining({ behavior: "smooth" }));
+    expect(document.activeElement).toBe(screen.getByRole("region", { name: "Tracking result" }));
+  });
+
+  it("uses a keyboard-operable tablist and keeps a narrow result card internally scrollable", () => {
+    render(<TrackingQueryCard {...sharedProps} phase="idle" />);
+
+    const trackingTab = screen.getByRole("tab", { name: "Tracking Number" });
+    fireEvent.keyDown(trackingTab, { key: "ArrowRight" });
+    const orderTab = screen.getByRole("tab", { name: "Order Number" });
+    expect(orderTab.getAttribute("aria-selected")).toBe("true");
+    expect(document.activeElement).toBe(orderTab);
+    expect(screen.getByRole("tabpanel", { name: "Order Number" })).not.toBeNull();
+
+    fireEvent.keyDown(orderTab, { key: "Home" });
+    expect(trackingTab.getAttribute("aria-selected")).toBe("true");
+    expect(document.activeElement).toBe(trackingTab);
+
+    const card = document.querySelector<HTMLElement>("[data-tracking-query-card]")!;
+    expect(card.style.boxSizing).toBe("border-box");
+    expect(card.style.minWidth).toBe("0");
+    expect(card.style.maxWidth).toBe("100%");
+    expect(card.style.overflowX).toBe("hidden");
+    expect(card.style.overflowY).toBe("auto");
+    expect(card.style.overscrollBehavior).toBe("contain");
+    expect(trackingTab.style.minHeight).toBe("44px");
+  });
+
+  it("focuses and announces empty and failed query states within the card", () => {
+    const scrollTo = vi.fn();
+    Object.defineProperty(HTMLElement.prototype, "scrollTo", { configurable: true, value: scrollTo });
+    const { rerender } = render(<TrackingQueryCard {...sharedProps} phase="idle" />);
+
+    rerender(<TrackingQueryCard {...sharedProps} phase="empty" />);
+    const emptyStatus = screen.getByRole("region", { name: "Tracking query status" });
+    expect(document.activeElement).toBe(emptyStatus);
+    expect(emptyStatus.getAttribute("aria-describedby")).toBeTruthy();
+    expect(screen.getByRole("status").textContent).toContain("couldn't find an order");
+
+    rerender(<TrackingQueryCard {...sharedProps} phase="error" />);
+    const errorStatus = screen.getByRole("region", { name: "Tracking query status" });
+    expect(document.activeElement).toBe(errorStatus);
+    expect(screen.getByRole("alert").textContent).toContain("couldn't retrieve this order");
+    expect(scrollTo).toHaveBeenCalledTimes(2);
   });
 });
 
@@ -80,5 +123,27 @@ describe("TrackingQueryResultDetails", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Show all events" }));
     expect(screen.getByText("Shipment information received")).not.toBeNull();
+  });
+
+  it("gives every result action a 44px touch target and wraps result metadata", () => {
+    render(<TrackingQueryResultDetails onTrackAnother={() => undefined} result={{
+      trackingNumber: "VERY-LONG-TRACKING-NUMBER-THAT-MUST-NOT-CAUSE-HORIZONTAL-OVERFLOW",
+      status: "In transit",
+      events: [
+        { id: "one", title: "One" },
+        { id: "two", title: "Two" },
+        { id: "three", title: "Three" },
+        { id: "four", title: "Four" }
+      ]
+    }} />);
+
+    for (const name of ["Track another", "Copy", "Show all events"]) {
+      const action = screen.getByRole("button", { name });
+      expect(action.style.minWidth).toBe("44px");
+      expect(action.style.minHeight).toBe("44px");
+    }
+    const details = screen.getByLabelText("Tracking result details");
+    expect(details.style.minWidth).toBe("0");
+    expect(details.style.overflowWrap).toBe("anywhere");
   });
 });

@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState, type CSSProperties, type FormEvent, type ReactNode } from "react";
+import { useEffect, useId, useRef, useState, type CSSProperties, type FormEvent, type KeyboardEvent, type ReactNode } from "react";
 import { formatTrackingPageMoney, isValidOrderEmail, isValidOrderNumber, isValidTrackingNumber, type TrackingPageQueryRequest, type TrackingPageQueryResult, type TrackingPageRuntimePhase, type TrackingPageTrackingStep } from "./tracking-page-runtime";
 import { safeTrackingPageUrl } from "./tracking-page-url";
 
@@ -136,6 +136,10 @@ export function TrackingQueryCard({
   const trackingInputId = useId();
   const orderInputId = useId();
   const emailInputId = useId();
+  const trackingTabId = useId();
+  const orderTabId = useId();
+  const tabPanelId = useId();
+  const queryStatusId = useId();
   const [mode, setMode] = useState<QueryMode>(initialMode);
   const [trackingNumber, setTrackingNumber] = useState(initialTrackingNumber);
   const [orderNumber, setOrderNumber] = useState(initialOrderNumber);
@@ -146,24 +150,42 @@ export function TrackingQueryCard({
   const trackingInputRef = useRef<HTMLInputElement>(null);
   const orderInputRef = useRef<HTMLInputElement>(null);
   const emailInputRef = useRef<HTMLInputElement>(null);
+  const tabRefs = useRef<Record<QueryMode, HTMLButtonElement | null>>({ tracking: null, order: null });
   const loading = phase === "loading";
+  const terminalPhase = phase === "success" || phase === "empty" || phase === "error";
 
   useEffect(() => {
-    if (phase !== "success" && phase !== "empty" && phase !== "error") return;
+    if (!terminalPhase) return;
     const card = cardRef.current;
     const resultNode = resultRef.current;
-    if (!card || !resultNode || typeof card.scrollTo !== "function") return;
-    card.scrollTo({ top: Math.max(0, resultNode.offsetTop - card.offsetTop - 16), behavior: "smooth" });
-  }, [phase, result]);
+    if (card && resultNode && typeof card.scrollTo === "function") {
+      card.scrollTo({ top: Math.max(0, resultNode.offsetTop - card.offsetTop - 16), behavior: "smooth" });
+    }
+    resultNode?.focus({ preventScroll: true });
+  }, [phase, terminalPhase]);
 
   const focusField = (field: FieldName) => {
     const input = field === "tracking" ? trackingInputRef.current : field === "order" ? orderInputRef.current : emailInputRef.current;
     input?.focus();
   };
 
-  const setActiveMode = (nextMode: QueryMode) => {
+  const setActiveMode = (nextMode: QueryMode, moveFocus = false) => {
     setMode(nextMode);
     setErrors({});
+    if (moveFocus) tabRefs.current[nextMode]?.focus();
+  };
+
+  const onTabKeyDown = (event: KeyboardEvent<HTMLButtonElement>, currentMode: QueryMode) => {
+    const modes: QueryMode[] = ["tracking", "order"];
+    const currentIndex = modes.indexOf(currentMode);
+    const nextMode = event.key === "ArrowRight" ? modes[(currentIndex + 1) % modes.length]
+      : event.key === "ArrowLeft" ? modes[(currentIndex - 1 + modes.length) % modes.length]
+        : event.key === "Home" ? modes[0]
+          : event.key === "End" ? modes[modes.length - 1]
+            : undefined;
+    if (!nextMode) return;
+    event.preventDefault();
+    setActiveMode(nextMode, true);
   };
 
   const clearError = (field: FieldName) => {
@@ -202,13 +224,17 @@ export function TrackingQueryCard({
   const cardData = cardDataAttribute ? { [cardDataAttribute]: "true" } : {};
   const resultData = resultDataAttribute ? { [resultDataAttribute]: "true" } : {};
 
-  return <div ref={cardRef} data-tracking-query-card {...cardData} style={{ ...cardStyle, overflowY: "auto" }}>
+  const activeTabId = mode === "tracking" ? trackingTabId : orderTabId;
+  const resultLabel = phase === "success" ? "Tracking result" : "Tracking query status";
+
+  return <div ref={cardRef} data-tracking-query-card {...cardData} aria-busy={loading || undefined} style={{ boxSizing: "border-box", minWidth: 0, maxWidth: "100%", overflowX: "hidden", overflowY: "auto", overscrollBehavior: "contain", scrollPaddingBlock: 16, ...cardStyle }}>
     <h1 style={{ margin: "0 0 28px", textAlign: "center", ...headingStyle }}>{heading}</h1>
     <div role="tablist" aria-label="Tracking method" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", borderBottom: "1px solid #cbd5e1", marginBottom: 18, ...tabListStyle }}>
-      <button type="button" role="tab" aria-selected={mode === "tracking"} onClick={() => setActiveMode("tracking")} style={tabStyle(mode === "tracking")}>{trackingTabLabel}</button>
-      <button type="button" role="tab" aria-selected={mode === "order"} onClick={() => setActiveMode("order")} style={tabStyle(mode === "order")}>{orderTabLabel}</button>
+      <button ref={(element) => { tabRefs.current.tracking = element; }} id={trackingTabId} type="button" role="tab" aria-selected={mode === "tracking"} aria-controls={tabPanelId} tabIndex={mode === "tracking" ? 0 : -1} onClick={() => setActiveMode("tracking")} onKeyDown={(event) => onTabKeyDown(event, "tracking")} style={tabStyle(mode === "tracking")}>{trackingTabLabel}</button>
+      <button ref={(element) => { tabRefs.current.order = element; }} id={orderTabId} type="button" role="tab" aria-selected={mode === "order"} aria-controls={tabPanelId} tabIndex={mode === "order" ? 0 : -1} onClick={() => setActiveMode("order")} onKeyDown={(event) => onTabKeyDown(event, "order")} style={tabStyle(mode === "order")}>{orderTabLabel}</button>
     </div>
-    <form noValidate onSubmit={submit} style={{ display: "grid", gap: 12, ...formStyle }}>
+    <div id={tabPanelId} role="tabpanel" aria-labelledby={activeTabId}>
+    <form noValidate onSubmit={submit} style={{ display: "grid", gap: 12, minWidth: 0, ...formStyle }}>
       {mode === "tracking" ? <div>
         <label htmlFor={trackingInputId} style={srOnly}>{trackingInputLabel}</label>
         <input ref={trackingInputRef} id={trackingInputId} aria-label={trackingInputLabel} aria-invalid={Boolean(errorFor("tracking"))} aria-describedby={errorFor("tracking") ? trackingInputId + "-error" : undefined} value={trackingNumber} onChange={(event) => { setTrackingNumber(event.target.value); clearError("tracking"); }} placeholder={trackingPlaceholder} style={inputWithError("tracking")} />
@@ -227,9 +253,10 @@ export function TrackingQueryCard({
       </>}
       <button type="submit" disabled={loading} style={submitStyle(loading)}>{loading ? loadingLabel : submitLabel}</button>
     </form>
-    {message ? <p role={phase === "error" ? "alert" : "status"} aria-live={phase === "error" ? "assertive" : "polite"} style={{ margin: "16px 0 0", color: phase === "error" ? "#b42318" : "#64748b", ...messageStyle }}>{message}</p> : null}
-    {phase === "success" && result ? <div ref={resultRef} data-tracking-query-result {...resultData} data-testid={resultTestId} tabIndex={-1} style={{ marginTop: 20, ...resultStyle }}>{result}</div> : null}
-    {(phase === "empty" || phase === "error") ? <div ref={resultRef} data-tracking-query-result {...resultData} data-testid={resultTestId} tabIndex={-1} /> : null}
+    </div>
+    {message ? <p id={queryStatusId} role={phase === "error" ? "alert" : "status"} aria-live={phase === "error" ? "assertive" : "polite"} style={{ margin: "16px 0 0", color: phase === "error" ? "#b42318" : "#64748b", ...messageStyle }}>{message}</p> : null}
+    {phase === "success" ? <p id={queryStatusId} role="status" aria-live="polite" style={srOnly}>Tracking details loaded.</p> : null}
+    {terminalPhase ? <div ref={resultRef} role="region" aria-label={resultLabel} aria-describedby={queryStatusId} data-tracking-query-result {...resultData} data-testid={resultTestId} tabIndex={-1} style={{ minWidth: 0, overflowWrap: "anywhere", marginTop: phase === "success" ? 20 : 0, ...resultStyle }}>{phase === "success" ? result : null}</div> : null}
     {watermark}
   </div>;
 }
@@ -264,14 +291,14 @@ function TrackingEvents({ result }: { result: TrackingPageQueryResult }) {
   const visibleEvents = events.slice(0, expanded ? 50 : 3);
   return <div aria-label="Shipping events" style={{ marginTop: 16 }}>
     <ol style={{ display: "grid", gap: 14, margin: 0, padding: 0, listStyle: "none" }}>
-      {visibleEvents.map((event, index) => <li key={event.id} style={{ position: "relative", paddingLeft: 22 }}>
+      {visibleEvents.map((event, index) => <li key={event.id} style={{ position: "relative", minWidth: 0, paddingLeft: 22, overflowWrap: "anywhere" }}>
         <span aria-hidden="true" style={{ position: "absolute", left: 0, top: 4, width: 10, height: 10, borderRadius: "50%", background: event.state === "current" || index === 0 ? "#111827" : "#cbd5e1" }} />
         <strong style={{ display: "block", fontSize: 14 }}>{event.title}</strong>
         {event.detail ? <span style={{ display: "block", marginTop: 2, color: "#64748b", fontSize: 13 }}>{event.detail}</span> : null}
         {event.at ? <time style={{ display: "block", marginTop: 3, color: "#94a3b8", fontSize: 12 }}>{event.at}</time> : null}
       </li>)}
     </ol>
-    {events.length > 3 ? <button type="button" onClick={() => setExpanded((current) => !current)} style={{ minHeight: 44, marginTop: 14, padding: "6px 12px", border: "1px solid #cbd5e1", borderRadius: 6, background: "#fff", color: "#0f172a", font: "inherit", fontSize: 13, cursor: "pointer" }}>{expanded ? "Show recent events" : "Show all events"}</button> : null}
+    {events.length > 3 ? <button type="button" onClick={() => setExpanded((current) => !current)} style={{ minWidth: 44, minHeight: 44, marginTop: 14, padding: "6px 12px", border: "1px solid #cbd5e1", borderRadius: 6, background: "#fff", color: "#0f172a", font: "inherit", fontSize: 13, cursor: "pointer" }}>{expanded ? "Show recent events" : "Show all events"}</button> : null}
   </div>;
 }
 
@@ -292,7 +319,7 @@ function TrackingOrderItems({ items }: { items: NonNullable<TrackingPageQueryRes
         const href = safeTrackingPageUrl(item.href);
         return <article key={item.id} style={{ display: "grid", gridTemplateColumns: "56px minmax(0, 1fr)", gap: 12, alignItems: "center" }}>
           <TrackingOrderItemImage src={item.imageUrl} title={item.title} />
-          <div style={{ minWidth: 0 }}>
+          <div style={{ minWidth: 0, overflowWrap: "anywhere" }}>
             {href ? <a href={href} style={{ color: "inherit", fontWeight: 700, overflowWrap: "anywhere" }}>{item.title}</a> : <strong style={{ overflowWrap: "anywhere" }}>{item.title}</strong>}
             {item.description ? <p style={{ margin: "3px 0 0", color: "#64748b", fontSize: 13 }}>{item.description}</p> : null}
             <p style={{ display: "flex", flexWrap: "wrap", gap: 8, margin: "4px 0 0", color: "#475569", fontSize: 13 }}><span>Qty {item.quantity}</span>{price?.amount ? <span>{price.amount}{price.startsAt ? " and up" : ""}</span> : null}{price?.compareAt ? <s style={{ color: "#94a3b8" }}>{price.compareAt}</s> : null}</p>
@@ -312,18 +339,18 @@ export function TrackingQueryResultDetails({ result, onTrackAnother, trackAnothe
       void navigator.clipboard.writeText(result.trackingNumber).then(() => setCopied(true)).catch(() => undefined);
     }
   };
-  return <section aria-label="Tracking result details">
-    <div style={{ display: "flex", alignItems: "start", justifyContent: "space-between", gap: 12 }}>
-      <div><strong style={{ fontSize: 17 }}>Your order is {result.status || "being updated"}</strong>{result.estimatedDelivery ? <p style={{ margin: "5px 0 0", color: "#475569", fontSize: 14 }}>Estimated delivery: {result.estimatedDelivery}</p> : null}</div>
-      {onTrackAnother ? <button type="button" onClick={onTrackAnother} style={{ minHeight: 44, flex: "0 0 auto", padding: "6px 10px", border: "1px solid #cbd5e1", borderRadius: 6, background: "#fff", color: "#0f172a", font: "inherit", fontSize: 12, cursor: "pointer" }}>{trackAnotherLabel}</button> : null}
+  return <section aria-label="Tracking result details" style={{ minWidth: 0, overflowWrap: "anywhere" }}>
+    <div style={{ display: "flex", flexWrap: "wrap", alignItems: "start", justifyContent: "space-between", gap: 12 }}>
+      <div style={{ minWidth: 0, flex: "1 1 180px" }}><strong style={{ fontSize: 17 }}>Your order is {result.status || "being updated"}</strong>{result.estimatedDelivery ? <p style={{ margin: "5px 0 0", color: "#475569", fontSize: 14 }}>Estimated delivery: {result.estimatedDelivery}</p> : null}</div>
+      {onTrackAnother ? <button type="button" onClick={onTrackAnother} style={{ minWidth: 44, minHeight: 44, flex: "0 0 auto", padding: "6px 10px", border: "1px solid #cbd5e1", borderRadius: 6, background: "#fff", color: "#0f172a", font: "inherit", fontSize: 12, cursor: "pointer" }}>{trackAnotherLabel}</button> : null}
     </div>
     <TrackingProgressDetails steps={progress} />
-    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 10, marginTop: 22, padding: 12, borderRadius: 8, background: "#f8fafc", color: "#334155", fontSize: 13 }}>
-      <span><strong>Carrier</strong><br />{result.carrier || "—"}</span>
-      <span><strong>Tracking number</strong><br />{result.trackingNumber} <button type="button" onClick={copyTrackingNumber} style={{ minHeight: 44, border: 0, background: "transparent", color: "#0f172a", font: "inherit", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>{copied ? "Copied" : "Copy"}</button></span>
-      <span><strong>Destination</strong><br />{result.destination || "—"}</span>
-      <span><strong>Transit time</strong><br />{result.transitDuration || "—"}</span>
-      {result.orderNumber ? <span><strong>Order number</strong><br />{result.orderNumber}</span> : null}
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 140px), 1fr))", gap: 10, marginTop: 22, padding: 12, borderRadius: 8, background: "#f8fafc", color: "#334155", fontSize: 13 }}>
+      <span style={{ minWidth: 0, overflowWrap: "anywhere" }}><strong>Carrier</strong><br />{result.carrier || "—"}</span>
+      <span style={{ minWidth: 0, overflowWrap: "anywhere" }}><strong>Tracking number</strong><br /><span>{result.trackingNumber}</span> <button type="button" onClick={copyTrackingNumber} style={{ minWidth: 44, minHeight: 44, border: 0, background: "transparent", color: "#0f172a", font: "inherit", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>{copied ? "Copied" : "Copy"}</button></span>
+      <span style={{ minWidth: 0, overflowWrap: "anywhere" }}><strong>Destination</strong><br />{result.destination || "—"}</span>
+      <span style={{ minWidth: 0, overflowWrap: "anywhere" }}><strong>Transit time</strong><br />{result.transitDuration || "—"}</span>
+      {result.orderNumber ? <span style={{ minWidth: 0, overflowWrap: "anywhere" }}><strong>Order number</strong><br />{result.orderNumber}</span> : null}
     </div>
     <section aria-label="Tracking timeline" style={{ marginTop: 24, borderTop: "1px solid #e2e8f0", paddingTop: 18 }}><h2 style={{ margin: 0, fontSize: 16 }}>Tracking timeline</h2><TrackingEvents result={result} /></section>
     <TrackingOrderItems items={result.orderItems ?? []} />

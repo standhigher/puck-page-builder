@@ -23,6 +23,7 @@ describe("V0.8 Sales", () => {
     const image = container.querySelector<HTMLImageElement>("[data-sales-hero-image]");
     expect(hero).toHaveStyle({ minHeight: "clamp(460px, 52vw, 620px)" });
     expect(card).toHaveStyle({ width: "min(560px, 100%)" });
+    expect(card).toHaveStyle({ maxHeight: "min(560px, calc(100dvh - 32px))", overflowX: "hidden", overflowY: "auto" });
     expect(image?.src).toContain("images.unsplash.com");
     expect(screen.getByPlaceholderText("Enter your tracking number")).toBeVisible();
     expect(screen.getByText("Powered by BestTrack")).toBeVisible();

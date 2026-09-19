@@ -105,10 +105,10 @@ function ShipmentSwitcher({ shipmentLabels: configuredLabels }: { shipmentLabels
   const configuredShipments = shipmentLabels(configuredLabels);
   const shipments = runtime.phase === "idle" || runtime.phase === "loading" ? configuredShipments : runtime.result?.shipments ?? [];
   if (!shipments.length) return null;
-  return <div aria-label="Shipment switcher" style={{ ...contentWidth, minHeight: 56, display: "flex", alignItems: "center", gap: 8, overflowX: "auto", whiteSpace: "nowrap" }}>
+  return <div aria-label="Shipment switcher" style={{ ...contentWidth, minWidth: 0, minHeight: 56, display: "flex", alignItems: "center", gap: 8, overflowX: "auto", whiteSpace: "nowrap" }}>
     {shipments.map((shipment, index) => {
       const selected = (runtime.selectedShipmentId ?? shipments[0]?.id) === shipment.id;
-      return <button key={shipment.id} type="button" onClick={() => runtime.selectShipment(shipment.id)} aria-pressed={selected} style={{ minWidth: 92, minHeight: 36, padding: "0 12px", border: selected ? "1px solid #1a1a1a" : "1px solid #e7e7e7", borderRadius: 4, background: "#fff", color: "#0a0a0a", fontSize: 11, fontWeight: selected ? 700 : 400, cursor: "pointer" }}>{shipment.label || "Shipment #" + (index + 1)}</button>;
+      return <button key={shipment.id} type="button" onClick={() => runtime.selectShipment(shipment.id)} aria-pressed={selected} style={{ minWidth: 92, minHeight: 44, padding: "0 12px", border: selected ? "1px solid #1a1a1a" : "1px solid #e7e7e7", borderRadius: 4, background: "#fff", color: "#0a0a0a", fontSize: 11, fontWeight: selected ? 700 : 400, cursor: "pointer" }}>{shipment.label || "Shipment #" + (index + 1)}</button>;
     })}
   </div>;
 }
@@ -117,10 +117,10 @@ function QueryHero(props: Record<string, unknown>) {
   const runtime = useBrandedRuntime();
   const [heroImageFailed, setHeroImageFailed] = useState(false);
   const result = runtime.displayedResult;
-  return <div style={{ position: "relative", minHeight: "clamp(520px, 44vw, 560px)", display: "grid", overflow: "hidden", background: "linear-gradient(135deg, #dedbd4, #b9b3aa)" }}>
+  return <div style={{ position: "relative", minWidth: 0, minHeight: "clamp(520px, 44vw, 560px)", display: "grid", overflow: "hidden", background: "linear-gradient(135deg, #dedbd4, #b9b3aa)" }}>
     {!heroImageFailed && safeImageUrl(props.heroImageUrl) ? <img src={safeImageUrl(props.heroImageUrl)} alt="" onError={() => setHeroImageFailed(true)} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} /> : null}
     <div aria-hidden="true" style={{ position: "absolute", inset: 0, background: "rgba(255,255,255,0.12)" }} />
-    <div style={{ ...contentWidth, position: "relative", zIndex: 1, display: "grid", alignItems: "center", width: "100%", paddingTop: "clamp(24px, 5vw, 48px)", paddingBottom: "clamp(24px, 5vw, 48px)" }}>
+    <div style={{ ...contentWidth, position: "relative", zIndex: 1, display: "grid", alignItems: "center", width: "100%", minWidth: 0, paddingTop: "clamp(24px, 5vw, 48px)", paddingBottom: "clamp(24px, 5vw, 48px)" }}>
       <TrackingQueryCard
         phase={runtime.phase}
         onQuery={runtime.query}
@@ -138,7 +138,7 @@ function QueryHero(props: Record<string, unknown>) {
         cardDataAttribute="data-branded-query-card"
         resultDataAttribute="data-branded-query-result"
         resultTestId="branded-result"
-        cardStyle={{ ...cardStyle, width: "min(560px, 100%)", maxHeight: "calc(100vh - 48px)", marginLeft: "auto", padding: "clamp(24px, 5vw, 48px)", boxSizing: "border-box", boxShadow: "0 16px 40px rgb(0 0 0 / 8%)" }}
+        cardStyle={{ ...cardStyle, width: "min(560px, 100%)", maxHeight: "min(560px, calc(100dvh - 32px))", marginLeft: "auto", padding: "clamp(24px, 5vw, 48px)", boxSizing: "border-box", boxShadow: "0 16px 40px rgb(0 0 0 / 8%)" }}
         headingStyle={{ marginBottom: 36, fontSize: "clamp(28px, 3vw, 32px)", lineHeight: 1.15 }}
         tabListStyle={{ borderBottomColor: "#e7e7e7", marginBottom: 24 }}
         tabStyle={(active) => ({ minHeight: 44, border: 0, borderBottom: active ? "2px solid #0a0a0a" : "2px solid transparent", background: "transparent", font: "inherit", fontWeight: active ? 700 : 400, cursor: "pointer" })}
@@ -155,7 +155,7 @@ function QueryHero(props: Record<string, unknown>) {
 
 function PackageContents({ items }: { items: TrackingPageQueryResult["orderItems"] }) {
   if (!items?.length) return <p style={{ margin: 0, color: "#6b6b6b" }}>Package contents are not available for this shipment.</p>;
-  return <div style={{ display: "grid", gap: 16 }}>{items.map((item) => <article key={item.id} style={{ display: "flex", alignItems: "flex-start", gap: 14 }}><ProductImage src={item.imageUrl} alt={item.title} /><div><strong>{item.title}</strong><p style={{ margin: "5px 0", color: "#6b6b6b", fontSize: 14 }}>{item.description ?? "Product details are available in your order."}</p><small style={{ color: "#6b6b6b" }}>Qty {item.quantity}</small></div></article>)}</div>;
+  return <div style={{ display: "grid", gap: 16 }}>{items.map((item) => <article key={item.id} style={{ display: "flex", alignItems: "flex-start", gap: 14, minWidth: 0 }}><ProductImage src={item.imageUrl} alt={item.title} /><div style={{ minWidth: 0, overflowWrap: "anywhere" }}><strong>{item.title}</strong><p style={{ margin: "5px 0", color: "#6b6b6b", fontSize: 14 }}>{item.description ?? "Product details are available in your order."}</p><small style={{ color: "#6b6b6b" }}>Qty {item.quantity}</small></div></article>)}</div>;
 }
 
 export function BrandedTextField({ value, onChange }: FieldProps) {

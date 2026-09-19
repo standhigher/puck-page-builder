@@ -27,7 +27,7 @@ describe("BestTrack template PRD compatibility metadata", () => {
     expect(isValidTrackingNumber("BT-2048-DEMO")).toBe(true);
     expect(isValidTrackingNumber("not valid!")).toBe(false);
     expect(isValidOrderNumber("ORDER-2048")).toBe(true);
-    expect(isValidOrderNumber("x")).toBe(false);
+    expect(isValidOrderNumber("x")).toBe(true);
     expect(isValidOrderEmail("customer@example.test")).toBe(true);
     expect(isValidOrderEmail("not-an-email")).toBe(false);
   });

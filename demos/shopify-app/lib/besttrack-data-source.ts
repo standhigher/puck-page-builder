@@ -17,8 +17,8 @@ export type GetSessionToken = () => Promise<string>;
 export function validateBestTrackTrackingParams(params: unknown): ValidationIssue[] {
   if (!params || typeof params !== "object" || Array.isArray(params)) return [{ path: "params", message: "物流查询参数必须是对象" }];
   const trackingNumber = (params as Record<string, unknown>).trackingNumber;
-  if (typeof trackingNumber !== "string" || !/^[A-Za-z0-9-]{4,64}$/.test(trackingNumber)) {
-    return [{ path: "params.trackingNumber", message: "trackingNumber 必须是 4–64 位的字母、数字或连字符" }];
+  if (typeof trackingNumber !== "string" || !/^[A-Za-z0-9_-]{6,64}$/.test(trackingNumber)) {
+    return [{ path: "params.trackingNumber", message: "trackingNumber 必须是 6–64 位的字母、数字、连字符或下划线" }];
   }
   return [];
 }

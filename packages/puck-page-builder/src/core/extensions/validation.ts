@@ -10,7 +10,10 @@ function isSafeUrl(value: string, config: FieldConfig) {
   if (value.startsWith("/")) return config.validation?.allowRelativeUrl !== false && !value.startsWith("//");
   try {
     const url = new URL(value);
-    return (config.validation?.allowedUrlProtocols ?? ["https:", "http:"]).includes(url.protocol as "http:" | "https:");
+    if (url.username || url.password) return false;
+    if ((config.validation?.allowedUrlProtocols ?? ["https:", "http:"]).includes(url.protocol as "http:" | "https:")) return true;
+    const editorRunsLocally = typeof window !== "undefined" && (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1" || window.location.hostname === "[::1]");
+    return config.validation?.allowLocalhost === true && editorRunsLocally && url.protocol === "http:" && (url.hostname === "localhost" || url.hostname === "127.0.0.1" || url.hostname === "[::1]");
   } catch {
     return false;
   }

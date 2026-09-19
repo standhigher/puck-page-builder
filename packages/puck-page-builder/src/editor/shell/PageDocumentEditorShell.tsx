@@ -4,7 +4,7 @@ import { DragHandleIcon, LayoutSectionIcon, MenuIcon, RedoIcon, UndoIcon } from 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPageDocumentPuckConfig } from "../../adapters/puck/page-document-config";
 import { fromEngineData, toEngineData } from "../../adapters/puck/page-document";
-import { validateFieldValue, type ExtensionRegistry, type FieldConfig, type ValidationIssue } from "../../core/extensions";
+import { validateFieldValue, validatePageDocumentWithRegistry, type ExtensionRegistry, type FieldConfig, type ValidationIssue } from "../../core/extensions";
 import type { BlockNode, JsonValue, PageDocument } from "../../core/schema/page-document";
 import type { ThemeTokenName, ThemeTokens } from "../../core/theme";
 import { EditorProvider, useEditorContext, type EditorLoadState } from "../context/EditorContext";
@@ -74,19 +74,7 @@ function blockTypeLabel(type: string, registry?: ExtensionRegistry) {
 }
 
 function validateDocumentBlocks(document: PageDocument, registry?: ExtensionRegistry): ValidationIssue[] {
-  if (!registry) return [];
-  return document.blocks.flatMap((block) => {
-    const definition = registry.getBlock(block.type);
-    if (!definition) return [];
-    const issues = [
-      ...(definition.validate?.(block.props) ?? []),
-      ...Object.entries(definition.fields).flatMap(([name, field]) => validateFieldValue(field, block.props[name]).map((issue) => ({ ...issue, path: issue.path ? `${name}.${issue.path}` : name })))
-    ];
-    if (definition.variants?.length && !definition.variants.some((variant) => variant.id === block.variant)) {
-      issues.push({ path: "variant", message: `Unsupported variant: ${block.variant}.` });
-    }
-    return issues.map((issue) => ({ ...issue, path: `${block.id}.${issue.path}` }));
-  });
+  return registry ? validatePageDocumentWithRegistry(document, registry) : [];
 }
 
 type ManagedSession = { state: EditorSessionState; session?: EditorSession; message?: string };

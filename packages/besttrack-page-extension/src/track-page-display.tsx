@@ -1,6 +1,8 @@
 /* eslint-disable react-refresh/only-export-components -- Shared visual primitives intentionally export components and token-aware helpers. */
 import { useState, type CSSProperties, type ReactNode } from "react";
 import type { ReadyToGoOrderItem, ReadyToGoRecommendation, ReadyToGoTrackingEvent, ReadyToGoTrackingStep } from "./ready-to-go";
+import { formatTrackingPageMoney } from "./tracking-page-runtime";
+import { safeTrackingPageUrl } from "./tracking-page-url";
 
 export const pageFont = { fontFamily: "var(--pb-font-family, Inter, system-ui, sans-serif)" } satisfies CSSProperties;
 export const contentWidth = {
@@ -15,24 +17,11 @@ export function text(props: Record<string, unknown>, key: string, fallback = "")
 }
 
 export function safeHref(value: unknown) {
-  if (typeof value !== "string") return "#";
-  if (value.startsWith("/")) return value;
-  try {
-    const url = new URL(value);
-    return url.protocol === "https:" || url.protocol === "http:" ? url.toString() : "#";
-  } catch {
-    return "#";
-  }
+  return safeTrackingPageUrl(value);
 }
 
 export function safeImageUrl(value: unknown) {
-  if (typeof value !== "string") return "";
-  try {
-    const url = new URL(value);
-    return url.protocol === "https:" || url.protocol === "http:" ? url.toString() : "";
-  } catch {
-    return "";
-  }
+  return safeTrackingPageUrl(value);
 }
 
 export function defaultProgress(status: string): ReadyToGoTrackingStep[] {
@@ -147,7 +136,7 @@ export function PackageContents({ items }: { items: ReadyToGoOrderItem[] }) {
           {item.description ? <p style={{ margin: "4px 0 0", fontSize: 13, color: "#64748b" }}>{item.description}</p> : null}
           <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8, marginTop: 4 }}>
             <p style={{ margin: 0, fontSize: 13, color: "#64748b" }}>x{item.quantity}</p>
-            {item.href ? <a href={safeHref(item.href)} style={{ display: "inline-flex", minHeight: 32, alignItems: "center", padding: "6px 16px", border: "1px solid #cbd5e1", borderRadius: 6, color: "#1e293b", fontSize: 13, fontWeight: 500, textDecoration: "none" }}>Reorder</a> : null}
+            {safeHref(item.href) ? <a href={safeHref(item.href)} style={{ display: "inline-flex", minHeight: 32, alignItems: "center", padding: "6px 16px", border: "1px solid #cbd5e1", borderRadius: 6, color: "#1e293b", fontSize: 13, fontWeight: 500, textDecoration: "none" }}>Reorder</a> : null}
           </div>
         </div>
       </article>;
@@ -163,7 +152,7 @@ export function RecommendationCards({ items }: { items: ReadyToGoRecommendation[
       </div>
       <div style={{ padding: "12px 8px", textAlign: "center", fontSize: 14 }}>
         <p style={{ margin: 0, color: "#334155" }}>{item.title}</p>
-        {item.price ? <p style={{ margin: "4px 0 0", fontWeight: 600, color: "#0f172a" }}>{item.price}</p> : null}
+        {item.price && formatTrackingPageMoney(item.price)?.amount ? <p style={{ margin: "4px 0 0", fontWeight: 600, color: "#0f172a" }}>{formatTrackingPageMoney(item.price)!.amount}</p> : null}
         {item.description ? <p style={{ margin: "4px 0 0", color: "#64748b", fontSize: 13 }}>{item.description}</p> : null}
       </div>
     </a>)}

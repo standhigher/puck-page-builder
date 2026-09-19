@@ -1,3 +1,4 @@
+import { validatePageDocumentWithRegistry, type ExtensionRegistry } from "@standhigher/puck-page-builder/extensions";
 import { migratePageDocument, type PageDocument, type PageDocumentIssue } from "@standhigher/puck-page-builder/schema";
 
 export type StoredPageDocument = {
@@ -22,12 +23,14 @@ function clone(document: PageDocument): PageDocument {
   return JSON.parse(JSON.stringify(document)) as PageDocument;
 }
 
-function validateForPage(pageId: string, value: unknown): PageDocument {
+function validateForPage(pageId: string, value: unknown, registry?: ExtensionRegistry): PageDocument {
   const migration = migratePageDocument(value);
   if (!migration.success) throw new PageDocumentStoreError(migration.issues);
   if (migration.data.pageId !== pageId) {
     throw new PageDocumentStoreError([{ path: "$.pageId", message: "URL 中的 pageId 必须与文档一致" }]);
   }
+  const issues = registry ? validatePageDocumentWithRegistry(migration.data, registry) : [];
+  if (issues.length) throw new PageDocumentStoreError(issues);
   return migration.data;
 }
 
@@ -40,8 +43,8 @@ export function getDraft(pageId: string): StoredPageDocument | undefined {
   return record && { ...record, document: clone(record.document) };
 }
 
-export function saveDraft(pageId: string, value: unknown, now = new Date()): StoredPageDocument {
-  const record = { document: clone(validateForPage(pageId, value)), updatedAt: now.toISOString() };
+export function saveDraft(pageId: string, value: unknown, now = new Date(), registry?: ExtensionRegistry): StoredPageDocument {
+  const record = { document: clone(validateForPage(pageId, value, registry)), updatedAt: now.toISOString() };
   drafts.set(pageId, record);
   return { ...record, document: clone(record.document) };
 }
@@ -51,8 +54,8 @@ export function getPublished(pageId: string): PublishedPageDocument | undefined 
   return record && { ...record, document: clone(record.document) };
 }
 
-export function publishDocument(pageId: string, value: unknown, now = new Date()): PublishedPageDocument {
-  const draft = saveDraft(pageId, value, now);
+export function publishDocument(pageId: string, value: unknown, now = new Date(), registry?: ExtensionRegistry): PublishedPageDocument {
+  const draft = saveDraft(pageId, value, now, registry);
   const record = { ...draft, document: clone(draft.document), publishedAt: now.toISOString() };
   published.set(pageId, record);
   return { ...record, document: clone(record.document) };

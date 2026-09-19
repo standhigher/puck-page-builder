@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useId, useMemo, useRef, useState, type CSSProperties, type FormEvent, type ReactNode } from "react";
 import type { BlockEditorProps, FieldProps } from "@standhigher/puck-page-builder/runtime";
-import { isEmptyTrackingPageResult, isValidOrderEmail, isValidOrderNumber, isValidTrackingNumber, type LegacyTrackingPageQuery, type TrackingPageQuery, type TrackingPageQueryRequest, type TrackingPageQueryResult, type TrackingPageRuntimePhase, type TrackingPageWatermark } from "./tracking-page-runtime";
+import { formatTrackingPageMoney, isEmptyTrackingPageResult, isValidOrderEmail, isValidOrderNumber, isValidTrackingNumber, type TrackingPageQuery, type TrackingPageQueryRequest, type TrackingPageQueryResult, type TrackingPageRuntimePhase, type TrackingPageWatermark } from "./tracking-page-runtime";
+import { safeTrackingPageUrl } from "./tracking-page-url";
 
 /** Transient, consumer-safe state. The host error is deliberately never retained for display. */
 export type SalesRuntimeState = { phase: TrackingPageRuntimePhase; result?: TrackingPageQueryResult };
@@ -9,12 +10,10 @@ const initialRuntime: SalesRuntime = { phase: "idle", supportsOrderQuery: false,
 const SalesRuntimeContext = createContext<SalesRuntime>(initialRuntime);
 export type SalesRuntimeProviderProps = {
   children: ReactNode;
-  /** The discriminated request contract for new host integrations. */
+  /** The discriminated, host-authorized request contract. */
   query?: TrackingPageQuery;
   /** Host-decided display state; no entitlement checks happen in this package. */
   watermark?: TrackingPageWatermark;
-  /** @deprecated Tracking-only compatibility bridge. Use `query`. */
-  queryTracking?: LegacyTrackingPageQuery;
 };
 
 const contentWidth: CSSProperties = { boxSizing: "border-box", width: "min(1120px, calc(100% - 32px))", margin: "0 auto" };
@@ -23,25 +22,23 @@ const panelStyle: CSSProperties = { boxSizing: "border-box", border: "1px solid 
 const gridStyle: CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 220px), 1fr))", gap: "clamp(16px, 2vw, 24px)" };
 
 /** The host injects a validated query; Sales never calls a DataSource itself. */
-export function SalesRuntimeProvider({ children, query: injectedQuery, queryTracking, watermark }: SalesRuntimeProviderProps) {
+export function SalesRuntimeProvider({ children, query: injectedQuery, watermark }: SalesRuntimeProviderProps) {
   const [state, setState] = useState<SalesRuntimeState>({ phase: "idle" });
   const requestId = useRef(0);
   const query = useCallback(async (request: TrackingPageQueryRequest) => {
     const currentRequestId = ++requestId.current;
     setState({ phase: "loading" });
     try {
-      if (!injectedQuery && !queryTracking) throw new Error("tracking-query-not-configured");
-      const result = injectedQuery
-        ? await injectedQuery(request)
-        : await queryTracking!(request.mode === "tracking" ? request.trackingNumber : request.orderNumber);
+      if (!injectedQuery) throw new Error("tracking-query-not-configured");
+      const result = await injectedQuery(request);
       if (currentRequestId !== requestId.current) return;
       setState({ phase: isEmptyTrackingPageResult(result) ? "empty" : "success", result });
     } catch {
       if (currentRequestId !== requestId.current) return;
       setState({ phase: "error" });
     }
-  }, [injectedQuery, queryTracking]);
-  const value = useMemo<SalesRuntime>(() => ({ ...state, query, watermark: watermark ?? (queryTracking ? { visible: true } : undefined), supportsOrderQuery: Boolean(injectedQuery) }), [injectedQuery, query, queryTracking, state, watermark]);
+  }, [injectedQuery]);
+  const value = useMemo<SalesRuntime>(() => ({ ...state, query, watermark, supportsOrderQuery: Boolean(injectedQuery) }), [injectedQuery, query, state, watermark]);
   return <SalesRuntimeContext.Provider value={value}>{children}</SalesRuntimeContext.Provider>;
 }
 
@@ -51,25 +48,12 @@ function text(props: object, key: string, fallback: string) {
   const value = (props as Record<string, unknown>)[key];
   return typeof value === "string" && value.trim() ? value.trim() : fallback;
 }
-function hasControlCharacter(value: string) { return [...value].some((character) => character.charCodeAt(0) < 32); }
-function safeHref(value: unknown) {
-  if (typeof value !== "string") return undefined;
-  if (value.startsWith("/") && !value.startsWith("//") && !value.startsWith("/\\") && !value.includes("\\") && !hasControlCharacter(value)) return value;
-  try {
-    const url = new URL(value);
-    return url.protocol === "https:" ? url.toString() : undefined;
-  } catch { return undefined; }
-}
-/** Image URLs are data, never CSS. Only HTTPS merchant assets are rendered. */
-function safeImageUrl(value: unknown) {
-  if (typeof value !== "string") return undefined;
-  try {
-    const url = new URL(value);
-    return url.protocol === "https:" ? url.toString() : undefined;
-  } catch { return undefined; }
-}
+const safeHref = safeTrackingPageUrl;
+const safeImageUrl = safeTrackingPageUrl;
 function resourceState(value: unknown): "ready" | "empty" | "invalid" {
-  return typeof value !== "string" ? "invalid" : value.trim() ? "ready" : "empty";
+  if (typeof value !== "string") return "invalid";
+  if (!value.trim()) return "empty";
+  return /^gid:\/\/shopify\/Collection\/\d+$/.test(value) ? "ready" : "invalid";
 }
 function Status({ children, alert = false }: { children: ReactNode; alert?: boolean }) {
   return <p role={alert ? "alert" : "status"} aria-live={alert ? "assertive" : "polite"} style={{ margin: "16px 0 0", color: alert ? "#a61b1b" : "var(--pb-color-muted)" }}>{children}</p>;
@@ -172,10 +156,10 @@ export function SalesQueryBlock(props: Record<string, unknown>) {
     const normalizedOrderNumber = orderNumber.trim();
     const normalizedEmail = email.trim();
     if (activeMode === "tracking" && !isValidTrackingNumber(normalizedTrackingNumber)) {
-      setInputError("Enter a tracking number using 4–64 letters, numbers, or hyphens.");
+      setInputError("Enter a tracking number using 6–64 letters, numbers, hyphens, or underscores.");
       return;
     }
-    if (activeMode === "order" && !isValidOrderNumber(normalizedOrderNumber)) { setInputError("Enter an order number using 4–64 letters, numbers, or hyphens."); return; }
+    if (activeMode === "order" && !isValidOrderNumber(normalizedOrderNumber)) { setInputError("Enter an order number using 1–64 non-space characters."); return; }
     if (activeMode === "order" && !isValidOrderEmail(normalizedEmail)) { setInputError("Enter a valid email address."); return; }
     setInputError(null);
     void runtime.query(activeMode === "tracking" ? { mode: activeMode, trackingNumber: normalizedTrackingNumber } : { mode: activeMode, orderNumber: normalizedOrderNumber, email: normalizedEmail });
@@ -229,8 +213,7 @@ export function SalesServiceCardsBlock(props: Record<string, unknown>) {
 export function SalesProductCategoriesBlock(props: Record<string, unknown>) {
   const title = text(props, "heading", "Shop by category");
   const state = resourceState(props.collectionId);
-  const href = safeHref(props.collectionHref);
-  return <Section title={title}>{state === "invalid" ? <Status alert>Collection reference is invalid.</Status> : state === "empty" ? <Status>No collection selected. Choose a collection through an authorized resource integration.</Status> : href ? <a href={href} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", minHeight: 74, boxSizing: "border-box", padding: "14px 18px", border: "1px solid var(--pb-color-border)", borderRadius: "calc(var(--pb-radius) / 1.5)", background: "var(--pb-color-background)", color: "var(--pb-color-text)", fontWeight: 700, textDecoration: "none" }}><span>{text(props, "collectionLabel", "Featured collection")}</span><span aria-hidden="true">→</span></a> : <Status alert>Collection link is unavailable.</Status>}</Section>;
+  return <Section title={title}>{state === "invalid" ? <Status alert>Collection reference is invalid.</Status> : state === "empty" ? <Status>No collection selected. Choose a collection through an authorized resource integration.</Status> : <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", minHeight: 74, boxSizing: "border-box", padding: "14px 18px", border: "1px solid var(--pb-color-border)", borderRadius: "calc(var(--pb-radius) / 1.5)", background: "var(--pb-color-background)", color: "var(--pb-color-text)", fontWeight: 700 }}><span>{text(props, "collectionLabel", "Featured collection")}</span></div>}</Section>;
 }
 
 export function SalesRecommendationsBlock(props: Record<string, unknown>) {
@@ -240,6 +223,7 @@ export function SalesRecommendationsBlock(props: Record<string, unknown>) {
   return <Section title={title} busy={runtime.phase === "loading"}>{runtime.phase === "error" ? <Status alert>Recommendations are temporarily unavailable.</Status> : runtime.phase === "empty" ? <Status>No recommendations are available for that number.</Status> : runtime.phase === "success" && recommendations.length ? <div style={gridStyle}>{recommendations.map((item) => {
     const href = safeHref(item.href);
     const itemTitle = text(item, "title", "Recommended product");
-    return <article key={item.id} style={{ display: "grid", gap: 14, minWidth: 0, padding: 18, border: "1px solid var(--pb-color-border)", borderRadius: "calc(var(--pb-radius) / 1.5)", background: "var(--pb-color-background)" }}><ProductImage src={item.imageUrl} alt={itemTitle} /><div><strong>{href ? <a href={href} style={{ color: "inherit" }}>{itemTitle}</a> : itemTitle}</strong>{item.price ? <small style={{ display: "block", marginTop: 5, color: "var(--pb-color-muted)" }}>{item.price}</small> : null}{item.description ? <p style={{ marginBottom: 0, color: "var(--pb-color-muted)" }}>{item.description}</p> : null}</div></article>;
+    const price = item.price ? formatTrackingPageMoney(item.price) : undefined;
+    return <article key={item.id} style={{ display: "grid", gap: 14, minWidth: 0, padding: 18, border: "1px solid var(--pb-color-border)", borderRadius: "calc(var(--pb-radius) / 1.5)", background: "var(--pb-color-background)" }}><ProductImage src={item.imageUrl} alt={itemTitle} /><div><strong>{href ? <a href={href} style={{ color: "inherit" }}>{itemTitle}</a> : itemTitle}</strong>{price?.amount ? <small style={{ display: "block", marginTop: 5, color: "var(--pb-color-muted)" }}>{price.amount}</small> : null}{item.description ? <p style={{ marginBottom: 0, color: "var(--pb-color-muted)" }}>{item.description}</p> : null}</div></article>;
   })}</div> : <Status>{runtime.phase === "success" ? "No recommendations are available for this order." : runtime.phase === "loading" ? "Loading recommendations…" : "Recommended products appear with your order result."}</Status>}</Section>;
 }

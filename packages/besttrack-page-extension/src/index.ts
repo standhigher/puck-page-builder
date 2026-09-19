@@ -1,7 +1,6 @@
 export {
   ReadyToGoRuntimeProvider,
   type ReadyToGoRuntimeProviderProps,
-  type ReadyToGoTrackingQuery,
   type ReadyToGoTrackingResult,
   type ReadyToGoRuntimeState,
   type ReadyToGoShipment,
@@ -27,17 +26,24 @@ export {
   isValidOrderEmail,
   isValidOrderNumber,
   isValidTrackingNumber,
-  type LegacyTrackingPageQuery,
+  formatTrackingPageMoney,
+  isTrackingPageResourceReference,
   type TrackingPageOrderItem,
+  type TrackingPageCollectionReference,
+  type TrackingPageMediaReference,
+  type TrackingPageMoney,
+  type TrackingPageProductReference,
   type TrackingPageQuery,
   type TrackingPageQueryRequest,
   type TrackingPageQueryResult,
   type TrackingPageOrderQueryRequest,
   type TrackingPageRecommendation,
   type TrackingPageRuntimePhase,
+  type TrackingPageResourceReference,
   type TrackingPageShipment,
   type TrackingPageTrackingEvent,
   type TrackingPageTrackingQueryRequest,
   type TrackingPageWatermark,
   type TrackingPageTrackingStep
 } from "./tracking-page-runtime";
+export { isSafeTrackingPageUrl, safeTrackingPageUrl, type TrackingPageUrlOptions } from "./tracking-page-url";

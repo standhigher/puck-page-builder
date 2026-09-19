@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getDraft, PageDocumentStoreError, saveDraft } from "../../../../../lib/page-document-store";
+import { trackingPageRegistry } from "../../../../../lib/tracking-page-registry";
 
 type RouteContext = { params: Promise<{ pageId: string }> };
 
@@ -15,7 +16,7 @@ export async function GET(_request: Request, context: RouteContext) {
 export async function PUT(request: Request, context: RouteContext) {
   const { pageId } = await context.params;
   try {
-    return NextResponse.json(saveDraft(pageId, await request.json()));
+    return NextResponse.json(saveDraft(pageId, await request.json(), undefined, trackingPageRegistry));
   } catch (error) {
     if (error instanceof PageDocumentStoreError) return NextResponse.json({ error: "invalid-page-document", issues: error.issues }, { status: 400 });
     return NextResponse.json({ error: "invalid-json" }, { status: 400 });

@@ -28,8 +28,8 @@ const query: TrackingPageQuery = async (request) => {
 `TrackingPageQueryRequest` is either `{ mode: "tracking", trackingNumber }`
 or `{ mode: "order", orderNumber, email }`. The templates perform local PRD
 format checks, but the host must validate and authorize again on the server.
-The deprecated `queryTracking` prop remains a tracking-only compatibility
-bridge; it cannot safely authorize an order-and-email request.
+`query` is the only RuntimeProvider query prop. A host must not submit an
+order number through the tracking-number mode or add a second transport shape.
 
 Branded and Sales render a two-tab query card on the Hero’s right edge at
 desktop widths and as a single full-width card on narrow screens. Each tab
@@ -42,11 +42,10 @@ persistence calls and never writes a query result into a `PageDocument`.
 
 The optional `watermark` provider prop is an opaque host decision. This package
 only renders `watermark.visible` and its optional label; it does not infer or
-evaluate entitlement. For v0.7 tracking-only `queryTracking` compatibility,
-the historical “Powered by BestTrack” label is retained; new `query`
-integrations render a watermark only when the host supplies its state. Query
-results and watermark state are transient.
+evaluate entitlement. Query results and watermark state are transient.
 
 Document props and bindings must remain JSON-only and must not contain a token,
-secret, customer order data, email address, or live query result. Missing
-display data and unsafe resource URLs render controlled fallbacks.
+secret, customer order data, email address, or live query result. Merchant
+resources use stable Shopify IDs; product prices and availability are Runtime
+data. Production URLs must be public HTTPS URLs. Missing display data and
+unsafe resource URLs render controlled fallbacks.

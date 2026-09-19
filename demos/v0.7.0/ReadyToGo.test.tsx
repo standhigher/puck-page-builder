@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import { bestTrackPageExtension, ReadyToGoRuntimeProvider, type ReadyToGoTrackingQuery } from "../../packages/besttrack-page-extension/src";
+import { bestTrackPageExtension, ReadyToGoRuntimeProvider, type TrackingPageQuery } from "../../packages/besttrack-page-extension/src";
 import { ReadyToGoDeliveryEditor, ReadyToGoProgressEditor, ReadyToGoQueryEditor, ReadyToGoRecommendationsEditor } from "../../packages/besttrack-page-extension/src/ready-to-go";
 import { createExtensionRegistry } from "../../packages/puck-page-builder/src/core/extensions";
 import { WebRenderer } from "../../packages/puck-page-builder/src/renderer/web/WebRenderer";
@@ -15,11 +15,11 @@ function deferred<T>() {
   return { promise, resolve, reject };
 }
 
-function renderReadyToGo(queryTracking?: ReadyToGoTrackingQuery) {
+function renderReadyToGo(query?: TrackingPageQuery) {
   const registry = createExtensionRegistry([bestTrackPageExtension]);
   const document = registry.getTemplate("besttrack.ready-to-go")!.create();
   return render(
-    <ReadyToGoRuntimeProvider queryTracking={queryTracking}>
+    <ReadyToGoRuntimeProvider query={query}>
       <WebRenderer document={document} registry={registry} />
     </ReadyToGoRuntimeProvider>
   );
@@ -43,10 +43,10 @@ describe("V0.7.0 Ready-to-go", () => {
   });
 
   it("edits Ready-to-go copy on the canvas without running a tracking query", () => {
-    const queryTracking = vi.fn<ReadyToGoTrackingQuery>();
+    const query = vi.fn<TrackingPageQuery>();
     const onPropsChange = vi.fn();
     render(
-      <ReadyToGoRuntimeProvider queryTracking={queryTracking}>
+      <ReadyToGoRuntimeProvider query={query}>
         <ReadyToGoQueryEditor
           heading="Track your order"
           submitLabel="Track Your Order"
@@ -63,17 +63,17 @@ describe("V0.7.0 Ready-to-go", () => {
       </ReadyToGoRuntimeProvider>
     );
 
-    const query = within(screen.getByLabelText("Ready-to-go query editor"));
-    fireEvent.change(query.getByLabelText("Canvas heading"), { target: { value: "Find your parcel" } });
-    fireEvent.change(query.getByLabelText("Canvas submitLabel"), { target: { value: "Check delivery" } });
-    fireEvent.change(query.getByLabelText("Canvas default tracking number"), { target: { value: "BT-EDIT" } });
-    fireEvent.change(query.getByLabelText("Canvas trackingTabLabel"), { target: { value: "Parcel ID" } });
+    const queryEditor = within(screen.getByLabelText("Ready-to-go query editor"));
+    fireEvent.change(queryEditor.getByLabelText("Canvas heading"), { target: { value: "Find your parcel" } });
+    fireEvent.change(queryEditor.getByLabelText("Canvas submitLabel"), { target: { value: "Check delivery" } });
+    fireEvent.change(queryEditor.getByLabelText("Canvas default tracking number"), { target: { value: "BT-EDIT" } });
+    fireEvent.change(queryEditor.getByLabelText("Canvas trackingTabLabel"), { target: { value: "Parcel ID" } });
     fireEvent.change(within(screen.getByLabelText("Ready-to-go delivery editor")).getByLabelText("Canvas heading"), { target: { value: "Shipment facts" } });
     fireEvent.change(screen.getByLabelText("Canvas contentsHeading"), { target: { value: "Inside the box" } });
     fireEvent.change(screen.getByLabelText("Canvas carrierHeading"), { target: { value: "Courier" } });
     fireEvent.change(within(screen.getByLabelText("Ready-to-go recommendations editor")).getByLabelText("Canvas heading"), { target: { value: "Also consider" } });
 
-    expect(queryTracking).not.toHaveBeenCalled();
+    expect(query).not.toHaveBeenCalled();
     expect(screen.queryByRole("button", { name: "Track Your Order" })).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Canvas poweredBy")).not.toBeInTheDocument();
     expect(screen.queryByText("Shipment progress appears after a consumer tracking query.")).not.toBeInTheDocument();
@@ -103,12 +103,12 @@ describe("V0.7.0 Ready-to-go", () => {
   });
 
   it("uses one query result as shared RuntimeState for every result block", async () => {
-    const queryTracking = vi.fn<ReadyToGoTrackingQuery>().mockResolvedValue({
+    const query = vi.fn<TrackingPageQuery>().mockResolvedValue({
       trackingNumber: "BT-7777",
       status: "Out for delivery",
       carrier: "BestTrack",
       latestEvent: "Courier assigned",
-      deliveryAddress: "Shanghai",
+      destination: "Shanghai",
       estimatedDelivery: "Sep 22 - Sep 24",
       progress: [
         { id: "ordered", label: "Ordered", state: "complete" },
@@ -119,15 +119,15 @@ describe("V0.7.0 Ready-to-go", () => {
       ],
       events: [{ id: "hub", title: "Courier assigned", at: "Sep 18, 4:00 PM", state: "current" }],
       orderItems: [{ id: "case", title: "Travel case", quantity: 1, description: "Protects the shipment." }],
-      recommendations: [{ id: "cover", title: "Shipping cover", description: "Protect the next order.", price: "$12.00" }]
+      recommendations: [{ id: "cover", title: "Shipping cover", description: "Protect the next order.", price: { amount: 1200, currencyCode: "USD" } }]
     });
 
-    renderReadyToGo(queryTracking);
+    renderReadyToGo(query);
     fireEvent.change(screen.getByLabelText("Tracking number"), { target: { value: "BT-7777" } });
     fireEvent.click(screen.getByRole("button", { name: "Track Your Order" }));
 
-    await waitFor(() => expect(queryTracking).toHaveBeenCalledTimes(1));
-    expect(queryTracking).toHaveBeenCalledWith("BT-7777");
+    await waitFor(() => expect(query).toHaveBeenCalledTimes(1));
+    expect(query).toHaveBeenCalledWith({ mode: "tracking", trackingNumber: "BT-7777" });
     expect(await screen.findByRole("heading", { name: "Out for delivery" })).toBeVisible();
     expect(screen.getByLabelText("Delivery progress")).toBeVisible();
     expect(screen.getByLabelText("Delivery progress")).toHaveStyle({ width: "100%", overflow: "visible" });
@@ -148,40 +148,40 @@ describe("V0.7.0 Ready-to-go", () => {
   });
 
   it("disables submit while loading and shows a controlled query error", async () => {
-    const pending = deferred<Awaited<ReturnType<ReadyToGoTrackingQuery>>>();
-    const queryTracking = vi.fn<ReadyToGoTrackingQuery>().mockReturnValue(pending.promise);
-    renderReadyToGo(queryTracking);
+    const pending = deferred<Awaited<ReturnType<TrackingPageQuery>>>();
+    const query = vi.fn<TrackingPageQuery>().mockReturnValue(pending.promise);
+    renderReadyToGo(query);
 
     fireEvent.click(screen.getByRole("button", { name: "Track Your Order" }));
     expect(screen.getByRole("button", { name: "Tracking…" })).toBeDisabled();
     expect(screen.getByLabelText("Loading shipment progress")).toBeVisible();
 
     pending.reject(new Error("carrier-timeout"));
-    expect(await screen.findByRole("alert")).toHaveTextContent("carrier-timeout");
+    expect(await screen.findByRole("alert")).toHaveTextContent("We couldn’t retrieve this order right now. Please try again later.");
     expect(screen.getByText("Shipment progress is temporarily unavailable.")).toBeVisible();
     expect(screen.getByText("Delivery details are temporarily unavailable.")).toBeVisible();
     expect(screen.getByText("Recommendations are temporarily unavailable.")).toBeVisible();
   });
 
   it("keeps delivery fields visible when some result values are missing", async () => {
-    const queryTracking = vi.fn<ReadyToGoTrackingQuery>().mockResolvedValue({
-      trackingNumber: "BT-1",
+    const query = vi.fn<TrackingPageQuery>().mockResolvedValue({
+      trackingNumber: "BT-1000",
       status: "Ordered"
     });
-    renderReadyToGo(queryTracking);
+    renderReadyToGo(query);
     fireEvent.click(screen.getByRole("button", { name: "Track Your Order" }));
     expect(await screen.findByText("Not available")).toBeVisible();
-    expect(screen.getByText("Delivery details are not available.")).toBeVisible();
+    expect(screen.getByText("Destination details are not available.")).toBeVisible();
     expect(screen.getByText("Shipping events will appear when the carrier publishes them.")).toBeVisible();
   });
 
   it("uses a placeholder when a recommendation image fails", async () => {
-    const queryTracking = vi.fn<ReadyToGoTrackingQuery>().mockResolvedValue({
-      trackingNumber: "BT-2",
+    const query = vi.fn<TrackingPageQuery>().mockResolvedValue({
+      trackingNumber: "BT-2000",
       status: "In transit",
       recommendations: [{ id: "cover", title: "Shipping cover", description: "Protect the next order.", imageUrl: "https://example.invalid/cover.png" }]
     });
-    renderReadyToGo(queryTracking);
+    renderReadyToGo(query);
     fireEvent.click(screen.getByRole("button", { name: "Track Your Order" }));
     const image = await screen.findByAltText("Shipping cover");
     fireEvent.error(image);

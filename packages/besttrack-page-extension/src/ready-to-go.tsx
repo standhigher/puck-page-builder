@@ -16,7 +16,6 @@ import {
 import { isValidOrderEmail, isValidOrderNumber, isValidTrackingNumber } from "./tracking-page-runtime";
 import type {
   TrackingPageOrderItem,
-  LegacyTrackingPageQuery,
   TrackingPageQuery,
   TrackingPageQueryRequest,
   TrackingPageQueryResult,
@@ -27,15 +26,13 @@ import type {
   TrackingPageWatermark
 } from "./tracking-page-runtime";
 
-/** Backward-compatible Ready-to-go names for the shared Consumer Runtime contract. */
+/** Ready-to-go names for the shared Consumer Runtime contract. */
 export type ReadyToGoOrderItem = TrackingPageOrderItem;
 export type ReadyToGoRecommendation = TrackingPageRecommendation;
 export type ReadyToGoTrackingStep = TrackingPageTrackingStep;
 export type ReadyToGoTrackingEvent = TrackingPageTrackingEvent;
 export type ReadyToGoShipment = TrackingPageShipment;
 export type ReadyToGoTrackingResult = TrackingPageQueryResult;
-/** @deprecated Use `TrackingPageQuery` and the `query` provider prop. */
-export type ReadyToGoTrackingQuery = LegacyTrackingPageQuery;
 export type ReadyToGoRuntimeState = { phase: "idle" | "loading" | "success" | "error"; result?: ReadyToGoTrackingResult; error?: string };
 type ReadyToGoRuntime = ReadyToGoRuntimeState & { query(request: TrackingPageQueryRequest): Promise<void>; watermark?: TrackingPageWatermark };
 
@@ -47,8 +44,6 @@ export type ReadyToGoRuntimeProviderProps = {
   query?: TrackingPageQuery;
   /** Host-decided display state; no entitlement checks happen in this package. */
   watermark?: TrackingPageWatermark;
-  /** @deprecated Compatibility bridge for tracking-only integrations. */
-  queryTracking?: ReadyToGoTrackingQuery;
 };
 
 /** Mock is an explicit preview default, never a fallback for an injected live query. */
@@ -59,7 +54,7 @@ function previewReadyToGoTracking(trackingNumber = "BT-2048-DEMO"): ReadyToGoTra
     carrier: "BestTrack demo carrier",
     latestEvent: "Shipment accepted at the regional hub",
     updatedAt: "Sep 17, 10:00 AM",
-    deliveryAddress: "Demo recipient · Shanghai",
+    destination: "Shanghai",
     estimatedDelivery: "Sep 22 - Sep 24",
     progress: defaultProgress("In transit"),
     events: [
@@ -68,8 +63,8 @@ function previewReadyToGoTracking(trackingNumber = "BT-2048-DEMO"): ReadyToGoTra
     ],
     orderItems: [{ id: "demo-order-item", title: "Demo shipment item", quantity: 1, description: "Product details are available in your order." }],
     recommendations: [
-      { id: "shipping-protection", title: "Shipping protection", description: "Extra assurance for your next delivery.", price: "$9.00" },
-      { id: "delivery-alerts", title: "Delivery alerts", description: "Receive an update at every milestone.", price: "$4.00" }
+      { id: "shipping-protection", title: "Shipping protection", description: "Extra assurance for your next delivery.", price: { amount: 900, currencyCode: "USD" } },
+      { id: "delivery-alerts", title: "Delivery alerts", description: "Receive an update at every milestone.", price: { amount: 400, currencyCode: "USD" } }
     ]
   };
 }
@@ -78,20 +73,16 @@ async function queryMockReadyToGoTracking(request: TrackingPageQueryRequest): Pr
   return previewReadyToGoTracking(request.mode === "tracking" ? request.trackingNumber : request.orderNumber);
 }
 
-export function ReadyToGoRuntimeProvider({ children, query: injectedQuery, queryTracking, watermark }: ReadyToGoRuntimeProviderProps) {
+export function ReadyToGoRuntimeProvider({ children, query: injectedQuery, watermark }: ReadyToGoRuntimeProviderProps) {
   const [state, setState] = useState<ReadyToGoRuntimeState>({ phase: "idle" });
   const query = useCallback(async (request: TrackingPageQueryRequest) => {
     setState({ phase: "loading" });
     try {
-      const result = injectedQuery
-        ? await injectedQuery(request)
-        : queryTracking
-          ? await queryTracking(request.mode === "tracking" ? request.trackingNumber : request.orderNumber)
-          : await queryMockReadyToGoTracking(request);
+      const result = injectedQuery ? await injectedQuery(request) : await queryMockReadyToGoTracking(request);
       setState({ phase: "success", result });
     }
-    catch (error) { setState({ phase: "error", error: error instanceof Error ? error.message : "tracking-query-failed" }); }
-  }, [injectedQuery, queryTracking]);
+    catch { setState({ phase: "error", error: "We couldn’t retrieve this order right now. Please try again later." }); }
+  }, [injectedQuery]);
   const value = useMemo<ReadyToGoRuntime>(() => ({ ...state, query, watermark }), [query, state, watermark]);
   return <ReadyToGoRuntimeContext.Provider value={value}>{children}</ReadyToGoRuntimeContext.Provider>;
 }
@@ -207,7 +198,7 @@ function DeliveryResult({ heading, contentsHeading, carrierHeading, result }: { 
       <div>
         <h3 style={{ margin: "0 0 12px", fontSize: 18, fontWeight: 700 }}>{carrierHeading}</h3>
         <p style={{ margin: 0, fontSize: 14, fontWeight: 600, color: "#1e293b" }}>{result.carrier ?? "Not available"}</p>
-        <p style={{ margin: "8px 0 0", fontSize: 14, color: "#64748b" }}>{result.deliveryAddress ?? "Delivery details are not available."}</p>
+        <p style={{ margin: "8px 0 0", fontSize: 14, color: "#64748b" }}>{result.destination ?? "Destination details are not available."}</p>
       </div>
     </div>
   </div>;
@@ -291,7 +282,7 @@ export function ReadyToGoQueryBlock(props: Record<string, unknown>) {
     setLocalError("");
     if (mode === "order") {
       if (!isValidOrderNumber(orderNumber.trim())) {
-        setLocalError("Enter an order number using 4–64 letters, numbers, or hyphens.");
+        setLocalError("Enter an order number using 1–64 non-space characters.");
         return;
       }
       if (!isValidOrderEmail(email.trim())) {
@@ -302,7 +293,7 @@ export function ReadyToGoQueryBlock(props: Record<string, unknown>) {
       return;
     }
     if (!isValidTrackingNumber(trackingNumber.trim())) {
-      setLocalError("Enter a tracking number using 4–64 letters, numbers, or hyphens.");
+      setLocalError("Enter a tracking number using 6–64 letters, numbers, hyphens, or underscores.");
       return;
     }
     void runtime.query({ mode: "tracking", trackingNumber: trackingNumber.trim() });
@@ -323,7 +314,7 @@ export function ReadyToGoQueryBlock(props: Record<string, unknown>) {
           <input id="ready-to-go-email" aria-label="Email" type="email" value={email} onChange={(event) => setEmail(event.target.value)} required placeholder="Enter your email" style={inputStyle} />
         </> : <>
           <label htmlFor="ready-to-go-tracking-number" style={{ position: "absolute", width: 1, height: 1, overflow: "hidden", clipPath: "inset(50%)" }}>Tracking number</label>
-          <input id="ready-to-go-tracking-number" aria-label="Tracking number" value={trackingNumber} onChange={(event) => setTrackingNumber(event.target.value)} required minLength={4} maxLength={64} placeholder="Enter your tracking number" style={inputStyle} />
+          <input id="ready-to-go-tracking-number" aria-label="Tracking number" value={trackingNumber} onChange={(event) => setTrackingNumber(event.target.value)} required minLength={6} maxLength={64} placeholder="Enter your tracking number" style={inputStyle} />
         </>}
         {localError ? <p style={{ margin: 0, textAlign: "center", fontSize: 12, color: "#f43f5e" }}>{localError}</p> : null}
         <button type="submit" disabled={loading} style={{ display: "flex", alignItems: "center", justifyContent: "center", width: "100%", minHeight: 58, marginTop: 8, border: 0, borderRadius: "var(--pb-radius, 8px)", background: loading ? "#475569" : "var(--pb-color-primary, #111)", color: "#fff", font: "inherit", fontSize: 15, fontWeight: 600, cursor: loading ? "wait" : "pointer", opacity: loading ? 0.7 : 1 }}>{loading ? "Tracking…" : submitLabel}</button>

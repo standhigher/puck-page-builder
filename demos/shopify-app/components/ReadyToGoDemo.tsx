@@ -1,6 +1,6 @@
 "use client";
 
-import { bestTrackPageExtension, ReadyToGoRuntimeProvider, type ReadyToGoTrackingQuery } from "@standhigher/besttrack-page-extension";
+import { bestTrackPageExtension, ReadyToGoRuntimeProvider, type TrackingPageQuery } from "@standhigher/besttrack-page-extension";
 import { PageDocumentEditorShell } from "@standhigher/puck-page-builder";
 import { createExtensionRegistry, migratePageDocument, WebRenderer, type PageDocument } from "@standhigher/puck-page-builder/runtime";
 import { Banner, BlockStack, Card, Page, Text } from "@shopify/polaris";
@@ -36,11 +36,13 @@ export function ReadyToGoDemo({ getSessionToken }: { getSessionToken?: GetSessio
     void load();
     return () => { active = false; };
   }, [initialDocument]);
-  const queryTracking = useCallback<ReadyToGoTrackingQuery>(async (trackingNumber) => {
-    if (!getSessionToken) return { trackingNumber, status: "In transit", carrier: "BestTrack demo carrier", latestEvent: "Shipment accepted at the regional hub", deliveryAddress: "Demo recipient · Shanghai", recommendations: [{ id: "shipping-protection", title: "Shipping protection", description: "Extra assurance for your next delivery." }] };
+  const query = useCallback<TrackingPageQuery>(async (request) => {
+    const trackingNumber = request.mode === "tracking" ? request.trackingNumber : request.orderNumber;
+    if (!getSessionToken) return { trackingNumber, status: "In transit", carrier: "BestTrack demo carrier", latestEvent: "Shipment accepted at the regional hub", destination: "Shanghai", recommendations: [{ id: "shipping-protection", title: "Shipping protection", description: "Extra assurance for your next delivery." }] };
+    if (request.mode !== "tracking") throw new Error("demo-order-query-not-configured");
     const source = registry.getDataSource("besttrack.tracking.query");
     if (!source) throw new Error("besttrack-tracking-source-not-registered");
-    return source.live({ trackingNumber }) as Promise<Awaited<ReturnType<ReadyToGoTrackingQuery>>>;
+    return source.live({ trackingNumber }) as Promise<Awaited<ReturnType<TrackingPageQuery>>>;
   }, [getSessionToken, registry]);
 
   const save = async (next: PageDocument, resource: "draft" | "published") => {
@@ -49,7 +51,7 @@ export function ReadyToGoDemo({ getSessionToken }: { getSessionToken?: GetSessio
   };
   if (loadState === "error") return <Page fullWidth><Banner tone="critical" title="无法加载 Ready-to-go 草稿">草稿未通过 PageDocument 校验，编辑器未打开。</Banner></Page>;
 
-  return <ReadyToGoRuntimeProvider queryTracking={queryTracking}>
+  return <ReadyToGoRuntimeProvider query={query}>
     <Page fullWidth>
       <BlockStack gap="300">
         <Card>

@@ -27,15 +27,14 @@ error.
 The transport is deliberately not prescribed here. Its logical payload is:
 
 ```ts
-type TrackingPageQueryRequest = {
-  trackingNumber: string; // 4–64 display-safe characters after host validation
-};
+type TrackingPageQueryRequest =
+  | { mode: "tracking"; trackingNumber: string } // 6–64 letters, numbers, hyphens or underscores
+  | { mode: "order"; orderNumber: string; email: string };
 ```
 
-This is intentionally the only query mode supported by Sales Hero. The
-storefront must not present an order-number mode, or submit an order identifier
-as `trackingNumber`, until the Go Consumer Runtime API publishes a separate
-discriminated request mode with its own validation and authorization rules.
+The storefront must never submit an order identifier through `trackingNumber`.
+Order mode requires both values and an independent server-side authorization
+check before reaching commerce or carrier systems.
 
 The Consumer Runtime API must determine the tenant and authorization scope
 from trusted request context, not from a `PageDocument`, browser-supplied shop
@@ -46,8 +45,7 @@ upstream carrier or commerce system.
 
 On a successful lookup the API returns the display-safe shape exported as
 `TrackingPageQueryResult` by `@standhigher/besttrack-page-extension`.
-`outcome: "empty"` is a successful query with no result; an omitted `outcome`
-is treated as the legacy compatible `found` case. Optional item, shipment and
+`outcome: "empty"` is a successful query with no result. Optional item, shipment and
 recommendation fields are for the active response only. They must not be
 written into the PageDocument or `binding.params`.
 
@@ -59,9 +57,9 @@ full tracking number, customer address, token or raw upstream body.
 
 ## Resource references and rendering
 
-Sales document props may retain a JSON-only resource reference and minimal
-merchant-authored display copy, such as a collection ID, label and relative
-link. Any authorization or resolution of that reference belongs to the
+Sales document props may retain a JSON-only stable Shopify resource reference
+and minimal merchant-authored display copy, such as a collection ID and label.
+Any authorization or resolution of that reference belongs to the
 Consumer Runtime API or another trusted service. Sales blocks do not make
 resource requests themselves. Invalid links and missing images render a
 controlled fallback rather than a broken resource.

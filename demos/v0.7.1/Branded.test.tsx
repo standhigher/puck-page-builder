@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import { bestTrackBrandedExtension, BrandedRuntimeProvider, type ReadyToGoTrackingQuery, type TrackingPageQuery } from "../../packages/besttrack-page-extension/src";
+import { bestTrackBrandedExtension, BrandedRuntimeProvider, type TrackingPageQuery } from "../../packages/besttrack-page-extension/src";
 import { createExtensionRegistry } from "../../packages/puck-page-builder/src/core/extensions";
 import { WebRenderer } from "../../packages/puck-page-builder/src/renderer/web/WebRenderer";
 
@@ -14,10 +14,10 @@ describe("V0.7.1 Branded", () => {
 
   it("keeps the selected shipment, result progress, details and recommendations in one tracking journey", async () => {
     const registry = createExtensionRegistry([bestTrackBrandedExtension]);
-    const query = vi.fn<ReadyToGoTrackingQuery>().mockResolvedValue({ trackingNumber: "BT-1000", status: "In transit", shipments: [{ id: "first", label: "Shipment #1", trackingNumber: "BT-first", orderItems: [{ id: "tote", title: "Studio tote", quantity: 2 }], recommendations: [{ id: "cover", title: "Shipping cover", description: "Protection for a future order." }], progress: [{ id: "ordered", label: "Ordered", state: "complete" }, { id: "transit", label: "In Transit", state: "current" }], events: [{ id: "hub", title: "Accepted at regional hub", at: "Sep 4, 3:51 PM", state: "current" }] }, { id: "second", label: "Shipment #2", trackingNumber: "BT-second", status: "Order Ready", orderItems: [{ id: "case", title: "Travel case", quantity: 1 }], recommendations: [], events: [{ id: "packing", title: "Package is being prepared", state: "current" }] }] });
-    render(<BrandedRuntimeProvider queryTracking={query}><WebRenderer document={registry.getTemplate("besttrack.branded")!.create()} registry={registry} /></BrandedRuntimeProvider>);
+    const query = vi.fn<TrackingPageQuery>().mockResolvedValue({ trackingNumber: "BT-1000", status: "In transit", shipments: [{ id: "first", label: "Shipment #1", trackingNumber: "BT-first", orderItems: [{ id: "tote", title: "Studio tote", quantity: 2 }], recommendations: [{ id: "cover", title: "Shipping cover", description: "Protection for a future order." }], progress: [{ id: "ordered", label: "Ordered", state: "complete" }, { id: "transit", label: "In Transit", state: "current" }], events: [{ id: "hub", title: "Accepted at regional hub", at: "Sep 4, 3:51 PM", state: "current" }] }, { id: "second", label: "Shipment #2", trackingNumber: "BT-second", status: "Order Ready", orderItems: [{ id: "case", title: "Travel case", quantity: 1 }], recommendations: [], events: [{ id: "packing", title: "Package is being prepared", state: "current" }] }] });
+    render(<BrandedRuntimeProvider query={query}><WebRenderer document={registry.getTemplate("besttrack.branded")!.create()} registry={registry} /></BrandedRuntimeProvider>);
     fireEvent.click(screen.getByRole("button", { name: "Track" }));
-    await waitFor(() => expect(query).toHaveBeenCalledWith("DEMO-YQTRACK9999"));
+    await waitFor(() => expect(query).toHaveBeenCalledWith({ mode: "tracking", trackingNumber: "DEMO-YQTRACK9999" }));
     expect(await screen.findByText("Studio tote")).toBeVisible();
     expect(screen.getByText("In transit")).toBeVisible();
     expect(screen.getByLabelText("Delivery progress")).toBeVisible();
@@ -35,11 +35,11 @@ describe("V0.7.1 Branded", () => {
   it("keeps configured brand content and links on the namespaced surface", () => {
     const registry = createExtensionRegistry([bestTrackBrandedExtension]);
     const document = registry.getTemplate("besttrack.branded")!.create();
-    document.blocks[0]!.props = { ...document.blocks[0]!.props, message: "Northstar summer sale", href: "/collections/summer" };
-    render(<BrandedRuntimeProvider queryTracking={async () => ({ trackingNumber: "BT-2048-DEMO", status: "idle" })}><WebRenderer document={document} registry={registry} /></BrandedRuntimeProvider>);
+    document.blocks[0]!.props = { ...document.blocks[0]!.props, message: "Northstar summer sale", href: "https://example.com/collections/summer" };
+    render(<BrandedRuntimeProvider query={async () => ({ trackingNumber: "BT-2048-DEMO", status: "idle" })}><WebRenderer document={document} registry={registry} /></BrandedRuntimeProvider>);
     expect(screen.getByText("Northstar summer sale")).toBeVisible();
     expect(screen.getByLabelText("Branded announcement")).toHaveStyle({ background: "#252525" });
-    expect(screen.getByRole("link", { name: "Northstar summer sale" })).toHaveAttribute("href", "/collections/summer");
+    expect(screen.getByRole("link", { name: "Northstar summer sale" })).toHaveAttribute("href", "https://example.com/collections/summer");
   });
 
   it("renders configured query tab labels", () => {
@@ -55,13 +55,13 @@ describe("V0.7.1 Branded", () => {
   it("uses the shared Consumer Runtime empty and error states without exposing host errors", async () => {
     const registry = createExtensionRegistry([bestTrackBrandedExtension]);
     const emptyQuery = vi.fn<TrackingPageQuery>().mockResolvedValue({ trackingNumber: "BT-empty", status: "Not found", outcome: "empty" });
-    const { rerender } = render(<BrandedRuntimeProvider queryTracking={emptyQuery}><WebRenderer document={registry.getTemplate("besttrack.branded")!.create()} registry={registry} /></BrandedRuntimeProvider>);
+    const { rerender } = render(<BrandedRuntimeProvider query={emptyQuery}><WebRenderer document={registry.getTemplate("besttrack.branded")!.create()} registry={registry} /></BrandedRuntimeProvider>);
 
     fireEvent.click(screen.getByRole("button", { name: "Track" }));
     expect(await screen.findByText("We couldn’t find an order for that number.")).toBeVisible();
     expect(screen.queryByLabelText("Tracking result")).not.toBeInTheDocument();
 
-    rerender(<BrandedRuntimeProvider queryTracking={async () => { throw new Error("upstream credential detail"); }}><WebRenderer document={registry.getTemplate("besttrack.branded")!.create()} registry={registry} /></BrandedRuntimeProvider>);
+    rerender(<BrandedRuntimeProvider query={async () => { throw new Error("upstream credential detail"); }}><WebRenderer document={registry.getTemplate("besttrack.branded")!.create()} registry={registry} /></BrandedRuntimeProvider>);
     fireEvent.click(screen.getByRole("button", { name: "Track" }));
     expect(await screen.findByText("We couldn’t retrieve this order right now. Please try again later.")).toBeVisible();
     expect(screen.queryByText("upstream credential detail")).not.toBeInTheDocument();
@@ -70,7 +70,7 @@ describe("V0.7.1 Branded", () => {
   it("renders a controlled product fallback for invalid Consumer Runtime resource URLs", async () => {
     const registry = createExtensionRegistry([bestTrackBrandedExtension]);
     const query = vi.fn<TrackingPageQuery>().mockResolvedValue({ trackingNumber: "BT-safe", status: "In transit", shipments: [{ id: "first", label: "Shipment #1", recommendations: [{ id: "cover", title: "Delivery cover", description: "A simple protection plan.", imageUrl: "javascript:unsafe", href: "javascript:unsafe" }] }] });
-    render(<BrandedRuntimeProvider queryTracking={query}><WebRenderer document={registry.getTemplate("besttrack.branded")!.create()} registry={registry} /></BrandedRuntimeProvider>);
+    render(<BrandedRuntimeProvider query={query}><WebRenderer document={registry.getTemplate("besttrack.branded")!.create()} registry={registry} /></BrandedRuntimeProvider>);
 
     fireEvent.click(screen.getByRole("button", { name: "Track" }));
     expect(await screen.findByLabelText("Delivery cover image unavailable")).toBeVisible();

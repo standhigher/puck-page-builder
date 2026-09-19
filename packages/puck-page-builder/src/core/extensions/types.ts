@@ -36,6 +36,8 @@ export type FieldValidation = {
   minLength?: number;
   maxLength?: number;
   allowRelativeUrl?: boolean;
+  /** Allows HTTP only for an explicit local development host. */
+  allowLocalhost?: boolean;
   allowedUrlProtocols?: Array<"http:" | "https:">;
 };
 

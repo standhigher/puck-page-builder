@@ -1,6 +1,6 @@
 # Branded template integration
 
-V0.7.1 provides the built-in Web template besttrack.branded at version 1. It
+V0.8 provides the built-in Web template besttrack.branded at version 1. It
 creates five blocks: announcement, tracking experience, recommendations, quick
 links and Blog. The tracking experience is a composite consumer block: it owns
 the shipment switcher, query hero and the successful-query result.
@@ -12,8 +12,8 @@ besttrack.tracking.query. Render the Editor, preview and Storefront document
 with this same Registry. The Branded blocks are deliberately presentation-only:
 the host supplies a BrandedRuntimeProvider (or an equivalent host wrapper)
 with a `TrackingPageQuery`: an explicit mock query in preview and a
-server-authorized live query in production. The legacy
-`ReadyToGoTrackingQuery` alias remains assignable for existing integrations.
+server-authorized live query in production. The sole query contract is the
+discriminated `TrackingPageQuery`: tracking number, or order number plus email.
 
 The query result is shared by the tracking experience and recommendations
 blocks. A result may expose multiple shipments; selecting one changes the

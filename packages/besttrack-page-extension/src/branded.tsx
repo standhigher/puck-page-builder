@@ -5,7 +5,7 @@ import {
   isValidOrderEmail,
   isValidOrderNumber,
   isValidTrackingNumber,
-  type LegacyTrackingPageQuery,
+  formatTrackingPageMoney,
   type TrackingPageQuery,
   type TrackingPageQueryRequest,
   type TrackingPageQueryResult,
@@ -15,6 +15,7 @@ import {
   type TrackingPageTrackingStep,
   type TrackingPageWatermark
 } from "./tracking-page-runtime";
+import { safeTrackingPageUrl } from "./tracking-page-url";
 
 /** Branded uses the shared, display-safe Consumer Runtime result without persisting it. */
 export type BrandedRuntimeState = { phase: TrackingPageRuntimePhase; result?: TrackingPageQueryResult; error?: string };
@@ -39,18 +40,16 @@ const initialRuntime: BrandedRuntime = {
 const BrandedRuntimeContext = createContext<BrandedRuntime>(initialRuntime);
 export type BrandedRuntimeProviderProps = {
   children: ReactNode;
-  /** The discriminated request contract for new host integrations. */
+  /** The discriminated, host-authorized request contract. */
   query?: TrackingPageQuery;
   /** Host-decided display state; no entitlement checks happen in this package. */
   watermark?: TrackingPageWatermark;
-  /** @deprecated Tracking-only compatibility bridge. Use `query`. */
-  queryTracking?: LegacyTrackingPageQuery;
 };
 
 const contentWidth = { width: "min(1200px, 100%)", margin: "0 auto", padding: "0 clamp(16px, 4vw, 48px)", boxSizing: "border-box" as const };
 const cardStyle = { background: "#fff", color: "#0a0a0a", border: "1px solid #e7e7e7", borderRadius: 10, fontFamily: "var(--pb-font-family)" };
 
-export function BrandedRuntimeProvider({ children, query: injectedQuery, queryTracking, watermark }: BrandedRuntimeProviderProps) {
+export function BrandedRuntimeProvider({ children, query: injectedQuery, watermark }: BrandedRuntimeProviderProps) {
   const [state, setState] = useState<BrandedRuntimeState>({ phase: "idle" });
   const [selectedShipmentId, setSelectedShipmentId] = useState<string | null>(null);
   const requestId = useRef(0);
@@ -58,10 +57,8 @@ export function BrandedRuntimeProvider({ children, query: injectedQuery, queryTr
     const currentRequestId = ++requestId.current;
     setState({ phase: "loading" });
     try {
-      if (!injectedQuery && !queryTracking) throw new Error("tracking-query-not-configured");
-      const result = injectedQuery
-        ? await injectedQuery(request)
-        : await queryTracking!(request.mode === "tracking" ? request.trackingNumber : request.orderNumber);
+      if (!injectedQuery) throw new Error("tracking-query-not-configured");
+      const result = await injectedQuery(request);
       if (currentRequestId !== requestId.current) return;
       setSelectedShipmentId(result.shipments?.[0]?.id ?? null);
       setState({ phase: isEmptyTrackingPageResult(result) ? "empty" : "success", result });
@@ -69,7 +66,7 @@ export function BrandedRuntimeProvider({ children, query: injectedQuery, queryTr
       if (currentRequestId !== requestId.current) return;
       setState({ phase: "error", error: "tracking-query-failed" });
     }
-  }, [injectedQuery, queryTracking]);
+  }, [injectedQuery]);
   const reset = useCallback(() => {
     requestId.current += 1;
     setSelectedShipmentId(null);
@@ -84,8 +81,8 @@ export function BrandedRuntimeProvider({ children, query: injectedQuery, queryTr
     if (state.result?.shipments?.some((shipment) => shipment.id === id)) setSelectedShipmentId(id);
   }, [state.result]);
   const value = useMemo<BrandedRuntime>(
-    () => ({ ...state, displayedResult, selectedShipmentId, query, reset, selectShipment, watermark: watermark ?? (queryTracking ? { visible: true } : undefined), supportsOrderQuery: Boolean(injectedQuery) }),
-    [displayedResult, injectedQuery, query, queryTracking, reset, selectedShipmentId, selectShipment, state, watermark]
+    () => ({ ...state, displayedResult, selectedShipmentId, query, reset, selectShipment, watermark, supportsOrderQuery: Boolean(injectedQuery) }),
+    [displayedResult, injectedQuery, query, reset, selectedShipmentId, selectShipment, state, watermark]
   );
   return <BrandedRuntimeContext.Provider value={value}>{children}</BrandedRuntimeContext.Provider>;
 }
@@ -93,15 +90,8 @@ export function BrandedRuntimeProvider({ children, query: injectedQuery, queryTr
 function useBrandedRuntime() { return useContext(BrandedRuntimeContext); }
 function RuntimeWatermark({ watermark }: { watermark?: TrackingPageWatermark }) { return watermark?.visible ? <small style={{ display: "block", marginTop: 10, color: "#8a8a8a", fontSize: 8, textAlign: "right" }}>{watermark.label || "Powered by BestTrack"}</small> : null; }
 function text(props: Record<string, unknown>, key: string, fallback: string) { return typeof props[key] === "string" ? props[key] : fallback; }
-function safeHref(value: unknown) {
-  if (typeof value !== "string") return "#";
-  if (value.startsWith("/") && !value.startsWith("//")) return value;
-  try { const url = new URL(value); return url.protocol === "https:" || url.protocol === "http:" ? url.toString() : "#"; } catch { return "#"; }
-}
-function safeImageUrl(value: unknown) {
-  if (typeof value !== "string") return "";
-  try { const url = new URL(value); return url.protocol === "https:" || url.protocol === "http:" ? url.toString() : ""; } catch { return ""; }
-}
+const safeHref = safeTrackingPageUrl;
+const safeImageUrl = safeTrackingPageUrl;
 function shipmentLabels(value: unknown) {
   return typeof value === "string"
     ? value.split("|").map((label, index) => ({ id: "configured-" + index, label: label.trim() })).filter((item) => item.label)
@@ -146,12 +136,12 @@ function QueryHero(props: Record<string, unknown>) {
     const order = orderNumber.trim();
     const orderEmail = email.trim();
     if (activeMode === "tracking") {
-      if (!isValidTrackingNumber(tracking)) { setInputError("Enter a tracking number using 4–64 letters, numbers, or hyphens."); return; }
+      if (!isValidTrackingNumber(tracking)) { setInputError("Enter a tracking number using 6–64 letters, numbers, hyphens, or underscores."); return; }
       setInputError("");
       void runtime.query({ mode: "tracking", trackingNumber: tracking });
       return;
     }
-    if (!isValidOrderNumber(order)) { setInputError("Enter an order number using 4–64 letters, numbers, or hyphens."); return; }
+    if (!isValidOrderNumber(order)) { setInputError("Enter an order number using 1–64 non-space characters."); return; }
     if (!isValidOrderEmail(orderEmail)) { setInputError("Enter a valid email address."); return; }
     setInputError("");
     void runtime.query({ mode: "order", orderNumber: order, email: orderEmail });
@@ -307,8 +297,9 @@ export function BrandedBlogEditor(block: BrandedEditorProps) {
 
 export function BrandedAnnouncementBlock(props: Record<string, unknown>) {
   const message = text(props, "message", "");
+  const href = safeHref(props.href);
   if (!message) return null;
-  return <section aria-label="Branded announcement" style={{ minHeight: 36, display: "grid", placeItems: "center", padding: "0 16px", background: "#252525", color: "#fff", fontFamily: "var(--pb-font-family)", fontSize: 12, textAlign: "center" }}><a href={safeHref(props.href)} style={{ color: "inherit", textDecoration: "none" }}>{message}</a></section>;
+  return <section aria-label="Branded announcement" style={{ minHeight: 36, display: "grid", placeItems: "center", padding: "0 16px", background: "#252525", color: "#fff", fontFamily: "var(--pb-font-family)", fontSize: 12, textAlign: "center" }}>{href ? <a href={href} style={{ color: "inherit", textDecoration: "none" }}>{message}</a> : message}</section>;
 }
 
 /** Complete consumer journey: pre-query hero, selected shipment and result details share one controller. */
@@ -339,7 +330,8 @@ export function BrandedOrderItemsBlock(props: Record<string, unknown>) {
 
 function RecommendationCard({ item }: { item: TrackingPageRecommendation }) {
   const href = safeHref(item.href);
-  return <article style={{ overflow: "hidden", borderRadius: 6, background: "#fff", boxShadow: "0 1px 2px rgb(0 0 0 / 8%)" }}><ProductImage src={item.imageUrl} alt={item.title} /><div style={{ padding: 14 }}><strong>{item.title}</strong>{item.price ? <p style={{ margin: "6px 0", fontWeight: 700 }}>{item.price}</p> : null}<p style={{ margin: "6px 0", color: "#6b6b6b", fontSize: 13 }}>{item.description}</p>{href === "#" ? <span style={{ color: "#6b6b6b", fontSize: 13, fontWeight: 700 }}>View product</span> : <a href={href} style={{ color: "#0a0a0a", fontSize: 13, fontWeight: 700 }}>View product</a>}</div></article>;
+  const price = item.price ? formatTrackingPageMoney(item.price) : undefined;
+  return <article style={{ overflow: "hidden", borderRadius: 6, background: "#fff", boxShadow: "0 1px 2px rgb(0 0 0 / 8%)" }}><ProductImage src={item.imageUrl} alt={item.title} /><div style={{ padding: 14 }}><strong>{item.title}</strong>{price?.amount ? <p style={{ margin: "6px 0", fontWeight: 700 }}>{price.amount}</p> : null}<p style={{ margin: "6px 0", color: "#6b6b6b", fontSize: 13 }}>{item.description}</p>{!href ? <span style={{ color: "#6b6b6b", fontSize: 13, fontWeight: 700 }}>View product</span> : <a href={href} style={{ color: "#0a0a0a", fontSize: 13, fontWeight: 700 }}>View product</a>}</div></article>;
 }
 
 export function BrandedRecommendationsBlock(props: Record<string, unknown>) {
@@ -355,10 +347,13 @@ export function BrandedRecommendationsBlock(props: Record<string, unknown>) {
 
 export function BrandedQuickLinksBlock(props: Record<string, unknown>) {
   const title = text(props, "heading", "Need help?");
-  return <section aria-label={title} style={{ ...cardStyle, margin: "24px auto", maxWidth: 1200, padding: 24 }}><h2>{title}</h2><div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 16 }}><a href={safeHref(props.primaryHref)} style={{ color: "#0a0a0a" }}>{text(props, "primaryLabel", "Shipping help")}</a><a href={safeHref(props.secondaryHref)} style={{ color: "#0a0a0a" }}>{text(props, "secondaryLabel", "Contact us")}</a></div></section>;
+  const primaryHref = safeHref(props.primaryHref);
+  const secondaryHref = safeHref(props.secondaryHref);
+  return <section aria-label={title} style={{ ...cardStyle, margin: "24px auto", maxWidth: 1200, padding: 24 }}><h2>{title}</h2><div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 16 }}>{primaryHref ? <a href={primaryHref} style={{ color: "#0a0a0a" }}>{text(props, "primaryLabel", "Shipping help")}</a> : <span>{text(props, "primaryLabel", "Shipping help")}</span>}{secondaryHref ? <a href={secondaryHref} style={{ color: "#0a0a0a" }}>{text(props, "secondaryLabel", "Contact us")}</a> : <span>{text(props, "secondaryLabel", "Contact us")}</span>}</div></section>;
 }
 
 export function BrandedBlogBlock(props: Record<string, unknown>) {
   const title = text(props, "heading", "From our journal");
-  return <section aria-label={title} style={{ ...cardStyle, margin: "24px auto", maxWidth: 1200, padding: 24 }}><h2>{title}</h2><article><strong>{text(props, "articleTitle", "Delivery tips for every season")}</strong><p>{text(props, "excerpt", "Simple ways to make every delivery feel considered.")}</p><a href={safeHref(props.articleHref)} style={{ color: "#0a0a0a" }}>{text(props, "linkLabel", "Read the story")}</a></article></section>;
+  const href = safeHref(props.articleHref);
+  return <section aria-label={title} style={{ ...cardStyle, margin: "24px auto", maxWidth: 1200, padding: 24 }}><h2>{title}</h2><article><strong>{text(props, "articleTitle", "Delivery tips for every season")}</strong><p>{text(props, "excerpt", "Simple ways to make every delivery feel considered.")}</p>{href ? <a href={href} style={{ color: "#0a0a0a" }}>{text(props, "linkLabel", "Read the story")}</a> : <span>{text(props, "linkLabel", "Read the story")}</span>}</article></section>;
 }

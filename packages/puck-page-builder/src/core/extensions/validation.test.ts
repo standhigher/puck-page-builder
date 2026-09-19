@@ -6,6 +6,8 @@ describe("generic extension validation", () => {
     expect(validateFieldValue({ field: "", control: "text", required: true, validation: { minLength: 3, maxLength: 5 } }, "a\nbcdef").map((issue) => issue.message)).toEqual(expect.arrayContaining(["必须为单行文本。", "最多允许 5 个字符。"]))
     expect(validateFieldValue({ field: "", control: "textarea", validation: { minLength: 3 } }, "a\nb")).toEqual([])
     expect(validateFieldValue({ field: "", control: "url" }, "/tracking/123")).toEqual([])
+    expect(validateFieldValue({ field: "", control: "url", validation: { allowRelativeUrl: false, allowedUrlProtocols: ["https:"], allowLocalhost: true } }, "/tracking/123")).toHaveLength(1)
+    expect(validateFieldValue({ field: "", control: "url", validation: { allowRelativeUrl: false, allowedUrlProtocols: ["https:"], allowLocalhost: true } }, "http://localhost:3000/tracking")).toEqual([])
     expect(validateFieldValue({ field: "", control: "url" }, "javascript:alert(1)")).toHaveLength(1)
     expect(validateFieldValue({ field: "", control: "color" }, "#005BD3")).toEqual([])
     expect(validateFieldValue({ field: "", control: "color" }, "blue")).toHaveLength(1)

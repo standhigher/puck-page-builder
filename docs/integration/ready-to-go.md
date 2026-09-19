@@ -14,15 +14,15 @@ const document = registry.getTemplate("besttrack.ready-to-go")!.create();
 
 ## RuntimeState 与数据边界
 
-每个 Ready-to-go 页面都由 `ReadyToGoRuntimeProvider` 包裹。查询区块只发起受控 `queryTracking`，物流进度、配送信息和推荐区块都订阅同一份 RuntimeState：
+每个 Ready-to-go 页面都由 `ReadyToGoRuntimeProvider` 包裹。查询区块只发起受控 `query`，物流进度、配送信息和推荐区块都订阅同一份 RuntimeState：
 
 ```tsx
-<ReadyToGoRuntimeProvider queryTracking={queryTracking}>
+<ReadyToGoRuntimeProvider query={query}>
   <WebRenderer document={document} registry={registry} />
 </ReadyToGoRuntimeProvider>
 ```
 
-不传 `queryTracking` 时，Provider 使用显式 Mock，适用于本地编辑与 Mock Preview。Live 模式必须由宿主注入已鉴权的 Consumer Runtime API 查询函数；失败会显示受控错误，不会回退为 Mock。不要将 Session Token、订单私密数据或查询结果写入 `PageDocument`。
+不传 `query` 时，Provider 使用显式 Mock，适用于本地编辑与 Mock Preview。Live 模式必须由宿主注入已鉴权的 Consumer Runtime API 查询函数；失败会显示受控错误，不会回退为 Mock。不要将 Session Token、订单私密数据或查询结果写入 `PageDocument`。
 
 Shopify Demo 的 `/page-builder` 已包含该模板的编辑器和 Consumer WebRenderer 预览。独立访问时使用 Mock；通过嵌入式 Shopify 应用访问时才启用现有 Session Token 保护的 Live DataSource。
 

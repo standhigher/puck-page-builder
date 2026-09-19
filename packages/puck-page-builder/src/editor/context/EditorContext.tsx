@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useReducer,
 import type { ExtensionRegistry } from "../../core/extensions";
 import type { BlockNode, JsonValue, PageDocument } from "../../core/schema/page-document";
 import type { Device } from "../state/types";
+import { canAddBlock, canApplyCanvasDocument, canDeleteBlock, canDragBlock, canDuplicateBlock, type PageDocumentEditorPolicy } from "../policy";
 
 export type EditorLoadState = "loading" | "ready" | "empty" | "error" | "disabled" | "success";
 
@@ -47,20 +48,26 @@ export type EditorContextValue = {
   document: PageDocument;
   selectedBlockId: string | null;
   selectedBlock: BlockNode | null;
+  pendingDeleteBlock: BlockNode | null;
   canvasSelectionRequest: string | null;
   device: Device;
   loadState: EditorLoadState;
   isDirty: boolean;
   actionState: EditorActionState;
+  canAddBlock(type: string): boolean;
+  canDragBlock(id: string): boolean;
   /** Request a canvas selection. The inspector changes only after Puck confirms it. */
   requestCanvasSelection(id: string): void;
   /** Called from the canvas/Puck selection event. */
   confirmCanvasSelection(id: string | null): void;
   /** Applies an edit that originated in the canvas engine. */
-  updateFromCanvas(document: PageDocument): void;
+  updateFromCanvas(document: PageDocument): boolean;
   setDevice(device: Device): void;
   addBlock(type: string, beforeId?: string): string | null;
   duplicateBlock(id: string): void;
+  requestDeleteBlock(id: string): void;
+  cancelDeleteBlock(): void;
+  confirmDeleteBlock(): void;
   deleteBlock(id: string): void;
   moveBlock(id: string, direction: -1 | 1): void;
   reorderBlock(id: string, beforeId: string): void;
@@ -87,13 +94,15 @@ function defaultBlock(type: string, blocks: BlockNode[], registry?: ExtensionReg
   return { id: uniqueBlockId(type, blocks), type, version: definition.version, props: definition.defaultProps as Record<string, JsonValue>, variant: definition.defaultVariant ?? "default", style: {} };
 }
 
-export function EditorProvider({ initialDocument, registry, loadState = "ready", leaveWarning = "You have unsaved changes.", onDocumentChange, children }: { initialDocument: PageDocument; registry?: ExtensionRegistry; loadState?: EditorLoadState; leaveWarning?: string; onDocumentChange?: (document: PageDocument) => void; children: ReactNode }) {
+export function EditorProvider({ initialDocument, registry, policy, loadState = "ready", leaveWarning = "You have unsaved changes.", onDocumentChange, children }: { initialDocument: PageDocument; registry?: ExtensionRegistry; policy?: PageDocumentEditorPolicy; loadState?: EditorLoadState; leaveWarning?: string; onDocumentChange?: (document: PageDocument) => void; children: ReactNode }) {
   const [history, dispatch] = useReducer(historyReducer, initialDocument, (document): EditorHistory => ({ document, selectedBlockId: document.blocks[0]?.id ?? null, past: [], future: [], device: "desktop", savedDocument: document }));
   const historyRef = useRef(history);
   useEffect(() => { historyRef.current = history; }, [history]);
   const [canvasSelectionRequest, setCanvasSelectionRequest] = useState<string | null>(null);
+  const [pendingDeleteBlockId, setPendingDeleteBlockId] = useState<string | null>(null);
   const editable = loadState === "ready" || loadState === "success";
   const selectedBlock = history.document.blocks.find((block) => block.id === history.selectedBlockId) ?? null;
+  const pendingDeleteBlock = history.document.blocks.find((block) => block.id === pendingDeleteBlockId) ?? null;
   const replace = useCallback((document: PageDocument, selectedBlockId: string | null) => dispatch({ type: "replace", document, selectedBlockId }), []);
   // Puck keeps the active contenteditable node only while its config is referentially stable.
   // Read the current document from a ref so typing in the canvas does not rebuild that config.
@@ -104,9 +113,11 @@ export function EditorProvider({ initialDocument, registry, loadState = "ready",
   }, []);
   const updateFromCanvas = useCallback((document: PageDocument) => {
     const current = historyRef.current;
-    if (!editable || JSON.stringify(document) === JSON.stringify(current.document)) return;
+    if (!editable || JSON.stringify(document) === JSON.stringify(current.document)) return false;
+    if (!canApplyCanvasDocument(current.document, document, (type) => registry?.getBlock(type), policy)) return false;
     replace(document, current.selectedBlockId);
-  }, [editable, replace]);
+    return true;
+  }, [editable, policy, registry, replace]);
   const updateBlockProps = useCallback((id: string, props: Record<string, JsonValue>) => {
     if (!editable) return;
     const current = historyRef.current;
@@ -143,27 +154,33 @@ export function EditorProvider({ initialDocument, registry, loadState = "ready",
     const actionState = {
       canUndo: editable && history.past.length > 0,
       canRedo: editable && history.future.length > 0,
-      canAdd: editable,
+      canAdd: editable && ["core.text", "core.image", ...(registry?.blocks.map((block) => block.type) ?? [])].some((type) => canAddBlock(type, history.document.blocks, registry?.getBlock(type), policy)),
       canEdit: editable && selectedBlock !== null,
-      canDelete: editable && selectedBlock !== null,
-      canDuplicate: editable && selectedBlock !== null,
-      canReorder: editable && history.document.blocks.length > 1
+      canDelete: editable && canDeleteBlock(selectedBlock, history.document.blocks, registry?.getBlock(selectedBlock?.type ?? ""), policy),
+      canDuplicate: editable && canDuplicateBlock(selectedBlock, history.document.blocks, registry?.getBlock(selectedBlock?.type ?? ""), policy),
+      canReorder: editable && history.document.blocks.length > 1 && canDragBlock(selectedBlock, registry?.getBlock(selectedBlock?.type ?? ""), policy)
     };
     return {
       document: history.document,
       selectedBlockId: history.selectedBlockId,
       selectedBlock,
+      pendingDeleteBlock,
       canvasSelectionRequest,
       device: history.device,
       loadState,
       isDirty,
       actionState,
+      canAddBlock: (type) => editable && canAddBlock(type, history.document.blocks, registry?.getBlock(type), policy),
+      canDragBlock: (id) => {
+        const block = history.document.blocks.find((item) => item.id === id);
+        return editable && canDragBlock(block, registry?.getBlock(block?.type ?? ""), policy);
+      },
       requestCanvasSelection,
       confirmCanvasSelection,
       updateFromCanvas,
       setDevice: (device) => dispatch({ type: "device", device }),
       addBlock: (type, beforeId) => {
-        if (!editable) return null;
+        if (!editable || !canAddBlock(type, history.document.blocks, registry?.getBlock(type), policy)) return null;
         const block = defaultBlock(type, history.document.blocks, registry);
         const blocks = [...history.document.blocks];
         const targetIndex = beforeId ? blocks.findIndex((item) => item.id === beforeId) : -1;
@@ -176,7 +193,7 @@ export function EditorProvider({ initialDocument, registry, loadState = "ready",
         if (!editable) return;
         const index = history.document.blocks.findIndex((block) => block.id === id);
         const source = history.document.blocks[index];
-        if (!source) return;
+        if (!canDuplicateBlock(source, history.document.blocks, registry?.getBlock(source?.type ?? ""), policy)) return;
         const block = { ...source, id: uniqueBlockId(source.type, history.document.blocks), props: { ...source.props } };
         const blocks = [...history.document.blocks];
         blocks.splice(index + 1, 0, block);
@@ -185,7 +202,8 @@ export function EditorProvider({ initialDocument, registry, loadState = "ready",
       deleteBlock: (id) => {
         if (!editable) return;
         const index = history.document.blocks.findIndex((block) => block.id === id);
-        if (index < 0) return;
+        const source = history.document.blocks[index];
+        if (!canDeleteBlock(source, history.document.blocks, registry?.getBlock(source?.type ?? ""), policy)) return;
         const blocks = history.document.blocks.filter((block) => block.id !== id);
         replace({ ...history.document, blocks }, blocks[index]?.id ?? blocks[index - 1]?.id ?? null);
       },
@@ -193,7 +211,7 @@ export function EditorProvider({ initialDocument, registry, loadState = "ready",
         if (!editable) return;
         const from = history.document.blocks.findIndex((block) => block.id === id);
         const to = from + direction;
-        if (from < 0 || to < 0 || to >= history.document.blocks.length) return;
+        if (from < 0 || to < 0 || to >= history.document.blocks.length || !canDragBlock(history.document.blocks[from], registry?.getBlock(history.document.blocks[from]?.type ?? ""), policy)) return;
         const blocks = [...history.document.blocks];
         [blocks[from], blocks[to]] = [blocks[to], blocks[from]];
         replace({ ...history.document, blocks }, id);
@@ -203,17 +221,33 @@ export function EditorProvider({ initialDocument, registry, loadState = "ready",
         const source = history.document.blocks.find((block) => block.id === id);
         const withoutSource = history.document.blocks.filter((block) => block.id !== id);
         const targetIndex = withoutSource.findIndex((block) => block.id === beforeId);
-        if (!source || targetIndex < 0) return;
+        if (!source || targetIndex < 0 || !canDragBlock(source, registry?.getBlock(source.type), policy)) return;
         const blocks = [...withoutSource];
         blocks.splice(targetIndex, 0, source);
         replace({ ...history.document, blocks }, id);
       },
       updateBlockProps,
+      requestDeleteBlock: (id) => {
+        const block = history.document.blocks.find((item) => item.id === id);
+        if (editable && canDeleteBlock(block, history.document.blocks, registry?.getBlock(block?.type ?? ""), policy)) setPendingDeleteBlockId(id);
+      },
+      cancelDeleteBlock: () => setPendingDeleteBlockId(null),
+      confirmDeleteBlock: () => {
+        if (pendingDeleteBlockId) {
+          const id = pendingDeleteBlockId;
+          setPendingDeleteBlockId(null);
+          const index = history.document.blocks.findIndex((block) => block.id === id);
+          const source = history.document.blocks[index];
+          if (!canDeleteBlock(source, history.document.blocks, registry?.getBlock(source?.type ?? ""), policy)) return;
+          const blocks = history.document.blocks.filter((block) => block.id !== id);
+          replace({ ...history.document, blocks }, blocks[index]?.id ?? blocks[index - 1]?.id ?? null);
+        }
+      },
       undo: () => { if (editable) dispatch({ type: "undo" }); },
       redo: () => { if (editable) dispatch({ type: "redo" }); },
       markSaved: () => dispatch({ type: "saved" })
     };
-  }, [canvasSelectionRequest, confirmCanvasSelection, editable, history, isDirty, loadState, registry, replace, requestCanvasSelection, selectedBlock, updateBlockProps, updateFromCanvas]);
+  }, [canvasSelectionRequest, confirmCanvasSelection, editable, history, isDirty, loadState, pendingDeleteBlock, pendingDeleteBlockId, policy, registry, replace, requestCanvasSelection, selectedBlock, updateBlockProps, updateFromCanvas]);
 
   return <EditorContext.Provider value={value}>{children}</EditorContext.Provider>;
 }

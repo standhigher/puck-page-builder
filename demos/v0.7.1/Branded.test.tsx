@@ -42,6 +42,16 @@ describe("V0.7.1 Branded", () => {
     expect(screen.getByRole("link", { name: "Northstar summer sale" })).toHaveAttribute("href", "/collections/summer");
   });
 
+  it("renders configured query tab labels", () => {
+    const registry = createExtensionRegistry([bestTrackBrandedExtension]);
+    const document = registry.getTemplate("besttrack.branded")!.create();
+    const experience = document.blocks.find((block) => block.type === "besttrack.branded.tracking-experience")!;
+    experience.props = { ...experience.props, orderTabLabel: "Order ID", trackingTabLabel: "Parcel code" };
+    render(<BrandedRuntimeProvider query={async () => ({ trackingNumber: "BT-2048-DEMO", status: "idle" })}><WebRenderer document={document} registry={registry} /></BrandedRuntimeProvider>);
+    expect(screen.getByRole("tab", { name: "Order ID" })).toBeVisible();
+    expect(screen.getByRole("tab", { name: "Parcel code" })).toBeVisible();
+  });
+
   it("uses the shared Consumer Runtime empty and error states without exposing host errors", async () => {
     const registry = createExtensionRegistry([bestTrackBrandedExtension]);
     const emptyQuery = vi.fn<TrackingPageQuery>().mockResolvedValue({ trackingNumber: "BT-empty", status: "Not found", outcome: "empty" });

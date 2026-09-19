@@ -20,6 +20,9 @@ function isSafeUrl(value: string, config: FieldConfig) {
 export function validateFieldValue(config: FieldConfig, value: unknown): ValidationIssue[] {
   const control = config.control;
   if (!control && !config.required && !config.validation) return [];
+  // Optional fields added after a document was created are absent rather than
+  // malformed. Their renderer-level fallback keeps historical documents valid.
+  if (value === undefined && !config.required) return [];
   if (typeof value !== "string") return [{ path: "", message: "必须是字符串。" }];
   const issues: ValidationIssue[] = [];
   if (config.required && value.trim().length === 0) issues.push({ path: "", message: "此字段为必填项。" });

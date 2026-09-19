@@ -198,7 +198,11 @@ describe("PageDocumentEditorShell V0.4", () => {
 
     const buttonInput = screen.getByLabelText("Button label");
     await waitFor(() => expect(buttonInput).toHaveValue("Check delivery"));
-    expect(changes.at(-1)?.blocks.find((block) => block.type === "besttrack.branded.tracking-experience")?.props).toMatchObject({ heading: "Find your parcel", submitLabel: "Check delivery" });
+    const orderTab = editor.querySelector<HTMLInputElement>('[data-branded-editor-field="orderTabLabel"]');
+    expect(orderTab).toHaveValue("Order Number");
+    fireEvent.change(orderTab!, { target: { value: "Order ID" } });
+    await waitFor(() => expect(screen.getByLabelText("Order tab label")).toHaveValue("Order ID"));
+    expect(changes.at(-1)?.blocks.find((block) => block.type === "besttrack.branded.tracking-experience")?.props).toMatchObject({ heading: "Find your parcel", submitLabel: "Check delivery", orderTabLabel: "Order ID" });
   });
 
   it("synchronizes Ready-to-go edit-mode values between the canvas, inspector and PageDocument", async () => {

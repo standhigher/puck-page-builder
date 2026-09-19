@@ -11,6 +11,11 @@ describe("generic extension validation", () => {
     expect(validateFieldValue({ field: "", control: "color" }, "blue")).toHaveLength(1)
   });
 
+  it("allows missing optional fields for backward-compatible documents", () => {
+    expect(validateFieldValue({ field: "", control: "text" }, undefined)).toEqual([]);
+    expect(validateFieldValue({ field: "", control: "text", required: true }, undefined)).toEqual([{ path: "", message: "必须是字符串。" }]);
+  });
+
   it("rejects contradictory block cardinality policies at registration time", () => {
     expect(validateBlockPolicy({ required: true, maxInstances: 0 })).toMatch(/minInstances/);
     expect(() => createExtensionRegistry([{

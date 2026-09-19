@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { bestTrackBrandedExtension, BrandedRuntimeProvider, type TrackingPageQuery } from "../../packages/besttrack-page-extension/src";
 import { createExtensionRegistry } from "../../packages/puck-page-builder/src/core/extensions";
@@ -19,14 +19,14 @@ describe("V0.7.1 Branded", () => {
     fireEvent.click(screen.getByRole("button", { name: "Track" }));
     await waitFor(() => expect(query).toHaveBeenCalledWith({ mode: "tracking", trackingNumber: "DEMO-YQTRACK9999" }));
     expect(await screen.findByText("Studio tote")).toBeVisible();
-    expect(screen.getByText("In transit")).toBeVisible();
+    expect(screen.getByText("Your order is In transit")).toBeVisible();
     expect(screen.getByLabelText("Delivery progress")).toBeVisible();
     expect(screen.getByText("Accepted at regional hub")).toBeVisible();
     expect(screen.getByText("Shipping cover")).toBeVisible();
     fireEvent.click(screen.getByRole("button", { name: "Shipment #2" }));
     expect(await screen.findByText("Travel case")).toBeVisible();
-    expect(screen.getByText("Tracking: BT-second")).toBeVisible();
-    expect(screen.getByRole("heading", { name: "Order Ready" })).toBeVisible();
+    expect(within(screen.getByTestId("branded-result")).getByText("BT-second")).toBeVisible();
+    expect(screen.getByText("Your order is Order Ready")).toBeVisible();
     expect(screen.getByText("Package is being prepared")).toBeVisible();
     fireEvent.click(screen.getByRole("button", { name: "Track another order" }));
     expect(screen.getByRole("heading", { name: "Track your order" })).toBeVisible();

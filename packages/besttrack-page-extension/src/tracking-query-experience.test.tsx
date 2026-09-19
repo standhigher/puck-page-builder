@@ -1,6 +1,6 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { TrackingQueryCard } from "./tracking-query-experience";
+import { TrackingQueryCard, TrackingQueryResultDetails } from "./tracking-query-experience";
 
 const sharedProps = {
   onQuery: vi.fn(async () => undefined),
@@ -46,5 +46,39 @@ describe("TrackingQueryCard", () => {
 
     rerender(<TrackingQueryCard {...sharedProps} onQuery={onQuery} phase="success" result={<p>Delivered</p>} />);
     expect(scrollTo).toHaveBeenCalledWith(expect.objectContaining({ behavior: "smooth" }));
+  });
+});
+
+describe("TrackingQueryResultDetails", () => {
+  it("renders the full in-card result with five stages, bounded events and item prices", () => {
+    render(<TrackingQueryResultDetails result={{
+      trackingNumber: "BT-2048",
+      orderNumber: "#2048",
+      status: "In transit",
+      carrier: "BestTrack Express",
+      estimatedDelivery: "Sep 12",
+      destination: "Austin, TX",
+      transitDuration: "3 days",
+      events: [
+        { id: "one", title: "At local facility", state: "current" },
+        { id: "two", title: "Departed regional hub" },
+        { id: "three", title: "Accepted by carrier" },
+        { id: "four", title: "Shipment information received" }
+      ],
+      orderItems: [{ id: "tote", title: "Studio tote", quantity: 2, price: { amount: 1200, compareAtAmount: 1500, currencyCode: "USD" } }]
+    }} />);
+
+    expect(screen.getByLabelText("Delivery progress").querySelectorAll("li")).toHaveLength(5);
+    expect(screen.getByText("BestTrack Express")).not.toBeNull();
+    expect(screen.getByText("Austin, TX")).not.toBeNull();
+    expect(screen.getByText("3 days")).not.toBeNull();
+    expect(screen.getByText("#2048")).not.toBeNull();
+    expect(screen.getByText("$12.00")).not.toBeNull();
+    expect(screen.getByText("$15.00")).not.toBeNull();
+    expect(screen.getByLabelText("Studio tote image unavailable")).not.toBeNull();
+    expect(screen.queryByText("Shipment information received")).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Show all events" }));
+    expect(screen.getByText("Shipment information received")).not.toBeNull();
   });
 });

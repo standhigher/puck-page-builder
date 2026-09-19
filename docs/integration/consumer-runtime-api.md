@@ -49,6 +49,16 @@ On a successful lookup the API returns the display-safe shape exported as
 recommendation fields are for the active response only. They must not be
 written into the PageDocument or `binding.params`.
 
+For the Branded and Sales in-card result, the host may return `carrier`,
+`estimatedDelivery`, city/region-only `destination`, `transitDuration`,
+`orderNumber`, five ordered `progress` entries, and newest-first `events`.
+Each order item may contain title, description, quantity, HTTPS image/link and
+`price` as `{ amount, currencyCode, compareAtAmount?, startsAt? }`, where all
+amounts are integer minor units. The UI exposes at most 50 events and only
+renders a compare-at value when it is greater than `amount`. Do not return a
+street address, phone number, email address, payment data, credentials or raw
+upstream payload.
+
 For failures, return a stable, non-sensitive classification suitable for host
 telemetry (for example `invalid_query`, `unauthorized`, `rate_limited`,
 `unavailable`, or `upstream_failure`). The consumer UI shows a generic error;

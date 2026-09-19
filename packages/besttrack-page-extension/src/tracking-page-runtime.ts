@@ -12,6 +12,7 @@ export type TrackingPageOrderItem = {
   imageUrl?: string;
   description?: string;
   href?: string;
+  price?: TrackingPageMoney;
 };
 
 /** A stable Shopify object reference stored in PageDocument props. */
@@ -84,6 +85,8 @@ export type TrackingPageQueryResult = {
   updatedAt?: string;
   /** City/region-level destination only. Never include a street address or contact data. */
   destination?: string;
+  transitDuration?: string;
+  orderNumber?: string;
   estimatedDelivery?: string;
   progress?: TrackingPageTrackingStep[];
   events?: TrackingPageTrackingEvent[];

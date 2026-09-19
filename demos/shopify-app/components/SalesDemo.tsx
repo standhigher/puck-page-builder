@@ -33,7 +33,18 @@ export function SalesDemo({ getSessionToken }: { getSessionToken?: GetSessionTok
   }, [initialDocument]);
   const query = useCallback<TrackingPageQuery>(async (request) => {
     const trackingNumber = request.mode === "tracking" ? request.trackingNumber : request.orderNumber;
-    if (!getSessionToken) return { trackingNumber, status: "In transit", orderItems: [{ id: "sales-order", title: "Express travel case", quantity: 1 }], recommendations: [{ id: "cover", title: "Shipping cover", description: "Add delivery protection to a future order." }] };
+    if (!getSessionToken) return {
+      trackingNumber,
+      orderNumber: request.mode === "order" ? request.orderNumber : "#BT-2048",
+      status: "In transit",
+      carrier: "BestTrack demo carrier",
+      estimatedDelivery: "Sep 12",
+      destination: "Shanghai",
+      transitDuration: "3 days",
+      events: [{ id: "hub", title: "Shipment accepted at the regional hub", at: "Sep 4, 3:51 PM", state: "current" }, { id: "warehouse", title: "Warehouse accepted your order", at: "Sep 4, 3:46 PM", state: "complete" }, { id: "placed", title: "The order has been placed and confirmed.", at: "Sep 4, 3:31 PM", state: "complete" }, { id: "received", title: "Shipment information received", at: "Sep 4, 3:20 PM", state: "complete" }],
+      orderItems: [{ id: "sales-order", title: "Express travel case", quantity: 1, price: { amount: 1200, compareAtAmount: 1500, currencyCode: "USD" } }],
+      recommendations: [{ id: "cover", title: "Shipping cover", description: "Add delivery protection to a future order." }]
+    };
     if (request.mode !== "tracking") throw new Error("demo-order-query-not-configured");
     const source = registry.getDataSource("besttrack.tracking.query");
     if (!source) throw new Error("besttrack-tracking-source-not-registered");

@@ -38,6 +38,14 @@ result, empty state or generic failure remains inside the query card; the page
 itself does not scroll or navigate. `defaultTrackingNumber` remains a
 preview-only, non-sensitive placeholder.
 
+On success, the card renders a complete display-safe result: status, optional
+estimated delivery, five-stage progress, carrier and copyable tracking number,
+destination, transit time, recent shipping events and order items. Events show
+the newest three first and expand to no more than 50. Order-item prices use
+minor currency units supplied by the host; a compare-at price appears only
+when it is greater than the sale amount. Missing item images use an accessible
+placeholder and an absent item list is hidden.
+
 ## Consumer Runtime dependency
 
 Sales has one external runtime dependency: a host-injected TrackingPageQuery,
@@ -85,6 +93,8 @@ Runtime API or another trusted host service.
   state to assistive technology.
 - The Hero card, input and full-width action remain usable at mobile widths;
   its background is decorative and does not convey query instructions alone.
+- At 320px, there is no horizontal result overflow; tab and result actions have
+  44px touch targets, and result expansion scrolls inside the Hero card.
 - Tracking-number and order-number/email controls both use the authorized
   discriminated Runtime contract.
 - All customer-facing query results use controlled loading, empty and generic

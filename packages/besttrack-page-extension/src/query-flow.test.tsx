@@ -13,7 +13,7 @@ describe("discriminated query cards", () => {
     fireEvent.change(screen.getByLabelText("Email"), { target: { value: "customer@example.test" } });
     fireEvent.click(screen.getByRole("button", { name: "Find" }));
     await waitFor(() => expect(query).toHaveBeenCalledWith({ mode: "order", orderNumber: "ORDER-2048", email: "customer@example.test" }));
-    expect(screen.getByTestId("branded-result").textContent).toContain("Current status: In transit");
+    expect(screen.getByTestId("branded-result").textContent).toContain("Your order is In transit");
   });
 
   it("shows Sales local validation, preserves tab input, and replaces the in-card result", async () => {

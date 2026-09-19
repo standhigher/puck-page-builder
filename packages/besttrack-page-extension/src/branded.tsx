@@ -8,12 +8,10 @@ import {
   type TrackingPageQueryResult,
   type TrackingPageRecommendation,
   type TrackingPageRuntimePhase,
-  type TrackingPageTrackingEvent,
-  type TrackingPageTrackingStep,
   type TrackingPageWatermark
 } from "./tracking-page-runtime";
 import { safeTrackingPageUrl } from "./tracking-page-url";
-import { TrackingQueryCard, TrackingQueryResultSummary } from "./tracking-query-experience";
+import { TrackingQueryCard, TrackingQueryResultDetails } from "./tracking-query-experience";
 
 /** Branded uses the shared, display-safe Consumer Runtime result without persisting it. */
 export type BrandedRuntimeState = { phase: TrackingPageRuntimePhase; result?: TrackingPageQueryResult; error?: string };
@@ -147,7 +145,7 @@ function QueryHero(props: Record<string, unknown>) {
         formStyle={{ gap: 12 }}
         inputStyle={{ width: "100%", height: 48, padding: "0 16px", boxSizing: "border-box", border: "1px solid #e2e2e2", borderRadius: 10, font: "inherit" }}
         submitStyle={(loading) => ({ width: "100%", minHeight: 48, marginTop: 12, border: 0, borderRadius: 10, background: loading ? "#6b6b6b" : "#000", color: "#fff", font: "inherit", cursor: loading ? "wait" : "pointer" })}
-        result={result ? <TrackingQueryResultSummary result={result} /> : null}
+        result={result ? <TrackingQueryResultDetails result={result} onTrackAnother={runtime.reset} trackAnotherLabel={text(props, "trackAnotherLabel", "Track another order")} /> : null}
         resultStyle={{ padding: 16, border: "1px solid #e7e7e7", borderRadius: 8, background: "#fffdf0" }}
         watermark={<RuntimeWatermark watermark={runtime.watermark} />}
       />
@@ -155,63 +153,9 @@ function QueryHero(props: Record<string, unknown>) {
   </div>;
 }
 
-function defaultProgress(status: string): TrackingPageTrackingStep[] {
-  const steps = ["Ordered", "Order Ready", "In Transit", "Out for Delivery", "Delivered"];
-  const normalized = status.toLowerCase();
-  const current = normalized.includes("deliver") ? (normalized.includes("out for") ? 3 : 4) : normalized.includes("transit") ? 2 : normalized.includes("ready") ? 1 : 0;
-  return steps.map((label, index) => ({ id: label.toLowerCase().replaceAll(" ", "-"), label, state: index < current ? "complete" : index === current ? "current" : "upcoming" }));
-}
-
-function TrackingProgress({ steps }: { steps: TrackingPageTrackingStep[] }) {
-  return <div aria-label="Delivery progress" style={{ overflowX: "auto", padding: "28px 0 8px" }}>
-    <ol style={{ display: "grid", gridTemplateColumns: "repeat(" + steps.length + ", minmax(112px, 1fr))", minWidth: Math.max(560, steps.length * 138), padding: 0, margin: 0, listStyle: "none" }}>
-      {steps.map((step, index) => <li key={step.id} style={{ position: "relative", display: "grid", justifyItems: "center", gap: 12, color: step.state === "upcoming" ? "#718096" : "#0f1d3a", textAlign: "center" }}>
-        {index > 0 ? <span aria-hidden="true" style={{ position: "absolute", top: 19, right: "50%", width: "100%", height: 8, transform: "translateX(-50%)", background: step.state === "upcoming" ? "#d1d5db" : "#0f1d3a" }} /> : null}
-        <span aria-label={step.label + " " + step.state} style={{ position: "relative", zIndex: 1, display: "grid", placeItems: "center", width: 40, height: 40, border: step.state === "current" ? "1px solid #0f1d3a" : "1px solid #8190a4", borderRadius: "50%", background: step.state === "complete" ? "#0f1d3a" : "#fff", color: step.state === "complete" ? "#fff" : "#0f1d3a", fontWeight: 700 }}>{step.state === "complete" ? "✓" : index + 1}</span>
-        <strong style={{ fontSize: 14 }}>{step.label}</strong>
-      </li>)}
-    </ol>
-  </div>;
-}
-
-function ShippingTimeline({ events }: { events: TrackingPageTrackingEvent[] }) {
-  if (!events.length) return <p style={{ margin: 0, color: "#6b6b6b" }}>Shipping events will appear when the carrier publishes them.</p>;
-  return <ol aria-label="Shipping events" style={{ display: "grid", gap: 22, margin: 0, padding: 0, listStyle: "none" }}>
-    {events.map((event, index) => <li key={event.id} style={{ display: "grid", gridTemplateColumns: "22px 1fr", columnGap: 14, position: "relative" }}>
-      <span aria-hidden="true" style={{ position: "relative", zIndex: 1, width: 14, height: 14, marginTop: 4, borderRadius: "50%", background: event.state === "current" || index === 0 ? "#42b765" : "#d5dfed" }} />
-      {index < events.length - 1 ? <span aria-hidden="true" style={{ position: "absolute", left: 6, top: 18, bottom: -26, width: 2, background: "#e0e7f0" }} /> : null}
-      <div><strong style={{ color: index === 0 ? "#cb4d34" : "#51657f" }}>{event.title}</strong>{event.detail ? <p style={{ margin: "4px 0", color: "#6b6b6b" }}>{event.detail}</p> : null}{event.at ? <small style={{ color: "#8a9ab0" }}>{event.at}</small> : null}</div>
-    </li>)}
-  </ol>;
-}
-
 function PackageContents({ items }: { items: TrackingPageQueryResult["orderItems"] }) {
   if (!items?.length) return <p style={{ margin: 0, color: "#6b6b6b" }}>Package contents are not available for this shipment.</p>;
   return <div style={{ display: "grid", gap: 16 }}>{items.map((item) => <article key={item.id} style={{ display: "flex", alignItems: "flex-start", gap: 14 }}><ProductImage src={item.imageUrl} alt={item.title} /><div><strong>{item.title}</strong><p style={{ margin: "5px 0", color: "#6b6b6b", fontSize: 14 }}>{item.description ?? "Product details are available in your order."}</p><small style={{ color: "#6b6b6b" }}>Qty {item.quantity}</small></div></article>)}</div>;
-}
-
-function TrackingResult({ props }: { props: Record<string, unknown> }) {
-  const runtime = useBrandedRuntime();
-  const result = runtime.displayedResult;
-  if (!result) return null;
-  const progress = result.progress?.length ? result.progress : defaultProgress(result.status);
-  const events = result.events?.length ? result.events : result.latestEvent ? [{ id: "latest", title: result.latestEvent, at: result.updatedAt, state: "current" as const }] : [];
-  return <section aria-label="Tracking result" style={{ background: "#fff", borderTop: "1px solid #edf0f4", color: "#101828", fontFamily: "var(--pb-font-family)", padding: "clamp(36px, 6vw, 64px) 0" }}>
-    <div style={contentWidth}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 16, flexWrap: "wrap", textAlign: "center" }}>
-        <p style={{ flex: "1 1 360px", margin: 0, fontSize: "clamp(18px, 2vw, 28px)" }}>Tracking: {result.trackingNumber}</p>
-        <button type="button" onClick={runtime.reset} style={{ padding: "8px 12px", border: "1px solid #cbd5e1", borderRadius: 6, background: "#fff", color: "#101828", font: "inherit", cursor: "pointer" }}>{text(props, "trackAnotherLabel", "Track another order")}</button>
-      </div>
-      <h1 style={{ margin: "54px 0 0", fontSize: "clamp(36px, 5vw, 56px)", lineHeight: 1.1, textAlign: "center" }}>{result.status}</h1>
-      <TrackingProgress steps={progress} />
-    </div>
-    <div style={{ borderTop: "1px solid #edf0f4", marginTop: "clamp(28px, 5vw, 54px)", paddingTop: "clamp(36px, 5vw, 60px)" }}>
-      <div style={{ ...contentWidth, display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 340px), 1fr))", gap: "clamp(36px, 8vw, 120px)" }}>
-        <section aria-label="Shipping details"><h2 style={{ margin: "0 0 28px", fontSize: 28 }}>Shipping Details</h2><ShippingTimeline events={events} /></section>
-        <section aria-label="Package contents"><h2 style={{ margin: "0 0 28px", fontSize: 28 }}>Package Contents</h2><PackageContents items={result.orderItems} /></section>
-      </div>
-    </div>
-  </section>;
 }
 
 export function BrandedTextField({ value, onChange }: FieldProps) {
@@ -287,11 +231,9 @@ export function BrandedAnnouncementBlock(props: Record<string, unknown>) {
 
 /** Complete consumer journey: pre-query hero, selected shipment and result details share one controller. */
 export function BrandedTrackingExperienceBlock(props: Record<string, unknown>) {
-  const runtime = useBrandedRuntime();
   return <section aria-label="Branded tracking experience" style={{ background: "#fffdf0", fontFamily: "var(--pb-font-family)" }}>
     <ShipmentSwitcher shipmentLabels={props.shipmentLabels} />
     <QueryHero {...props} />
-    {runtime.phase === "success" ? <TrackingResult props={props} /> : null}
   </section>;
 }
 

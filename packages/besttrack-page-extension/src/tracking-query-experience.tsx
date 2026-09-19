@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, useState, type CSSProperties, type FormEvent, type ReactNode } from "react";
-import { isValidOrderEmail, isValidOrderNumber, isValidTrackingNumber, type TrackingPageQueryRequest, type TrackingPageQueryResult, type TrackingPageRuntimePhase } from "./tracking-page-runtime";
+import { formatTrackingPageMoney, isValidOrderEmail, isValidOrderNumber, isValidTrackingNumber, type TrackingPageQueryRequest, type TrackingPageQueryResult, type TrackingPageRuntimePhase, type TrackingPageTrackingStep } from "./tracking-page-runtime";
+import { safeTrackingPageUrl } from "./tracking-page-url";
 
 type QueryMode = "tracking" | "order";
 type FieldName = "tracking" | "order" | "email";
@@ -233,14 +234,98 @@ export function TrackingQueryCard({
   </div>;
 }
 
-/** Compact, display-safe summary used within the query card before detailed modules render. */
-export function TrackingQueryResultSummary({ result }: { result: TrackingPageQueryResult }) {
-  const delivery = result.estimatedDelivery || result.updatedAt;
-  return <div>
-    <strong>Current status: {result.status || "Tracking update"}</strong>
-    {delivery ? <p style={{ margin: "6px 0 0", color: "#64748b" }}>{result.estimatedDelivery ? "Estimated delivery: " : "Updated: "}{delivery}</p> : null}
-    <p style={{ margin: "6px 0 0", color: "#64748b" }}>Tracking number: {result.trackingNumber || "Not available"}</p>
-    {result.carrier ? <p style={{ margin: "6px 0 0", color: "#64748b" }}>Carrier: {result.carrier}</p> : null}
-    {result.latestEvent ? <p style={{ margin: "6px 0 0", color: "#64748b" }}>{result.latestEvent}</p> : null}
+function defaultProgress(status: string): TrackingPageTrackingStep[] {
+  const steps: Array<Pick<TrackingPageTrackingStep, "id" | "label" | "icon">> = [
+    { id: "ordered", label: "Ordered", icon: "check" },
+    { id: "ready", label: "Order Ready", icon: "bag" },
+    { id: "transit", label: "In Transit", icon: "truck" },
+    { id: "out", label: "Out for Delivery", icon: "box" },
+    { id: "delivered", label: "Delivered", icon: "check" }
+  ];
+  const normalized = status.toLowerCase();
+  const current = normalized.includes("deliver") ? (normalized.includes("out for") ? 3 : 4) : normalized.includes("transit") ? 2 : normalized.includes("ready") ? 1 : 0;
+  return steps.map((step, index) => ({ ...step, state: index < current ? "complete" : index === current ? "current" : "upcoming" }));
+}
+
+function TrackingProgressDetails({ steps }: { steps: TrackingPageTrackingStep[] }) {
+  return <ol aria-label="Delivery progress" style={{ display: "grid", gridTemplateColumns: "repeat(5, minmax(0, 1fr))", gap: 4, margin: "20px 0 0", padding: 0, listStyle: "none" }}>
+    {steps.slice(0, 5).map((step, index) => <li key={step.id} style={{ minWidth: 0, textAlign: "center", color: step.state === "upcoming" ? "#64748b" : "#0f172a" }}>
+      <span aria-label={step.label + " " + step.state} style={{ display: "grid", placeItems: "center", width: 28, height: 28, margin: "0 auto", border: "1px solid " + (step.state === "upcoming" ? "#94a3b8" : "#0f172a"), borderRadius: "50%", background: step.state === "current" ? "#0f172a" : "#fff", color: step.state === "current" ? "#fff" : "#0f172a", fontSize: 13, fontWeight: 700 }}>{step.state === "complete" || step.state === "current" ? "✓" : index + 1}</span>
+      <span style={{ display: "block", marginTop: 6, overflowWrap: "anywhere", fontSize: 11, lineHeight: 1.25 }}>{step.label}</span>
+      {step.date ? <span style={{ display: "block", marginTop: 3, color: "#94a3b8", fontSize: 10, lineHeight: 1.2 }}>{step.date}</span> : null}
+    </li>)}
+  </ol>;
+}
+
+function TrackingEvents({ result }: { result: TrackingPageQueryResult }) {
+  const [expanded, setExpanded] = useState(false);
+  const events = result.events ?? (result.latestEvent ? [{ id: "latest", title: result.latestEvent, at: result.updatedAt, state: "current" as const }] : []);
+  if (!events.length) return <p style={{ margin: "12px 0 0", color: "#64748b", fontSize: 14 }}>Tracking events are not available yet. Please try again later.</p>;
+  const visibleEvents = events.slice(0, expanded ? 50 : 3);
+  return <div aria-label="Shipping events" style={{ marginTop: 16 }}>
+    <ol style={{ display: "grid", gap: 14, margin: 0, padding: 0, listStyle: "none" }}>
+      {visibleEvents.map((event, index) => <li key={event.id} style={{ position: "relative", paddingLeft: 22 }}>
+        <span aria-hidden="true" style={{ position: "absolute", left: 0, top: 4, width: 10, height: 10, borderRadius: "50%", background: event.state === "current" || index === 0 ? "#111827" : "#cbd5e1" }} />
+        <strong style={{ display: "block", fontSize: 14 }}>{event.title}</strong>
+        {event.detail ? <span style={{ display: "block", marginTop: 2, color: "#64748b", fontSize: 13 }}>{event.detail}</span> : null}
+        {event.at ? <time style={{ display: "block", marginTop: 3, color: "#94a3b8", fontSize: 12 }}>{event.at}</time> : null}
+      </li>)}
+    </ol>
+    {events.length > 3 ? <button type="button" onClick={() => setExpanded((current) => !current)} style={{ minHeight: 44, marginTop: 14, padding: "6px 12px", border: "1px solid #cbd5e1", borderRadius: 6, background: "#fff", color: "#0f172a", font: "inherit", fontSize: 13, cursor: "pointer" }}>{expanded ? "Show recent events" : "Show all events"}</button> : null}
   </div>;
+}
+
+function TrackingOrderItemImage({ src, title }: { src?: string; title: string }) {
+  const [failed, setFailed] = useState(false);
+  const imageUrl = safeTrackingPageUrl(src);
+  if (!imageUrl || failed) return <span aria-label={title + " image unavailable"} style={{ display: "grid", width: 56, height: 56, placeItems: "center", borderRadius: 6, background: "#e2e8f0", color: "#64748b", fontSize: 13 }}>{title.slice(0, 1).toUpperCase()}</span>;
+  return <img src={imageUrl} alt="" onError={() => setFailed(true)} style={{ width: 56, height: 56, borderRadius: 6, objectFit: "cover", background: "#f1f5f9" }} />;
+}
+
+function TrackingOrderItems({ items }: { items: NonNullable<TrackingPageQueryResult["orderItems"]> }) {
+  if (!items.length) return null;
+  return <section aria-label="Order items" style={{ marginTop: 24, borderTop: "1px solid #e2e8f0", paddingTop: 18 }}>
+    <h2 style={{ margin: 0, fontSize: 16 }}>Items in your order</h2>
+    <div style={{ display: "grid", gap: 12, marginTop: 12 }}>
+      {items.map((item) => {
+        const price = item.price ? formatTrackingPageMoney(item.price) : undefined;
+        const href = safeTrackingPageUrl(item.href);
+        return <article key={item.id} style={{ display: "grid", gridTemplateColumns: "56px minmax(0, 1fr)", gap: 12, alignItems: "center" }}>
+          <TrackingOrderItemImage src={item.imageUrl} title={item.title} />
+          <div style={{ minWidth: 0 }}>
+            {href ? <a href={href} style={{ color: "inherit", fontWeight: 700, overflowWrap: "anywhere" }}>{item.title}</a> : <strong style={{ overflowWrap: "anywhere" }}>{item.title}</strong>}
+            {item.description ? <p style={{ margin: "3px 0 0", color: "#64748b", fontSize: 13 }}>{item.description}</p> : null}
+            <p style={{ display: "flex", flexWrap: "wrap", gap: 8, margin: "4px 0 0", color: "#475569", fontSize: 13 }}><span>Qty {item.quantity}</span>{price?.amount ? <span>{price.amount}{price.startsAt ? " and up" : ""}</span> : null}{price?.compareAt ? <s style={{ color: "#94a3b8" }}>{price.compareAt}</s> : null}</p>
+          </div>
+        </article>;
+      })}
+    </div>
+  </section>;
+}
+
+/** Complete, display-safe tracking result for Branded and Sales query cards. */
+export function TrackingQueryResultDetails({ result, onTrackAnother, trackAnotherLabel = "Track another" }: { result: TrackingPageQueryResult; onTrackAnother?: () => void; trackAnotherLabel?: string }) {
+  const [copied, setCopied] = useState(false);
+  const progress = result.progress?.length === 5 ? result.progress : defaultProgress(result.status);
+  const copyTrackingNumber = () => {
+    if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
+      void navigator.clipboard.writeText(result.trackingNumber).then(() => setCopied(true)).catch(() => undefined);
+    }
+  };
+  return <section aria-label="Tracking result details">
+    <div style={{ display: "flex", alignItems: "start", justifyContent: "space-between", gap: 12 }}>
+      <div><strong style={{ fontSize: 17 }}>Your order is {result.status || "being updated"}</strong>{result.estimatedDelivery ? <p style={{ margin: "5px 0 0", color: "#475569", fontSize: 14 }}>Estimated delivery: {result.estimatedDelivery}</p> : null}</div>
+      {onTrackAnother ? <button type="button" onClick={onTrackAnother} style={{ minHeight: 44, flex: "0 0 auto", padding: "6px 10px", border: "1px solid #cbd5e1", borderRadius: 6, background: "#fff", color: "#0f172a", font: "inherit", fontSize: 12, cursor: "pointer" }}>{trackAnotherLabel}</button> : null}
+    </div>
+    <TrackingProgressDetails steps={progress} />
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 10, marginTop: 22, padding: 12, borderRadius: 8, background: "#f8fafc", color: "#334155", fontSize: 13 }}>
+      <span><strong>Carrier</strong><br />{result.carrier || "—"}</span>
+      <span><strong>Tracking number</strong><br />{result.trackingNumber} <button type="button" onClick={copyTrackingNumber} style={{ minHeight: 44, border: 0, background: "transparent", color: "#0f172a", font: "inherit", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>{copied ? "Copied" : "Copy"}</button></span>
+      <span><strong>Destination</strong><br />{result.destination || "—"}</span>
+      <span><strong>Transit time</strong><br />{result.transitDuration || "—"}</span>
+      {result.orderNumber ? <span><strong>Order number</strong><br />{result.orderNumber}</span> : null}
+    </div>
+    <section aria-label="Tracking timeline" style={{ marginTop: 24, borderTop: "1px solid #e2e8f0", paddingTop: 18 }}><h2 style={{ margin: 0, fontSize: 16 }}>Tracking timeline</h2><TrackingEvents result={result} /></section>
+    <TrackingOrderItems items={result.orderItems ?? []} />
+  </section>;
 }

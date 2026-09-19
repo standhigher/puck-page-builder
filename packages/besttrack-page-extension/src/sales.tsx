@@ -2,7 +2,7 @@ import { createContext, useCallback, useContext, useMemo, useRef, useState, type
 import type { BlockEditorProps, FieldProps } from "@standhigher/puck-page-builder/runtime";
 import { formatTrackingPageMoney, isEmptyTrackingPageResult, type TrackingPageQuery, type TrackingPageQueryRequest, type TrackingPageQueryResult, type TrackingPageRuntimePhase, type TrackingPageWatermark } from "./tracking-page-runtime";
 import { safeTrackingPageUrl } from "./tracking-page-url";
-import { TrackingQueryCard, TrackingQueryResultSummary } from "./tracking-query-experience";
+import { TrackingQueryCard, TrackingQueryResultDetails } from "./tracking-query-experience";
 
 /** Transient, consumer-safe state. The host error is deliberately never retained for display. */
 export type SalesRuntimeState = { phase: TrackingPageRuntimePhase; result?: TrackingPageQueryResult };
@@ -166,7 +166,7 @@ export function SalesQueryBlock(props: Record<string, unknown>) {
         formStyle={{ gap: 14 }}
         inputStyle={{ boxSizing: "border-box", width: "100%", minHeight: 58, padding: "12px 16px", border: "1px solid var(--pb-color-border)", borderRadius: "calc(var(--pb-radius) / 1.25)", background: "var(--pb-color-surface)", color: "var(--pb-color-text)", font: "inherit", fontSize: 17 }}
         submitStyle={(loading) => ({ width: "100%", minHeight: 58, padding: "12px 18px", border: 0, borderRadius: "calc(var(--pb-radius) / 1.25)", background: loading ? "#64748b" : "var(--pb-color-text)", color: "var(--pb-color-surface)", font: "inherit", fontSize: 16, fontWeight: 700, cursor: loading ? "wait" : "pointer" })}
-        result={runtime.result ? <TrackingQueryResultSummary result={runtime.result} /> : null}
+        result={runtime.result ? <TrackingQueryResultDetails result={runtime.result} /> : null}
         resultStyle={{ padding: 16, border: "1px solid var(--pb-color-border)", borderRadius: "calc(var(--pb-radius) / 1.25)", background: "var(--pb-color-background)" }}
         watermark={<RuntimeWatermark watermark={runtime.watermark} />}
       />

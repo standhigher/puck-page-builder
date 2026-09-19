@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { bestTrackSalesExtension, SalesRuntimeProvider, type TrackingPageQuery, type TrackingPageQueryResult } from "../../packages/besttrack-page-extension/src";
 import { createExtensionRegistry } from "../../packages/puck-page-builder/src/core/extensions";
@@ -78,7 +78,8 @@ describe("V0.7.2 Sales", () => {
     render(<SalesRuntimeProvider query={query}><WebRenderer document={registry.getTemplate("besttrack.sales")!.create()} registry={registry} /></SalesRuntimeProvider>);
     fireEvent.click(screen.getByRole("button", { name: "Track order" }));
     await waitFor(() => expect(query).toHaveBeenCalledWith({ mode: "tracking", trackingNumber: "BT-2048-DEMO" }));
-    expect(await screen.findByText("Travel case")).toBeVisible();
+    const result = await screen.findByTestId("sales-result");
+    expect(within(result).getByText("Travel case")).toBeVisible();
     expect(screen.getByText("Delivery cover")).toBeVisible();
   });
 
@@ -102,7 +103,7 @@ describe("V0.7.2 Sales", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Track order" }));
     expect(await screen.findByText("Shipment #2")).toBeVisible();
-    expect(screen.getByLabelText("Travel case image unavailable")).toBeVisible();
+    expect(within(screen.getByTestId("sales-result")).getByLabelText("Travel case image unavailable")).toBeVisible();
     expect(screen.getByLabelText("Delivery cover image unavailable")).toBeVisible();
     expect(screen.queryByRole("link", { name: "Delivery cover" })).not.toBeInTheDocument();
   });

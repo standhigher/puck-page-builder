@@ -161,10 +161,11 @@ export function RecommendationCards({ items }: { items: ReadyToGoRecommendation[
 
   useEffect(() => {
     if (!emblaApi) return;
-    onSelect();
     emblaApi.on("select", onSelect);
     emblaApi.on("reInit", onSelect);
+    const frame = requestAnimationFrame(onSelect);
     return () => {
+      cancelAnimationFrame(frame);
       emblaApi.off("select", onSelect);
       emblaApi.off("reInit", onSelect);
     };
@@ -174,9 +175,12 @@ export function RecommendationCards({ items }: { items: ReadyToGoRecommendation[
     if (typeof window.matchMedia !== "function") return;
     const media = window.matchMedia("(max-width: 768px)");
     const update = () => setHideButtons(media.matches);
-    update();
+    const frame = requestAnimationFrame(update);
     media.addEventListener("change", update);
-    return () => media.removeEventListener("change", update);
+    return () => {
+      cancelAnimationFrame(frame);
+      media.removeEventListener("change", update);
+    };
   }, []);
 
   if (items.length === 0) return null;

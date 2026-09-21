@@ -42,6 +42,20 @@ export type TrackingPageRecommendation = {
   price?: TrackingPageMoney;
 };
 
+/** Host callback for page-level recommendations, independent of tracking queries. */
+export type TrackingPageRecommendationsQuery = () => Promise<TrackingPageRecommendation[]>;
+export type TrackingPageRecommendationsState = {
+  phase: TrackingPageRuntimePhase;
+  items: TrackingPageRecommendation[];
+};
+
+/** Dynamic merchant promotion returned by the trusted storefront host. */
+export type TrackingPageAd = Readonly<{
+  imageUrl: string;
+  href?: string;
+  alt?: string;
+}>;
+
 export type TrackingPageTrackingStep = {
   id: string;
   label: string;
@@ -73,6 +87,7 @@ export type TrackingPageShipment = {
   events?: TrackingPageTrackingEvent[];
   orderItems?: TrackingPageOrderItem[];
   recommendations?: TrackingPageRecommendation[];
+  ad?: TrackingPageAd;
 };
 
 export type TrackingPageQueryResult = {
@@ -92,6 +107,7 @@ export type TrackingPageQueryResult = {
   events?: TrackingPageTrackingEvent[];
   orderItems?: TrackingPageOrderItem[];
   recommendations?: TrackingPageRecommendation[];
+  ad?: TrackingPageAd;
   shipments?: TrackingPageShipment[];
 };
 

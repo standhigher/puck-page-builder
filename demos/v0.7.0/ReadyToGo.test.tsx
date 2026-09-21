@@ -84,8 +84,10 @@ describe("V0.7.0 Ready-to-go", () => {
     expect(within(screen.getByLabelText("Ready-to-go progress editor")).getByLabelText("Delivery progress")).toBeVisible();
     expect(within(screen.getByLabelText("Ready-to-go progress editor")).getByText("In transit")).toBeVisible();
     expect(within(screen.getByLabelText("Ready-to-go progress editor")).queryByLabelText("Estimated delivery placeholder")).not.toBeInTheDocument();
-    expect(within(screen.getByLabelText("Ready-to-go progress editor")).queryByText("Estimated delivery")).not.toBeInTheDocument();
-    expect(within(screen.getByLabelText("Ready-to-go progress editor")).queryByText("Sep 22 - Sep 24")).not.toBeInTheDocument();
+    expect(within(screen.getByLabelText("Ready-to-go progress editor")).getByLabelText("Est. Delivery")).toHaveStyle({ width: "100%", backgroundColor: "#eaf4ff" });
+    expect(within(screen.getByLabelText("Ready-to-go progress editor")).getByText("Est. Delivery")).toBeVisible();
+    expect(within(screen.getByLabelText("Ready-to-go progress editor")).getByText("Estimated time may update as tracking progresses.")).toBeVisible();
+    expect(within(screen.getByLabelText("Ready-to-go progress editor")).getByText("Sep 22 - Sep 24")).toBeVisible();
     expect(screen.queryByLabelText("Canvas estimatedDeliveryTitle")).not.toBeInTheDocument();
     expect(within(screen.getByLabelText("Ready-to-go delivery editor")).getByLabelText("Shipping events")).toBeVisible();
     expect(screen.getByText("Demo shipment item")).toBeVisible();
@@ -100,6 +102,23 @@ describe("V0.7.0 Ready-to-go", () => {
     expect(onPropsChange).toHaveBeenCalledWith({ contentsHeading: "Inside the box" });
     expect(onPropsChange).toHaveBeenCalledWith({ carrierHeading: "Courier" });
     expect(onPropsChange).toHaveBeenCalledWith({ heading: "Also consider" });
+  });
+
+  it("lets the canvas query editor stack at content height instead of a fixed hero card", () => {
+    render(
+      <ReadyToGoQueryEditor
+        heading="Track your order"
+        submitLabel="Track Your Order"
+        defaultTrackingNumber="BT-2048-DEMO"
+        trackingTabLabel="Tracking Number"
+        orderTabLabel="Order Number"
+        blockId="query"
+        selected
+        onPropsChange={vi.fn()}
+      />
+    );
+    expect(screen.getByLabelText("Ready-to-go query editor")).not.toHaveStyle({ minHeight: "520px" });
+    expect(screen.getByLabelText("Ready-to-go tracking query")).not.toHaveStyle({ minHeight: "388px" });
   });
 
   it("uses one query result as shared RuntimeState for every result block", async () => {
@@ -137,6 +156,9 @@ describe("V0.7.0 Ready-to-go", () => {
     expect(screen.getByText("Travel case")).toBeVisible();
     expect(screen.getByText("Shipping cover")).toBeVisible();
     expect(screen.getByText("Sep 22 - Sep 24")).toBeVisible();
+    expect(screen.getByLabelText("Est. Delivery")).toHaveStyle({ width: "100%", backgroundColor: "#eaf4ff" });
+    expect(screen.getByText("Est. Delivery")).toBeVisible();
+    expect(screen.getByText("Estimated time may update as tracking progresses.")).toBeVisible();
   });
 
   it("renders a namespaced Track Page surface with theme tokens", () => {
@@ -153,7 +175,7 @@ describe("V0.7.0 Ready-to-go", () => {
     renderReadyToGo(query);
 
     fireEvent.click(screen.getByRole("button", { name: "Track Your Order" }));
-    expect(screen.getByRole("button", { name: "Tracking…" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Tracking..." })).toBeDisabled();
     expect(screen.getByLabelText("Loading shipment progress")).toBeVisible();
 
     pending.reject(new Error("carrier-timeout"));

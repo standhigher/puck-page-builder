@@ -51,13 +51,16 @@ vi.mock("@puckeditor/core", () => {
   }
   Puck.Preview = Preview;
   const usePuck = () => useContext(PuckContext)!;
+  const IconButton = ({ title, onClick, children, type = "button", active }: { title: string; onClick?: () => void; children: React.ReactNode; type?: "button" | "submit" | "reset"; active?: boolean }) => (
+    <button type={type} title={title} aria-label={title} aria-pressed={active} onClick={onClick}>{children}</button>
+  );
   const registerOverlayPortal = (element: HTMLElement | null | undefined, options?: { disableDrag?: boolean }) => {
     if (!element || !options?.disableDrag) return undefined;
     const stopPointerDown = (event: PointerEvent) => event.stopPropagation();
     element.addEventListener("pointerdown", stopPointerDown, true);
     return () => element.removeEventListener("pointerdown", stopPointerDown, true);
   };
-  return { Puck, registerOverlayPortal, usePuck };
+  return { Puck, IconButton, registerOverlayPortal, usePuck };
 });
 
 const document: PageDocument = {
@@ -151,6 +154,42 @@ describe("PageDocumentEditorShell V0.4", () => {
     await waitFor(() => expect(screen.getByLabelText("文本内容")).toHaveValue("Second block"));
     fireEvent.click(screen.getByRole("button", { name: "区块" }));
     expect(screen.getByTestId("blocks-view").querySelector('[data-block-type="core.text"]')).toHaveAttribute("data-selected", "true");
+  });
+
+  it("collapses and restores the blocks and properties sidebars from the package shell", () => {
+    renderEditor();
+    const editor = screen.getByTestId("page-document-editor");
+    fireEvent.click(screen.getByRole("button", { name: "收起左侧面板" }));
+    expect(editor).toHaveAttribute("data-left-panel", "closed");
+    expect(screen.getByLabelText("PageDocument 区块")).toHaveClass("pb-panel--closed");
+    fireEvent.click(screen.getByRole("button", { name: "打开区块面板" }));
+    expect(editor).toHaveAttribute("data-left-panel", "open");
+    expect(screen.getByTestId("blocks-view")).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "收起属性面板" }));
+    expect(editor).toHaveAttribute("data-right-panel", "closed");
+    expect(screen.getByLabelText("PageDocument 属性")).toHaveClass("pb-panel--closed");
+    fireEvent.click(screen.getByRole("button", { name: "打开属性面板" }));
+    expect(editor).toHaveAttribute("data-right-panel", "open");
+    expect(screen.getByLabelText("PageDocument 属性")).not.toHaveClass("pb-panel--closed");
+  });
+
+  it("toggles both sidebars from the header controls", () => {
+    renderEditor();
+    const editor = screen.getByTestId("page-document-editor");
+    const leftToggle = within(screen.getByTestId("sidebar-toggles")).getByRole("button", { name: "切换左侧面板" });
+    const rightToggle = within(screen.getByTestId("sidebar-toggles")).getByRole("button", { name: "切换属性面板" });
+    fireEvent.click(leftToggle);
+    expect(editor).toHaveAttribute("data-left-panel", "closed");
+    expect(screen.getByLabelText("PageDocument 区块")).toHaveClass("pb-panel--closed");
+    fireEvent.click(leftToggle);
+    expect(editor).toHaveAttribute("data-left-panel", "open");
+    expect(screen.getByTestId("blocks-view")).toBeVisible();
+    fireEvent.click(rightToggle);
+    expect(editor).toHaveAttribute("data-right-panel", "closed");
+    expect(screen.getByLabelText("PageDocument 属性")).toHaveClass("pb-panel--closed");
+    fireEvent.click(rightToggle);
+    expect(editor).toHaveAttribute("data-right-panel", "open");
+    expect(screen.getByLabelText("PageDocument 属性")).not.toHaveClass("pb-panel--closed");
   });
 
   it("synchronizes selected canvas edits and Inspector edits in both directions", async () => {
@@ -263,6 +302,8 @@ describe("PageDocumentEditorShell V0.4", () => {
     expect(screen.getByTestId("page-document-editor").querySelector(".pb-canvas-frame")).toHaveAttribute("data-device", "mobile");
     expect(screen.getByTestId("blocks-view").querySelector('[data-block-type="core.text"]')).toBeVisible();
     expect(screen.getByRole("button", { name: "Undo" })).toHaveAttribute("aria-disabled", "true");
+    expect(screen.getByRole("button", { name: "Toggle left sidebar" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Toggle right sidebar" })).toBeVisible();
   });
 
   it.each(["loading", "empty", "error", "disabled"] as const)("renders the %s state without interactive controls", (loadState) => {

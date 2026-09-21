@@ -85,7 +85,7 @@ function editorText(block: SalesEditorProps, name: string, fallback: string) { r
 function SalesInlineText({ block, name, fallback, style }: { block: SalesEditorProps; name: string; fallback: string; style?: CSSProperties }) {
   const value = editorText(block, name, fallback);
   if (!block.selected) return <span data-sales-editor-field={name} style={style}>{value}</span>;
-  return <input aria-label={`Canvas ${name}`} data-sales-editor-field={name} value={value} onMouseDown={(event) => event.stopPropagation()} onClick={(event) => event.stopPropagation()} onChange={(event) => block.onPropsChange({ [name]: event.currentTarget.value })} style={{ boxSizing: "border-box", width: "100%", border: "1px dashed currentColor", borderRadius: 3, padding: "2px 5px", background: "transparent", color: "inherit", font: "inherit", fontWeight: "inherit", lineHeight: "inherit", textAlign: "inherit", ...style }} />;
+  return <input aria-label={`Canvas ${name}`} data-sales-editor-field={name} value={value} onMouseDown={(event) => event.stopPropagation()} onClick={(event) => event.stopPropagation()} onChange={(event) => block.onPropsChange({ [name]: event.currentTarget.value })} style={{ boxSizing: "border-box", width: "100%", /* border: "1px dashed currentColor", */ border: "none", borderRadius: 3, padding: "2px 5px", background: "transparent", color: "inherit", font: "inherit", fontWeight: "inherit", lineHeight: "inherit", textAlign: "inherit", ...style }} />;
 }
 function SalesEditorSurface({ block, children }: { block: SalesEditorProps; children: ReactNode }) {
   return <section aria-label="Sales editor preview" style={{ ...editorSurfaceStyle, outline: block.selected ? "2px solid #2563eb" : undefined, outlineOffset: -2 }}>{children}</section>;

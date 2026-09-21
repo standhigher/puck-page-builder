@@ -1,6 +1,6 @@
-import { Puck, usePuck } from "@puckeditor/core";
+import { IconButton, Puck, usePuck } from "@puckeditor/core";
 import { Badge, Banner, Button, ButtonGroup, InlineStack, Select, Text, TextField } from "@shopify/polaris";
-import { DragHandleIcon, LayoutSectionIcon, MenuIcon, RedoIcon, UndoIcon } from "@shopify/polaris-icons";
+import { DragHandleIcon, LayoutSectionIcon, MenuIcon, RedoIcon, UndoIcon, XIcon } from "@shopify/polaris-icons";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPageDocumentPuckConfig } from "../../adapters/puck/page-document-config";
 import { fromEngineData, toEngineData } from "../../adapters/puck/page-document";
@@ -73,6 +73,11 @@ function blockTypeLabel(type: string, registry?: ExtensionRegistry) {
   return registry?.getBlock(type)?.label ?? type;
 }
 
+/** Lucide PanelLeft / PanelRight, the same icons Puck's native header uses. */
+function PuckPanelIcon({ side }: { side: "left" | "right" }) {
+  return <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false"><rect width="18" height="18" x="3" y="3" rx="2" /><path d={side === "left" ? "M9 3v18" : "M15 3v18"} /></svg>;
+}
+
 function validateDocumentBlocks(document: PageDocument, registry?: ExtensionRegistry): ValidationIssue[] {
   return registry ? validatePageDocumentWithRegistry(document, registry) : [];
 }
@@ -132,9 +137,11 @@ export function PageDocumentEditorShell(props: PageDocumentEditorShellProps) {
   </EditorProvider>;
 }
 
-function PageDocumentEditor({ iframe = true, registry, adminLocale, onSave, onPublish, draftPersistence, draftRevision: initialDraftRevision, autoSave = true, autoSaveDelayMs = 800, publishAction, assetPicker, pageStatus, onBack, onPreview, onAddToStore, deleteConfirmation, availableBlockTypes, appearanceControls = false }: PageDocumentEditorShellProps) {
+function PageDocumentEditor({ iframe = false, registry, adminLocale, onSave, onPublish, draftPersistence, draftRevision: initialDraftRevision, autoSave = true, autoSaveDelayMs = 800, publishAction, assetPicker, pageStatus, onBack, onPreview, onAddToStore, deleteConfirmation, availableBlockTypes, appearanceControls = false }: PageDocumentEditorShellProps) {
   const editor = useEditorContext();
   const [blockView, setBlockView] = useState<"blocks" | "outline">("blocks");
+  const [leftRailOpen, setLeftRailOpen] = useState(true);
+  const [rightPanelOpen, setRightPanelOpen] = useState(true);
   const [draggingLibraryType, setDraggingLibraryType] = useState<string | null>(null);
   const canvasFrameRef = useRef<HTMLDivElement>(null);
   const [canvasMutationVersion, setCanvasMutationVersion] = useState(0);
@@ -280,10 +287,10 @@ function PageDocumentEditor({ iframe = true, registry, adminLocale, onSave, onPu
   }}>
     <Puck.Layout>
       <CanvasSelectionBridge data={engineData} requestedBlockId={editor.canvasSelectionRequest} onCanvasSelected={confirmCanvasSelection} canvasMutationVersion={canvasMutationVersion} canvasResetVersion={canvasResetVersion} />
-      <div className="pb-shell pb-shell--v04" data-testid="page-document-editor" data-page-id={editor.document.pageId} data-dirty={editor.isDirty} data-editor-state={editor.loadState} data-editor-session-state={editor.sessionState} data-save-state={resolvedSaveState}>
+      <div className="pb-shell pb-shell--v04" data-testid="page-document-editor" data-page-id={editor.document.pageId} data-dirty={editor.isDirty} data-editor-state={editor.loadState} data-editor-session-state={editor.sessionState} data-save-state={resolvedSaveState} data-left-panel={leftRailOpen ? "open" : "closed"} data-right-panel={rightPanelOpen ? "open" : "closed"}>
         <header className="pb-header">
           <div className="pb-header-content">
-            <div className="pb-header-title-group">{onBack ? <Button variant="tertiary" onClick={requestBack}>{i18n.t("back")}</Button> : null}<div className="pb-page-title"><Text as="h1" variant="headingSm">{editor.document.settings.seoTitle ?? editor.document.pageId}</Text><Text as="p" variant="bodySm" tone="subdued">PageDocument V{editor.document.schemaVersion} · {editor.document.target}</Text>{pageStatus ? <PageStatusCard status={pageStatus} sessionState={editor.sessionState} /> : null}</div></div>
+            <div className="pb-header-title-group">{onBack ? <Button variant="tertiary" onClick={requestBack}>{i18n.t("back")}</Button> : null}<div className="pb-page-title"><Text as="h1" variant="headingSm">{editor.document.settings.seoTitle ?? editor.document.pageId}</Text><Text as="p" variant="bodySm" tone="subdued">PageDocument V{editor.document.schemaVersion} · {editor.document.target}</Text>{pageStatus ? <PageStatusCard status={pageStatus} sessionState={editor.sessionState} /> : null}</div><div className="pb-header-sidebar-toggles" role="group" aria-label={i18n.t("toggleSidebars")} data-testid="sidebar-toggles"><IconButton type="button" title={i18n.t("toggleLeftSidebar")} onClick={() => setLeftRailOpen((open) => !open)}><PuckPanelIcon side="left" /></IconButton><IconButton type="button" title={i18n.t("toggleRightSidebar")} onClick={() => setRightPanelOpen((open) => !open)}><PuckPanelIcon side="right" /></IconButton></div></div>
             <div className="pb-header-device-toolbar"><ButtonGroup variant="segmented">{(Object.keys(deviceLabels) as Array<keyof typeof deviceLabels>).map((device) => <Button key={device} pressed={editor.device === device} onClick={() => editor.setDevice(device)}>{i18n.t(deviceLabels[device])}</Button>)}</ButtonGroup><div className="pb-zoom-control"><Select label={i18n.t("zoom")} labelHidden options={[{ label: i18n.t("zoomAuto"), value: "auto" }, { label: "50%", value: "50" }, { label: "70%", value: "70" }, { label: "100%", value: "100" }]} value={zoom} onChange={(value) => setZoom(value as typeof zoom)} /></div></div>
             <div className="pb-header-actions"><InlineStack gap="150" blockAlign="center" wrap={false}>
               <Badge tone={saveBadgeTone}>{saveBadgeLabel}</Badge>
@@ -299,13 +306,13 @@ function PageDocumentEditor({ iframe = true, registry, adminLocale, onSave, onPu
         {editor.loadState === "success" ? <Banner tone="success">{i18n.t("success")}</Banner> : null}
         {notice ? <Banner tone={notice === "published" ? "success" : "critical"}>{i18n.t(notice)}</Banner> : null}
         {validationIssues.length > 0 ? <Banner tone="critical" title="区块属性未通过校验"><ul>{validationIssues.map((issue) => <li key={`${issue.path}-${issue.message}`}>{issue.path}: {issue.message}</li>)}</ul></Banner> : null}
-        <div className="pb-workspace pb-workspace--document">
+        <div className={`pb-workspace pb-workspace--document${leftRailOpen ? "" : " pb-workspace--left-closed"}${rightPanelOpen ? "" : " pb-workspace--right-closed"}`} data-left-panel={leftRailOpen ? "open" : "closed"} data-right-panel={rightPanelOpen ? "open" : "closed"}>
           <nav className="pb-tool-rail" aria-label="编辑器工具">
-            <Button accessibilityLabel={i18n.t("blocks")} icon={LayoutSectionIcon} pressed={blockView === "blocks"} variant="tertiary" onClick={() => setBlockView("blocks")} />
-            <Button accessibilityLabel={i18n.t("outline")} icon={MenuIcon} pressed={blockView === "outline"} variant="tertiary" onClick={() => setBlockView("outline")} />
+            <Button accessibilityLabel={i18n.t("blocks")} icon={LayoutSectionIcon} pressed={blockView === "blocks" && leftRailOpen} variant="tertiary" onClick={() => { setBlockView("blocks"); setLeftRailOpen(true); }} />
+            <Button accessibilityLabel={i18n.t("outline")} icon={MenuIcon} pressed={blockView === "outline" && leftRailOpen} variant="tertiary" onClick={() => { setBlockView("outline"); setLeftRailOpen(true); }} />
           </nav>
-          <aside className="pb-left-panel" aria-label="PageDocument 区块">
-            <InlineStack align="space-between" blockAlign="center"><Text as="h2" variant="headingSm">{blockView === "blocks" ? i18n.t("blocks") : i18n.t("outline")}</Text></InlineStack>
+          <aside className={`pb-left-panel${leftRailOpen ? "" : " pb-panel--closed"}`} aria-label="PageDocument 区块">
+            <InlineStack align="space-between" blockAlign="center"><Text as="h2" variant="headingSm">{blockView === "blocks" ? i18n.t("blocks") : i18n.t("outline")}</Text><Button accessibilityLabel={i18n.t("collapseLeft")} icon={XIcon} variant="tertiary" onClick={() => setLeftRailOpen(false)} /></InlineStack>
             {blockView === "blocks" ? <div className="pb-block-list" data-testid="blocks-view" aria-label="区块类型库" role="list" onDrop={cancelLibraryDrop}>
               {blockTypes.map((type) => <div key={type} className={`pb-document-block-row pb-document-block-row--library ${editor.selectedBlock?.type === type ? "pb-document-block-row--selected" : ""}`} data-block-type={type} data-selected={editor.selectedBlock?.type === type} role="listitem" draggable={editor.canAddBlock(type)} aria-disabled={!editor.canAddBlock(type)} aria-label={`${blockTypeLabel(type, registry)}，拖拽至画布以添加${editor.selectedBlock?.type === type ? "，当前选中类型" : ""}`} onDragStart={(event) => { if (!editor.canAddBlock(type)) { event.preventDefault(); return; } event.dataTransfer.setData("application/x-page-document-block", type); event.dataTransfer.effectAllowed = "copy"; setDraggingLibraryType(type); }} onDragEnd={() => setDraggingLibraryType(null)}>
                 <span className="pb-library-block-title"><Text as="span" variant="bodySm" fontWeight="semibold">{blockTypeLabel(type, registry)}</Text><span className="pb-library-block-drag-hint" aria-hidden="true"><DragHandleIcon /></span></span>
@@ -320,9 +327,10 @@ function PageDocumentEditor({ iframe = true, registry, adminLocale, onSave, onPu
           </aside>
           <main className="pb-canvas-area">
             <div className="pb-canvas-stage"><div ref={canvasFrameRef} className={`pb-canvas-frame pb-canvas-frame--${editor.device}${zoom === "auto" ? "" : ` pb-canvas-frame--zoom-${zoom}`}`} data-device={editor.device} data-zoom={zoom}><Puck.Preview /></div>{draggingLibraryType ? <div className="pb-canvas-drop-target" data-testid="canvas-drop-target" role="region" aria-label="区块投放区" onDragOver={(event) => event.preventDefault()} onDrop={dropFromLibrary}>松开以添加 {blockTypeLabel(draggingLibraryType, registry)}</div> : null}{editor.selectedBlock ? <div className="pb-canvas-overlay" aria-label={`已选择 ${blockLabel(editor.selectedBlock, registry)}`}><span>{blockLabel(editor.selectedBlock, registry)}</span><span>Selected</span></div> : null}</div>
+            {!leftRailOpen || !rightPanelOpen ? <div className="pb-collapsed-actions">{!leftRailOpen ? <Button onClick={() => setLeftRailOpen(true)}>{i18n.t("expandLeft")}</Button> : null}{!rightPanelOpen ? <Button onClick={() => setRightPanelOpen(true)}>{i18n.t("expandRight")}</Button> : null}</div> : null}
           </main>
-          <aside className="pb-right-panel" aria-label="PageDocument 属性">
-            <Text as="h2" variant="headingSm">{i18n.t("properties")}</Text>
+          <aside className={`pb-right-panel${rightPanelOpen ? "" : " pb-panel--closed"}`} aria-label="PageDocument 属性">
+            <InlineStack align="space-between" blockAlign="center"><Text as="h2" variant="headingSm">{i18n.t("properties")}</Text><Button accessibilityLabel={i18n.t("collapseRight")} icon={XIcon} variant="tertiary" onClick={() => setRightPanelOpen(false)} /></InlineStack>
             {editor.selectedBlock ? <><DocumentInspector pageId={editor.document.pageId} assetPicker={assetPicker} block={editor.selectedBlock} registry={registry} disabled={!editor.actionState.canEdit} appearanceControls={appearanceControls} onChange={(props) => editor.updateBlockProps(editor.selectedBlock!.id, props)} onPresentationChange={(presentation) => updateBlockPresentation(editor.selectedBlock!.id, presentation)} /><InspectorActions block={editor.selectedBlock} canDuplicate={editor.actionState.canDuplicate} canDelete={editor.actionState.canDelete} canMove={editor.actionState.canReorder} canMoveUp={editor.document.blocks[0]?.id !== editor.selectedBlock.id} canMoveDown={editor.document.blocks.at(-1)?.id !== editor.selectedBlock.id} i18n={i18n} onDuplicate={() => editor.duplicateBlock(editor.selectedBlock!.id)} onDelete={() => editor.requestDeleteBlock(editor.selectedBlock!.id)} onMove={(direction) => editor.moveBlock(editor.selectedBlock!.id, direction)} /></> : <Text as="p" tone="subdued">{i18n.t("selectBlock")}</Text>}
           </aside>
         </div>
@@ -472,6 +480,6 @@ function DocumentInspector({ pageId, assetPicker, block, registry, disabled, app
       else delete style[token];
       onPresentationChange({ variant: block.variant, style });
     }} />)}</InspectorSection> : null}
-    {definition ? <p className="pb-inspector__hint">画布中带虚线边框的内容可直接编辑。</p> : null}
+    {/* {definition ? <p className="pb-inspector__hint">画布中带虚线边框的内容可直接编辑。</p> : null} */}
   </div>;
 }

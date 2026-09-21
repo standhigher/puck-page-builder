@@ -174,7 +174,7 @@ function InlineText({ block, name, fallback }: { block: BrandedEditorProps; name
     onMouseDown={(event) => event.stopPropagation()}
     onClick={(event) => event.stopPropagation()}
     onChange={(event) => block.onPropsChange({ [name]: event.currentTarget.value })}
-    style={{ display: "inline-block", width: "100%", minWidth: "5ch", boxSizing: "border-box", border: "1px dashed currentColor", borderRadius: 3, padding: "2px 5px", background: "transparent", color: "inherit", font: "inherit", fontWeight: "inherit", lineHeight: "inherit", letterSpacing: "inherit", textAlign: "inherit" }}
+    style={{ display: "inline-block", width: "100%", minWidth: "5ch", boxSizing: "border-box", /* border: "1px dashed currentColor", */ border: "none", borderRadius: 3, padding: "2px 5px", background: "transparent", color: "inherit", font: "inherit", fontWeight: "inherit", lineHeight: "inherit", letterSpacing: "inherit", textAlign: "inherit" }}
   />;
 }
 
@@ -194,7 +194,7 @@ export function BrandedTrackingExperienceEditor(block: BrandedEditorProps) {
       <EditorSurface block={block}>
         <h1 style={{ margin: "0 0 28px", textAlign: "center", fontSize: 32 }}><InlineText block={block} name="heading" fallback="Track your order" /></h1>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", borderBottom: "1px solid #e7e7e7", marginBottom: 20, textAlign: "center" }}><span style={{ padding: 10 }}><InlineText block={block} name="orderTabLabel" fallback="Order Number" /></span><strong style={{ padding: 10, borderBottom: "2px solid #0a0a0a" }}><InlineText block={block} name="trackingTabLabel" fallback="Tracking Number" /></strong></div>
-        <input aria-label="Canvas default tracking number" readOnly={!block.selected} value={text(block, "defaultTrackingNumber", "DEMO-YQTRACK9999")} onMouseDown={(event) => block.selected && event.stopPropagation()} onClick={(event) => block.selected && event.stopPropagation()} onChange={(event) => block.onPropsChange({ defaultTrackingNumber: event.currentTarget.value })} style={{ width: "100%", height: 44, boxSizing: "border-box", padding: "0 12px", border: block.selected ? "1px dashed #0a0a0a" : "1px solid #e2e2e2", borderRadius: 10, background: "#fff", font: "inherit" }} />
+        <input aria-label="Canvas default tracking number" readOnly={!block.selected} value={text(block, "defaultTrackingNumber", "DEMO-YQTRACK9999")} onMouseDown={(event) => block.selected && event.stopPropagation()} onClick={(event) => block.selected && event.stopPropagation()} onChange={(event) => block.onPropsChange({ defaultTrackingNumber: event.currentTarget.value })} style={{ width: "100%", height: 44, boxSizing: "border-box", padding: "0 12px", /* border: block.selected ? "1px dashed #0a0a0a" : "1px solid #e2e2e2", */ border: "1px solid #e2e2e2", borderRadius: 10, background: "#fff", font: "inherit" }} />
         <div style={{ display: "grid", placeItems: "center", minHeight: 46, marginTop: 16, borderRadius: 10, background: "#000", color: "#fff", fontWeight: 700 }}><InlineText block={block} name="submitLabel" fallback="Track" /></div>
         <small style={{ display: "block", marginTop: 10, color: "#8a8a8a", fontSize: 9, textAlign: "right" }}>Powered by BestTrack</small>
       </EditorSurface>

@@ -1,7 +1,7 @@
 /* eslint-disable react-refresh/only-export-components -- Shared visual primitives intentionally export components and token-aware helpers. */
 import { useState, type CSSProperties, type ReactNode } from "react";
 import type { ReadyToGoOrderItem, ReadyToGoRecommendation, ReadyToGoTrackingEvent, ReadyToGoTrackingStep } from "./ready-to-go";
-import { formatTrackingPageMoney } from "./tracking-page-runtime";
+import { formatTrackingPageMoney, type TrackingPageAd } from "./tracking-page-runtime";
 import { safeTrackingPageUrl } from "./tracking-page-url";
 
 export const pageFont = { fontFamily: "var(--pb-font-family, Inter, system-ui, sans-serif)" } satisfies CSSProperties;
@@ -156,6 +156,39 @@ export function RecommendationCards({ items }: { items: ReadyToGoRecommendation[
         {item.description ? <p style={{ margin: "4px 0 0", color: "#64748b", fontSize: 13 }}>{item.description}</p> : null}
       </div>
     </a>)}
+  </div>;
+}
+
+/**
+ * The legacy Track Page only rendered the promotion when the API returned an
+ * image. The live slot therefore stays collapsed when `ad` is absent; the
+ * editor can opt into a neutral placeholder to make the slot visible while
+ * configuring the page.
+ */
+export function TrackingPageAdSlot({ ad, editor = false }: { ad?: TrackingPageAd; editor?: boolean }) {
+  const [failedUrl, setFailedUrl] = useState<string>();
+  const imageUrl = safeImageUrl(ad?.imageUrl);
+  if ((!imageUrl || failedUrl === imageUrl) && !editor) return null;
+
+  const content = imageUrl && failedUrl !== imageUrl ? (
+    <img src={imageUrl} alt={ad?.alt ?? "Promotion"} loading="lazy" onError={() => setFailedUrl(imageUrl)} style={{ display: "block", width: "100%", height: "auto", objectFit: "cover" }} />
+  ) : (
+    <div aria-label="Advertisement placeholder" style={{ display: "grid", minHeight: 120, placeItems: "center", border: "1px dashed #cbd5e1", background: "#f8fafc", color: "#64748b", fontSize: 13 }}>
+      Advertisement space
+    </div>
+  );
+
+  const href = safeHref(ad?.href);
+  if (!imageUrl || !href) return <div data-tracking-page-ad>{content}</div>;
+  return <a data-tracking-page-ad href={href} target="_blank" rel="noopener noreferrer">{content}</a>;
+}
+
+/** Original Track Page `bst-edd-card`: full-width advisory dates, hidden when the mapper omits them. */
+export function EstimatedDeliveryCard({ dateText }: { dateText: string }) {
+  return <div aria-label="Est. Delivery" style={{ margin: "16px auto 0", width: "100%", boxSizing: "border-box", border: "1px solid transparent", borderRadius: 10, backgroundColor: "#eaf4ff", padding: "20px 22px 18px", textAlign: "left" }}>
+    <p style={{ margin: 0, color: "#202124", fontSize: 13, fontWeight: 700, lineHeight: 1.3 }}>Est. Delivery</p>
+    <p style={{ margin: "6px 0 0", color: "#202124", fontSize: 22, fontWeight: 700, lineHeight: 1.15, letterSpacing: 0, overflowWrap: "anywhere", wordBreak: "break-word" }}>{dateText}</p>
+    <p style={{ margin: "6px 0 0", color: "#5f6368", fontSize: 13, fontWeight: 400, lineHeight: 1.35 }}>Estimated time may update as tracking progresses.</p>
   </div>;
 }
 

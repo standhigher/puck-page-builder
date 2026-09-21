@@ -18,6 +18,7 @@
 | 新增业务区块、字段或模板 | [常规扩展开发](./extension-development.md) |
 | 配置模板、Variant 与 Theme Token | [模板与主题](./template-theme.md) |
 | 接入 Ready-to-go 模板 | [Ready-to-go 模板](./ready-to-go.md) |
+| Track Page 动态广告与推荐商品 | [动态内容改动说明](./track-page-dynamic-content.md) |
 | 接入 Branded 模板 | [Branded 模板](./branded-template.md) |
 | 接入 Sales 模板 | [Sales 模板](./sales-template.md) |
 | 设计服务端页面加载、数据绑定与降级 | [Runtime 接入](./runtime.md) |

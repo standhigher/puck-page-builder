@@ -47,7 +47,14 @@ const messages = {
     selectBlock: "选择一个区块以编辑。",
     desktop: "桌面",
     tablet: "平板",
-    mobile: "手机"
+    mobile: "手机",
+    collapseLeft: "收起左侧面板",
+    collapseRight: "收起属性面板",
+    expandLeft: "打开区块面板",
+    expandRight: "打开属性面板",
+    toggleSidebars: "侧栏显示",
+    toggleLeftSidebar: "切换左侧面板",
+    toggleRightSidebar: "切换属性面板"
   },
   en: {
     blocks: "Blocks",
@@ -95,7 +102,14 @@ const messages = {
     selectBlock: "Select a block to edit it.",
     desktop: "Desktop",
     tablet: "Tablet",
-    mobile: "Mobile"
+    mobile: "Mobile",
+    collapseLeft: "Collapse blocks panel",
+    collapseRight: "Collapse properties panel",
+    expandLeft: "Open blocks panel",
+    expandRight: "Open properties panel",
+    toggleSidebars: "Sidebar visibility",
+    toggleLeftSidebar: "Toggle left sidebar",
+    toggleRightSidebar: "Toggle right sidebar"
   }
 } as const;
 

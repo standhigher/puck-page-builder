@@ -1,5 +1,7 @@
 /* eslint-disable react-refresh/only-export-components -- Shared visual primitives intentionally export components and token-aware helpers. */
-import { useState, type CSSProperties, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react";
+import Autoplay from "embla-carousel-autoplay";
+import useEmblaCarousel from "embla-carousel-react";
 import type { ReadyToGoOrderItem, ReadyToGoRecommendation, ReadyToGoTrackingEvent, ReadyToGoTrackingStep } from "./ready-to-go";
 import { formatTrackingPageMoney, type TrackingPageAd } from "./tracking-page-runtime";
 import { safeTrackingPageUrl } from "./tracking-page-url";
@@ -145,41 +147,104 @@ export function PackageContents({ items }: { items: ReadyToGoOrderItem[] }) {
 }
 
 export function RecommendationCards({ items }: { items: ReadyToGoRecommendation[] }) {
-  return <div style={{ display: "flex", gap: 24, overflowX: "auto", paddingBottom: 8 }}>
-    {items.map((item) => <a key={item.id} href={safeHref(item.href)} style={{ flex: "0 0 262px", width: 262, maxWidth: "100%", textDecoration: "none", color: "inherit" }}>
-      <div style={{ width: 262, height: 262, maxWidth: "100%", borderRadius: "var(--pb-radius, 8px)", border: "1px solid #E3E3E3", overflow: "hidden", background: "#f1f5f9" }}>
-        <ProductImage src={item.imageUrl} alt={item.title} size={262} />
+  const autoplay = useMemo(() => Autoplay({ delay: 3000, stopOnInteraction: false, stopOnMouseEnter: true }), []);
+  const [emblaRef, emblaApi] = useEmblaCarousel({ loop: true, align: "start", slidesToScroll: 1 }, [autoplay]);
+  const [canScrollPrev, setCanScrollPrev] = useState(false);
+  const [canScrollNext, setCanScrollNext] = useState(false);
+  const [hideButtons, setHideButtons] = useState(false);
+
+  const onSelect = useCallback(() => {
+    if (!emblaApi) return;
+    setCanScrollPrev(emblaApi.canScrollPrev());
+    setCanScrollNext(emblaApi.canScrollNext());
+  }, [emblaApi]);
+
+  useEffect(() => {
+    if (!emblaApi) return;
+    onSelect();
+    emblaApi.on("select", onSelect);
+    emblaApi.on("reInit", onSelect);
+    return () => {
+      emblaApi.off("select", onSelect);
+      emblaApi.off("reInit", onSelect);
+    };
+  }, [emblaApi, onSelect]);
+
+  useEffect(() => {
+    if (typeof window.matchMedia !== "function") return;
+    const media = window.matchMedia("(max-width: 768px)");
+    const update = () => setHideButtons(media.matches);
+    update();
+    media.addEventListener("change", update);
+    return () => media.removeEventListener("change", update);
+  }, []);
+
+  if (items.length === 0) return null;
+
+  const arrow = (points: string) => (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <polyline points={points} />
+    </svg>
+  );
+  const buttonStyle: CSSProperties = {
+    position: "absolute",
+    top: 115,
+    zIndex: 2,
+    width: 32,
+    height: 32,
+    borderRadius: 99,
+    border: 0,
+    background: "#fff",
+    boxShadow: "0 0 0.5px rgba(0, 0, 0, 0.12)",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    cursor: "pointer",
+    color: "#333",
+    padding: 0
+  };
+
+  return <div aria-label="Recommended products carousel" style={{ position: "relative", marginLeft: 48, marginRight: 48 }}>
+    {!hideButtons && canScrollPrev ? <button type="button" aria-label="Previous" onClick={() => emblaApi?.scrollPrev()} style={{ ...buttonStyle, left: -40 }}>{arrow("15 18 9 12 15 6")}</button> : null}
+    <div ref={emblaRef} style={{ overflow: "hidden" }}>
+      <div style={{ display: "flex" }}>
+        {items.map((item) => {
+          const href = safeHref(item.href);
+          const card = <>
+            <div style={{ width: 262, height: 262, maxWidth: "100%", borderRadius: 8, border: "1px solid #E3E3E3", overflow: "hidden", background: "#f1f5f9" }}>
+              <ProductImage src={item.imageUrl} alt={item.title} size={262} />
+            </div>
+            <div style={{ padding: "12px 8px", textAlign: "center", fontSize: 14 }}>
+              <p style={{ margin: 0, color: "#334155" }}>{item.title}</p>
+              {item.price && formatTrackingPageMoney(item.price)?.amount ? <p style={{ margin: "4px 0 0", fontWeight: 600, color: "#0f172a" }}>{formatTrackingPageMoney(item.price)!.amount}</p> : null}
+              {item.description ? <p style={{ margin: "4px 0 0", color: "#64748b", fontSize: 13 }}>{item.description}</p> : null}
+            </div>
+          </>;
+          return <div key={item.id} style={{ flex: "0 0 286px", minWidth: 0, paddingRight: 24, boxSizing: "border-box" }}>
+            {href ? <a href={href} style={{ display: "block", width: 262, maxWidth: "100%", textDecoration: "none", color: "inherit" }}>{card}</a> : <div style={{ width: 262, maxWidth: "100%" }}>{card}</div>}
+          </div>;
+        })}
       </div>
-      <div style={{ padding: "12px 8px", textAlign: "center", fontSize: 14 }}>
-        <p style={{ margin: 0, color: "#334155" }}>{item.title}</p>
-        {item.price && formatTrackingPageMoney(item.price)?.amount ? <p style={{ margin: "4px 0 0", fontWeight: 600, color: "#0f172a" }}>{formatTrackingPageMoney(item.price)!.amount}</p> : null}
-        {item.description ? <p style={{ margin: "4px 0 0", color: "#64748b", fontSize: 13 }}>{item.description}</p> : null}
-      </div>
-    </a>)}
+    </div>
+    {!hideButtons && canScrollNext ? <button type="button" aria-label="Next" onClick={() => emblaApi?.scrollNext()} style={{ ...buttonStyle, right: -40 }}>{arrow("9 18 15 12 9 6")}</button> : null}
   </div>;
 }
 
 /**
  * The legacy Track Page only rendered the promotion when the API returned an
- * image. The live slot therefore stays collapsed when `ad` is absent; the
- * editor can opt into a neutral placeholder to make the slot visible while
- * configuring the page.
+ * image. The slot stays collapsed when `ad` is absent, including in the editor.
  */
-export function TrackingPageAdSlot({ ad, editor = false }: { ad?: TrackingPageAd; editor?: boolean }) {
+export function TrackingPageAdSlot({ ad }: { ad?: TrackingPageAd }) {
   const [failedUrl, setFailedUrl] = useState<string>();
   const imageUrl = safeImageUrl(ad?.imageUrl);
-  if ((!imageUrl || failedUrl === imageUrl) && !editor) return null;
+  if (!imageUrl || failedUrl === imageUrl) return null;
 
-  const content = imageUrl && failedUrl !== imageUrl ? (
+  const content = (
     <img src={imageUrl} alt={ad?.alt ?? "Promotion"} loading="lazy" onError={() => setFailedUrl(imageUrl)} style={{ display: "block", width: "100%", height: "auto", objectFit: "cover" }} />
-  ) : (
-    <div aria-label="Advertisement placeholder" style={{ display: "grid", minHeight: 120, placeItems: "center", border: "1px dashed #cbd5e1", background: "#f8fafc", color: "#64748b", fontSize: 13 }}>
-      Advertisement space
-    </div>
   );
 
   const href = safeHref(ad?.href);
-  if (!imageUrl || !href) return <div data-tracking-page-ad>{content}</div>;
+  if (!href) return <div data-tracking-page-ad>{content}</div>;
   return <a data-tracking-page-ad href={href} target="_blank" rel="noopener noreferrer">{content}</a>;
 }
 

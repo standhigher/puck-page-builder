@@ -25,7 +25,8 @@ should inject `transport` instead of inventing a new request body:
 
 That path reuses the original lookup: `POST /track/query?_t=`, snake_case
 `{ order_number, email, tracking_number, lang }`, one retry, independent
-`POST /products/recommend` with `{ page, page_size }`, and the original
+`POST /products/recommend` with `{ page, page_size }`, the original Embla
+recommendation carousel, and the original
 progress / shipping / empty-state mapping. The host only supplies fetch,
 App Proxy prefix, and credentials.
 

@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import { bestTrackPageExtension, ReadyToGoRuntimeProvider, type TrackingPageQuery } from "../../packages/besttrack-page-extension/src";
+import { bestTrackPageExtension, ReadyToGoRuntimeProvider, type TrackingPageQuery, type TrackingPageRecommendationsQuery } from "../../packages/besttrack-page-extension/src";
 import { ReadyToGoDeliveryEditor, ReadyToGoProgressEditor, ReadyToGoQueryEditor, ReadyToGoRecommendationsEditor } from "../../packages/besttrack-page-extension/src/ready-to-go";
 import { createExtensionRegistry } from "../../packages/puck-page-builder/src/core/extensions";
 import { WebRenderer } from "../../packages/puck-page-builder/src/renderer/web/WebRenderer";
@@ -15,11 +15,11 @@ function deferred<T>() {
   return { promise, resolve, reject };
 }
 
-function renderReadyToGo(query?: TrackingPageQuery) {
+function renderReadyToGo(query?: TrackingPageQuery, queryRecommendations?: TrackingPageRecommendationsQuery) {
   const registry = createExtensionRegistry([bestTrackPageExtension]);
   const document = registry.getTemplate("besttrack.ready-to-go")!.create();
   return render(
-    <ReadyToGoRuntimeProvider query={query}>
+    <ReadyToGoRuntimeProvider query={query} queryRecommendations={queryRecommendations}>
       <WebRenderer document={document} registry={registry} />
     </ReadyToGoRuntimeProvider>
   );
@@ -90,6 +90,7 @@ describe("V0.7.0 Ready-to-go", () => {
     expect(within(screen.getByLabelText("Ready-to-go progress editor")).getByText("Sep 22 - Sep 24")).toBeVisible();
     expect(screen.queryByLabelText("Canvas estimatedDeliveryTitle")).not.toBeInTheDocument();
     expect(within(screen.getByLabelText("Ready-to-go delivery editor")).getByLabelText("Shipping events")).toBeVisible();
+    expect(screen.queryByText("Advertisement space")).not.toBeInTheDocument();
     expect(screen.getByText("Demo shipment item")).toBeVisible();
     expect(screen.getByText("Shipping protection")).toBeVisible();
     expect(onPropsChange).toHaveBeenCalledWith({ heading: "Find your parcel" });
@@ -137,11 +138,11 @@ describe("V0.7.0 Ready-to-go", () => {
         { id: "delivered", label: "Delivered", state: "upcoming" }
       ],
       events: [{ id: "hub", title: "Courier assigned", at: "Sep 18, 4:00 PM", state: "current" }],
-      orderItems: [{ id: "case", title: "Travel case", quantity: 1, description: "Protects the shipment." }],
-      recommendations: [{ id: "cover", title: "Shipping cover", description: "Protect the next order.", price: { amount: 1200, currencyCode: "USD" } }]
+      orderItems: [{ id: "case", title: "Travel case", quantity: 1, description: "Protects the shipment." }]
     });
 
     renderReadyToGo(query);
+    expect(screen.getByText("Shipping protection")).toBeVisible();
     fireEvent.change(screen.getByLabelText("Tracking number"), { target: { value: "BT-7777" } });
     fireEvent.click(screen.getByRole("button", { name: "Track Your Order" }));
 
@@ -154,7 +155,7 @@ describe("V0.7.0 Ready-to-go", () => {
     expect(screen.getByText("BestTrack")).toBeVisible();
     expect(screen.getByText("Shanghai")).toBeVisible();
     expect(screen.getByText("Travel case")).toBeVisible();
-    expect(screen.getByText("Shipping cover")).toBeVisible();
+    expect(screen.getByText("Shipping protection")).toBeVisible();
     expect(screen.getByText("Sep 22 - Sep 24")).toBeVisible();
     expect(screen.getByLabelText("Est. Delivery")).toHaveStyle({ width: "100%", backgroundColor: "#eaf4ff" });
     expect(screen.getByText("Est. Delivery")).toBeVisible();
@@ -167,6 +168,8 @@ describe("V0.7.0 Ready-to-go", () => {
     expect(screen.getByLabelText("Ready-to-go tracking query").parentElement).toHaveStyle({ backgroundColor: "#fff" });
     expect(screen.getByRole("tab", { name: "Tracking Number" })).toHaveAttribute("aria-selected", "true");
     expect(screen.getByRole("main")).toHaveStyle({ "--pb-color-primary": "#111111" });
+    expect(screen.getByLabelText("Recommended products carousel")).toBeVisible();
+    expect(screen.getByText("Shipping protection")).toBeVisible();
   });
 
   it("disables submit while loading and shows a controlled query error", async () => {
@@ -182,7 +185,7 @@ describe("V0.7.0 Ready-to-go", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent("We couldn’t retrieve this order right now. Please try again later.");
     expect(screen.getByText("Shipment progress is temporarily unavailable.")).toBeVisible();
     expect(screen.getByText("Delivery details are temporarily unavailable.")).toBeVisible();
-    expect(screen.getByText("Recommendations are temporarily unavailable.")).toBeVisible();
+    expect(screen.getByText("Shipping protection")).toBeVisible();
   });
 
   it("keeps delivery fields visible when some result values are missing", async () => {
@@ -198,13 +201,13 @@ describe("V0.7.0 Ready-to-go", () => {
   });
 
   it("uses a placeholder when a recommendation image fails", async () => {
-    const query = vi.fn<TrackingPageQuery>().mockResolvedValue({
-      trackingNumber: "BT-2000",
-      status: "In transit",
-      recommendations: [{ id: "cover", title: "Shipping cover", description: "Protect the next order.", imageUrl: "https://example.invalid/cover.png" }]
-    });
-    renderReadyToGo(query);
-    fireEvent.click(screen.getByRole("button", { name: "Track Your Order" }));
+    const queryRecommendations = vi.fn(async () => [{
+      id: "cover",
+      title: "Shipping cover",
+      description: "Protect the next order.",
+      imageUrl: "https://example.invalid/cover.png"
+    }]);
+    renderReadyToGo(undefined, queryRecommendations);
     const image = await screen.findByAltText("Shipping cover");
     fireEvent.error(image);
     expect(screen.getByLabelText("Shipping cover image unavailable")).toBeVisible();

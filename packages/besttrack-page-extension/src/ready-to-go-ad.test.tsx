@@ -1,6 +1,6 @@
 import { fireEvent, render, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import { ReadyToGoDeliveryBlock, ReadyToGoQueryBlock, ReadyToGoRuntimeProvider } from "./ready-to-go";
+import { ReadyToGoDeliveryBlock, ReadyToGoDeliveryEditor, ReadyToGoQueryBlock, ReadyToGoRuntimeProvider } from "./ready-to-go";
 import type { TrackingPageQuery } from "./tracking-page-runtime";
 
 describe("Ready-to-go dynamic promotion slot", () => {
@@ -41,5 +41,13 @@ describe("Ready-to-go dynamic promotion slot", () => {
     fireEvent.click(getByRole("button", { name: "Find" }));
     await waitFor(() => expect(query).toHaveBeenCalled());
     expect(container.querySelector("[data-tracking-page-ad]")).toBeNull();
+  });
+
+  it("hides the editor ad slot when preview data has no ad", () => {
+    const { container, queryByText } = render(
+      <ReadyToGoDeliveryEditor heading="Shipping Details" contentsHeading="Package Contents" carrierHeading="Carrier" blockId="delivery" selected onPropsChange={vi.fn()} />
+    );
+    expect(container.querySelector("[data-tracking-page-ad]")).toBeNull();
+    expect(queryByText("Advertisement space")).toBeNull();
   });
 });

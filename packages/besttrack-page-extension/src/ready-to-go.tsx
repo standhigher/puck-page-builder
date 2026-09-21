@@ -70,6 +70,7 @@ export type ReadyToGoRuntimeProviderProps = {
   /**
    * Shopify Track Page live transport. When `query` is omitted, lookups use the
    * original `/track/query` body, `_t` cache-bust, retry, and mapping rules.
+   * Recommendations still POST `/products/recommend` on mount, even if `query` is set.
    */
   transport?: ShopifyTrackPageTransport;
   /** When omitted, URL deep-link auto-query is on only for the Shopify Track Page `transport` path. */
@@ -107,10 +108,11 @@ async function queryMockReadyToGoTracking(request: TrackingPageQueryRequest): Pr
 
 export function ReadyToGoRuntimeProvider({ children, query: injectedQuery, queryRecommendations, transport, autoQueryFromUrl, watermark }: ReadyToGoRuntimeProviderProps) {
   const [state, setState] = useState<ReadyToGoRuntimeState>({ phase: "idle" });
-  const [recommendations, setRecommendations] = useState<TrackingPageRecommendationsState>(() => ({
-    phase: queryRecommendations || (transport && !injectedQuery) ? "loading" : "idle",
-    items: []
-  }));
+  const [recommendations, setRecommendations] = useState<TrackingPageRecommendationsState>(() => (
+    queryRecommendations || transport
+      ? { phase: "loading", items: [] }
+      : { phase: "success", items: previewReadyToGoTracking().recommendations ?? [] }
+  ));
   const requestId = useRef(0);
   const resolvedQuery = useMemo(() => {
     if (injectedQuery) return injectedQuery;
@@ -119,9 +121,9 @@ export function ReadyToGoRuntimeProvider({ children, query: injectedQuery, query
   }, [injectedQuery, transport]);
   const resolvedRecommendations = useMemo(() => {
     if (queryRecommendations) return queryRecommendations;
-    if (transport && !injectedQuery) return createShopifyRecommendationsQuery(transport.post);
+    if (transport) return createShopifyRecommendationsQuery(transport.post);
     return undefined;
-  }, [injectedQuery, queryRecommendations, transport]);
+  }, [queryRecommendations, transport]);
   const live = Boolean(resolvedQuery);
 
   useEffect(() => {
@@ -262,14 +264,14 @@ function ProgressResult({ result, showEstimatedDelivery = true }: { result: Read
   </>;
 }
 
-function DeliveryResult({ heading, contentsHeading, carrierHeading, result, editor = false }: { heading: ReactNode; contentsHeading: ReactNode; carrierHeading: ReactNode; result: ReadyToGoTrackingResult; editor?: boolean }) {
+function DeliveryResult({ heading, contentsHeading, carrierHeading, result }: { heading: ReactNode; contentsHeading: ReactNode; carrierHeading: ReactNode; result: ReadyToGoTrackingResult }) {
   return <div style={{ ...contentWidth, display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 280px), 500px))", gap: 40, justifyContent: "center", alignItems: "start" }}>
     <div>
       <h3 style={{ margin: 0, fontSize: 20, lineHeight: "20px", fontWeight: 700 }}>{heading}</h3>
       <ShippingTimeline events={eventsFrom(result)} />
     </div>
     <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
-      <TrackingPageAdSlot ad={result.ad} editor={editor} />
+      <TrackingPageAdSlot ad={result.ad} />
       <div>
         <h3 style={{ margin: "0 0 12px", fontSize: 18, fontWeight: 700 }}>{contentsHeading}</h3>
         <PackageContents items={result.orderItems ?? []} />
@@ -331,7 +333,6 @@ export function ReadyToGoDeliveryEditor(block: ReadyToGoEditorProps) {
       contentsHeading={<InlineText block={block} name="contentsHeading" fallback="Package Contents" />}
       carrierHeading={<InlineText block={block} name="carrierHeading" fallback="Carrier" />}
       result={previewReadyToGoTracking()}
-      editor
     />
   </section>;
 }
@@ -450,28 +451,11 @@ export function ReadyToGoDeliveryBlock(props: Record<string, unknown>) {
 export function ReadyToGoRecommendationsBlock(props: Record<string, unknown>) {
   const runtime = useReadyToGoRuntime();
   const heading = text(props, "heading", "You may also like...");
-  const independent = runtime.recommendations.phase !== "idle";
-  if (independent) {
-    if (runtime.recommendations.phase !== "success" || runtime.recommendations.items.length === 0) return null;
-    return <SectionShell title={heading} bordered={false}>
-      <div style={{ ...contentWidth, padding: "48px 24px" }}>
-        <h3 style={{ margin: 0, textAlign: "center", fontSize: 20, lineHeight: "20px", fontWeight: 700 }}>{heading}</h3>
-        <div style={{ marginTop: 24 }}><RecommendationCards items={runtime.recommendations.items} /></div>
-      </div>
-    </SectionShell>;
-  }
-  if (runtime.phase === "empty") return null;
-  const recommendations = runtime.result?.recommendations ?? [];
+  if (runtime.recommendations.phase !== "success" || runtime.recommendations.items.length === 0) return null;
   return <SectionShell title={heading} bordered={false}>
     <div style={{ ...contentWidth, padding: "48px 24px" }}>
       <h3 style={{ margin: 0, textAlign: "center", fontSize: 20, lineHeight: "20px", fontWeight: 700 }}>{heading}</h3>
-      <div style={{ marginTop: 24 }}>
-        {runtime.phase === "loading" ? <IdleMessage>Loading recommendations…</IdleMessage> : null}
-        {runtime.phase === "error" ? <p style={{ margin: 0, textAlign: "center", color: "#b42318" }}>Recommendations are temporarily unavailable.</p> : null}
-        {runtime.phase === "idle" ? <IdleMessage>Recommendations appear with your shipment result.</IdleMessage> : null}
-        {runtime.phase === "success" && recommendations.length ? <RecommendationCards items={recommendations} /> : null}
-        {runtime.phase === "success" && !recommendations.length ? <IdleMessage>No recommendations are available for this shipment.</IdleMessage> : null}
-      </div>
+      <div style={{ marginTop: 24 }}><RecommendationCards items={runtime.recommendations.items} /></div>
     </div>
   </SectionShell>;
 }

@@ -2,6 +2,7 @@ import "@testing-library/jest-dom/vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { ReadyToGoDeliveryBlock, ReadyToGoProgressBlock, ReadyToGoQueryBlock, ReadyToGoRecommendationsBlock, ReadyToGoRuntimeProvider } from "./ready-to-go";
+import type { ShopifyTrackPagePost } from "./shopify-track-query";
 import type { TrackingPageQuery } from "./tracking-page-runtime";
 
 describe("Ready-to-go missing order", () => {
@@ -17,7 +18,7 @@ describe("Ready-to-go missing order", () => {
       <ReadyToGoDeliveryBlock />
       <ReadyToGoRecommendationsBlock />
     </ReadyToGoRuntimeProvider>);
-    expect(screen.queryByText("Travel tote")).not.toBeInTheDocument();
+    expect(await screen.findByText("Travel tote")).toBeVisible();
     expect(screen.queryByLabelText("Shipping Details")).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Shipment progress")).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("tab", { name: "Order Number" }));
@@ -85,5 +86,21 @@ describe("Ready-to-go missing order", () => {
       tracking_number: "BT-2048-DEMO",
       lang: "EN"
     });
+  });
+
+  it("loads original /products/recommend on mount without a tracking query", async () => {
+    const post = vi.fn(async (url: string) => {
+      if (String(url).includes("/products/recommend")) {
+        return { data: { products: [{ id: "gid://shopify/Product/1", title: "Travel tote", handle: "travel-tote" }] } };
+      }
+      throw new Error("unexpected tracking call");
+    });
+    render(<ReadyToGoRuntimeProvider transport={{ post: post as unknown as ShopifyTrackPagePost, retries: 0 }} autoQueryFromUrl={false} watermark={{ visible: false }}>
+      <ReadyToGoQueryBlock submitLabel="Find" />
+      <ReadyToGoRecommendationsBlock />
+    </ReadyToGoRuntimeProvider>);
+    expect(await screen.findByText("Travel tote")).toBeVisible();
+    expect(post).toHaveBeenCalledWith("/products/recommend", { page: 1, page_size: 20 });
+    expect(screen.queryByLabelText("Shipment progress")).not.toBeInTheDocument();
   });
 });

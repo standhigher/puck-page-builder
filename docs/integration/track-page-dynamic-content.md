@@ -24,16 +24,13 @@ type TrackingPageAd = {
 
 - 有合法图片地址时渲染广告图片。
 - 有 `href` 时使用新窗口打开链接。
-- 没有广告数据时整个广告位隐藏，和旧页面的 `ad_config?.image_url` 逻辑一致。
-- 编辑器预览始终显示中性的 `Advertisement space` 占位，方便识别该区域；这个占位不会出现在买家页面。
+- 没有广告数据时整个广告位隐藏，和旧页面的 `ad_config?.image_url` 逻辑一致。编辑器同样不显示空占位。
 
 图片和链接都经过包内安全 URL 处理，不把原始接口对象直接交给 DOM。
 
-### 3. 推荐商品保持 Runtime 注入
+### 3. 推荐商品独立于查单
 
-推荐商品原本已经由 `TrackingPageQueryResult.recommendations` 和 `ReadyToGoRecommendationsBlock` 支持，本次保留该结果注入方式，同时为旧 Track Page 的独立推荐接口增加了可选的 `queryRecommendations` 宿主回调。
-
-当宿主传入 `queryRecommendations` 时，推荐区块会独立经历 `idle → loading → success / empty / error`，不依赖物流查询是否成功；推荐为空或失败时线上区块隐藏。编辑器和没有独立 loader 的预览仍使用查询结果中的推荐数据或静态预览数据。
+推荐商品对齐原 Track Page 首页 `RecommendationsCarousel`：页面挂载即请求，不要求先点查询。有 `transport` 时默认 `POST /products/recommend`；也可以传入 `queryRecommendations`。没有 live loader 时（编辑器 / Mock 预览）直接显示静态预览商品。推荐为空或失败时线上区块隐藏，查单失败也不收起已显示的推荐。
 
 ```tsx
 <ReadyToGoRuntimeProvider query={query} queryRecommendations={queryRecommendations}>
@@ -86,7 +83,7 @@ type TrackingPageRecommendationsQuery = () => Promise<TrackingPageRecommendation
 }
 ```
 
-推荐商品仍由 host 负责接口调用、缓存、重试和错误处理，不能由 Puck 区块直接请求接口。Ready-to-go 在只传 `transport` 时会按原页面调用 `POST /products/recommend`，请求体 `{ page: 1, page_size: 20 }`，失败时隐藏推荐区块。也可以自行传入 `queryRecommendations`。
+推荐商品仍由 host 的 `transport.post` 或 `queryRecommendations` 发请求。Ready-to-go 在传入 `transport` 时按原页面调用 `POST /products/recommend`，请求体 `{ page: 1, page_size: 20 }`，与查单并行，失败时隐藏推荐区块。也可以自行传入 `queryRecommendations`。
 
 旧推荐请求不要并入物流查询的 loading/error 状态。没有 `onlineStoreUrl` 时回退到 `/products/:handle`。价格仍转成包的 `TrackingPageMoney` 以便现有卡片渲染；图片和跳转地址应是公开 HTTPS 地址，相对商品路径会在浏览器中解析为当前 origin。
 
@@ -108,4 +105,4 @@ type TrackingPageRecommendationsQuery = () => Promise<TrackingPageRecommendation
 新增测试覆盖：
 
 - 查询成功后广告图片和跳转地址正确渲染。
-- 没有 `ad` 时线上广告位保持隐藏。
+- 没有 `ad` 时线上和编辑器广告位都保持隐藏。

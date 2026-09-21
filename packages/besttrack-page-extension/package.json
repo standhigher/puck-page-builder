@@ -21,7 +21,9 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@standhigher/puck-page-builder": "workspace:*"
+    "@standhigher/puck-page-builder": "workspace:*",
+    "embla-carousel-autoplay": "^8.6.0",
+    "embla-carousel-react": "^8.6.0"
   },
   "devDependencies": {
     "tsup": "^8.5.1",

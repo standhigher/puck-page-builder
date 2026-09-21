@@ -14,7 +14,7 @@ const document = registry.getTemplate("besttrack.ready-to-go")!.create();
 
 ## RuntimeState 与数据边界
 
-每个 Ready-to-go 页面都由 `ReadyToGoRuntimeProvider` 包裹。查询区块只发起受控 `query`，物流进度、配送信息和推荐区块都订阅同一份 RuntimeState：
+每个 Ready-to-go 页面都由 `ReadyToGoRuntimeProvider` 包裹。查询区块只发起受控 `query`；物流进度和配送信息订阅查单 RuntimeState。推荐商品与原 Track Page 一样页面打开即加载，不依赖是否点击查询：
 
 ```tsx
 <ReadyToGoRuntimeProvider query={query}>
@@ -47,7 +47,7 @@ Ready-to-go 只换了 PageDocument + WebRenderer 渲染链路。`transport` 路�
 - 进度、物流时间、预计送达、`ad_config` 按原页面规则映射
 - 表单只校验非空，文案与原页面一致
 - URL 深链读写 `tracking_number` / `order_number` / `email`（search 优先，hash 回退）
-- 独立 `POST /products/recommend`，请求体 `{ page, page_size }`
+- 独立 `POST /products/recommend`，请求体 `{ page, page_size }`；推荐区复用原页 Embla 轮播（loop、3 秒自动播放、悬停暂停、左右箭头）
 - 未传入 `watermark` 时沿用原 powered-by 隐藏规则
 
 自定义 `query` 仍可用于 Mock、测试或新的 Consumer Runtime；一旦传入 `query`，就不再走 `/track/query`。

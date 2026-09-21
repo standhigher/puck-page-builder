@@ -1,4 +1,5 @@
 export { createExtensionRegistry, createTemplateRegistry, ExtensionRegistry, ExtensionRegistryError, TemplateRegistry, type ExtensionRegistryErrorCode } from "./registry";
 export { validatePageDocumentWithRegistry } from "./document-validation";
+export { isProductReference, parseProductReferences, toProductReferenceJson, type ProductReference } from "./product-reference";
 export { maximumBlockInstances, mergeBlockPolicies, minimumBlockInstances, validateBlockPolicy, validateFieldValue } from "./validation";
 export type { BlockDefinition, BlockEditorProps, BlockOperation, BlockPolicy, BlockVariantDefinition, DataSourceDefinition, EditorAction, EditorActionPosition, EditorOperationPolicy, ExtensionActionContext, ExtensionRegistryOptions, ExtensionTarget, FieldConfig, FieldDefinition, FieldProps, FieldValidation, LifecycleHooks, PageBuilderExtension, RendererDefinition, TemplateDefinition, TemplateSource, UISlotContribution, UISlotName, ValidationIssue } from "./types";

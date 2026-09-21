@@ -83,11 +83,8 @@ describe("V0.7.0 Ready-to-go", () => {
     expect(within(screen.getByLabelText("Ready-to-go progress editor")).queryByText("Shipment progress")).not.toBeInTheDocument();
     expect(within(screen.getByLabelText("Ready-to-go progress editor")).getByLabelText("Delivery progress")).toBeVisible();
     expect(within(screen.getByLabelText("Ready-to-go progress editor")).getByText("In transit")).toBeVisible();
-    expect(within(screen.getByLabelText("Ready-to-go progress editor")).queryByLabelText("Estimated delivery placeholder")).not.toBeInTheDocument();
-    expect(within(screen.getByLabelText("Ready-to-go progress editor")).getByLabelText("Est. Delivery")).toHaveStyle({ width: "100%", backgroundColor: "#eaf4ff" });
-    expect(within(screen.getByLabelText("Ready-to-go progress editor")).getByText("Est. Delivery")).toBeVisible();
-    expect(within(screen.getByLabelText("Ready-to-go progress editor")).getByText("Estimated time may update as tracking progresses.")).toBeVisible();
-    expect(within(screen.getByLabelText("Ready-to-go progress editor")).getByText("Sep 22 - Sep 24")).toBeVisible();
+    expect(within(screen.getByLabelText("Ready-to-go progress editor")).queryByLabelText("Est. Delivery")).not.toBeInTheDocument();
+    expect(within(screen.getByLabelText("Ready-to-go progress editor")).queryByText("Sep 22 - Sep 24")).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Canvas estimatedDeliveryTitle")).not.toBeInTheDocument();
     expect(within(screen.getByLabelText("Ready-to-go delivery editor")).getByLabelText("Shipping events")).toBeVisible();
     expect(screen.queryByText("Advertisement space")).not.toBeInTheDocument();
@@ -103,6 +100,21 @@ describe("V0.7.0 Ready-to-go", () => {
     expect(onPropsChange).toHaveBeenCalledWith({ contentsHeading: "Inside the box" });
     expect(onPropsChange).toHaveBeenCalledWith({ carrierHeading: "Courier" });
     expect(onPropsChange).toHaveBeenCalledWith({ heading: "Also consider" });
+  });
+
+  it("previews merchant-selected recommendation products on the canvas", () => {
+    render(
+      <ReadyToGoRecommendationsEditor
+        heading="You may also like..."
+        products={[{ id: "gid://shopify/Product/1", title: "Studio Wireless Headphones", imageUrl: "https://cdn.example/headphones.jpg" }]}
+        blockId="recs"
+        selected
+        onPropsChange={vi.fn()}
+      />
+    );
+    expect(screen.getByText("Studio Wireless Headphones")).toBeVisible();
+    expect(screen.getByAltText("Studio Wireless Headphones")).toHaveAttribute("src", "https://cdn.example/headphones.jpg");
+    expect(screen.queryByText("Shipping protection")).not.toBeInTheDocument();
   });
 
   it("lets the canvas query editor stack at content height instead of a fixed hero card", () => {

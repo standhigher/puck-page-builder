@@ -1,4 +1,5 @@
 import type { PageDocument } from "../core/schema/page-document";
+import type { ProductReference } from "../core/extensions/product-reference";
 import type { ValidationIssue } from "../core/extensions";
 
 /** An opaque lease returned by the host's single-editor lock service. */
@@ -75,6 +76,20 @@ export type AssetPickerAdapter = {
     blockId: string;
     current?: Partial<AssetReference>;
   }): Promise<AssetReference | null>;
+};
+
+/**
+ * Opens a host-owned product picker. Search, Shopify App Bridge, and
+ * authorization stay in the host; this package only displays the snapshot
+ * and forwards the button click.
+ */
+export type ProductPickerAdapter = {
+  selectProducts(input: {
+    pageId: string;
+    blockId: string;
+    current: readonly ProductReference[];
+    multiple?: boolean;
+  }): Promise<readonly ProductReference[] | null>;
 };
 
 export type PagePublicationStatus = "unpublished" | "published";

@@ -56,6 +56,14 @@ export function DraftPageDocumentEditor({ initialDocument, registry }: { initial
     initialDocument={document}
     registry={registry}
     loadState={loadState}
+    productPicker={{
+      async selectProducts({ current }) {
+        return current.length ? current : [
+          { id: "gid://shopify/Product/101", title: "Studio Wireless Headphones", imageUrl: "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&w=200&q=80" },
+          { id: "gid://shopify/Product/102", title: "Cloud Buds Pro", imageUrl: "https://images.unsplash.com/photo-1590658268037-6bf12165a8df?auto=format&fit=crop&w=200&q=80" }
+        ];
+      }
+    }}
     onSave={(next) => requestDocument(endpoint(next.pageId, "draft"), "PUT", next)}
     onPublish={(next) => requestDocument(endpoint(next.pageId, "published"), "POST", next)}
   />;

@@ -1,15 +1,15 @@
-import { IconButton, Puck, usePuck } from "@puckeditor/core";
+import { Puck, usePuck } from "@puckeditor/core";
 import { Badge, Banner, Button, ButtonGroup, InlineStack, Select, Text, TextField } from "@shopify/polaris";
-import { DragHandleIcon, LayoutSectionIcon, MenuIcon, RedoIcon, UndoIcon, XIcon } from "@shopify/polaris-icons";
+import { DragHandleIcon, LayoutSectionIcon, MenuIcon, ProductIcon, RedoIcon, UndoIcon, XIcon } from "@shopify/polaris-icons";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPageDocumentPuckConfig } from "../../adapters/puck/page-document-config";
 import { fromEngineData, toEngineData } from "../../adapters/puck/page-document";
-import { validateFieldValue, validatePageDocumentWithRegistry, type ExtensionRegistry, type FieldConfig, type ValidationIssue } from "../../core/extensions";
+import { parseProductReferences, toProductReferenceJson, validateFieldValue, validatePageDocumentWithRegistry, type ExtensionRegistry, type FieldConfig, type ValidationIssue } from "../../core/extensions";
 import type { BlockNode, JsonValue, PageDocument } from "../../core/schema/page-document";
 import type { ThemeTokenName, ThemeTokens } from "../../core/theme";
 import { EditorProvider, useEditorContext, type EditorLoadState } from "../context/EditorContext";
 import { PageStatusCard } from "../components/PageStatusCard";
-import type { AssetPickerAdapter, DraftPersistenceAdapter, DraftSaveResult, EditorSession, EditorSessionAdapter, EditorSessionState, PageStatus, PublishAction } from "../contracts";
+import type { AssetPickerAdapter, DraftPersistenceAdapter, DraftSaveResult, EditorSession, EditorSessionAdapter, EditorSessionState, PageStatus, ProductPickerAdapter, PublishAction } from "../contracts";
 import { createAdminI18n } from "../i18n/admin";
 import type { PageDocumentEditorPolicy } from "../policy";
 import type { Device } from "../state/types";
@@ -47,9 +47,12 @@ export type PageDocumentEditorShellProps = {
   publishAction?: PublishAction;
   /** Host-owned picker/uploader for shop-scoped assets. */
   assetPicker?: AssetPickerAdapter;
+  /** Host-owned product picker. The shell only shows the selected snapshot and a button. */
+  productPicker?: ProductPickerAdapter;
   /** Optional reusable page lifecycle summary. */
   pageStatus?: PageStatus;
   onBack?: () => void;
+  onHistory?: (input: { document: PageDocument; draftRevision?: number; session?: EditorSession }) => void;
   onPreview?: (input: { document: PageDocument; draftRevision?: number; session?: EditorSession }) => Promise<void> | void;
   onAddToStore?: (input: { document: PageDocument; session?: EditorSession }) => Promise<void> | void;
 };
@@ -71,11 +74,6 @@ function blockTypeLabel(type: string, registry?: ExtensionRegistry) {
   if (type === "core.text") return "文本";
   if (type === "core.image") return "图片";
   return registry?.getBlock(type)?.label ?? type;
-}
-
-/** Lucide PanelLeft / PanelRight, the same icons Puck's native header uses. */
-function PuckPanelIcon({ side }: { side: "left" | "right" }) {
-  return <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false"><rect width="18" height="18" x="3" y="3" rx="2" /><path d={side === "left" ? "M9 3v18" : "M15 3v18"} /></svg>;
 }
 
 function validateDocumentBlocks(document: PageDocument, registry?: ExtensionRegistry): ValidationIssue[] {
@@ -137,7 +135,7 @@ export function PageDocumentEditorShell(props: PageDocumentEditorShellProps) {
   </EditorProvider>;
 }
 
-function PageDocumentEditor({ iframe = false, registry, adminLocale, onSave, onPublish, draftPersistence, draftRevision: initialDraftRevision, autoSave = true, autoSaveDelayMs = 800, publishAction, assetPicker, pageStatus, onBack, onPreview, onAddToStore, deleteConfirmation, availableBlockTypes, appearanceControls = false }: PageDocumentEditorShellProps) {
+function PageDocumentEditor({ iframe = false, registry, adminLocale, onSave, onPublish, draftPersistence, draftRevision: initialDraftRevision, autoSave = true, autoSaveDelayMs = 800, publishAction, assetPicker, productPicker, pageStatus, onBack, onHistory, onPreview, onAddToStore, deleteConfirmation, availableBlockTypes, appearanceControls = false }: PageDocumentEditorShellProps) {
   const editor = useEditorContext();
   const [blockView, setBlockView] = useState<"blocks" | "outline">("blocks");
   const [leftRailOpen, setLeftRailOpen] = useState(true);
@@ -290,10 +288,12 @@ function PageDocumentEditor({ iframe = false, registry, adminLocale, onSave, onP
       <div className="pb-shell pb-shell--v04" data-testid="page-document-editor" data-page-id={editor.document.pageId} data-dirty={editor.isDirty} data-editor-state={editor.loadState} data-editor-session-state={editor.sessionState} data-save-state={resolvedSaveState} data-left-panel={leftRailOpen ? "open" : "closed"} data-right-panel={rightPanelOpen ? "open" : "closed"}>
         <header className="pb-header">
           <div className="pb-header-content">
-            <div className="pb-header-title-group">{onBack ? <Button variant="tertiary" onClick={requestBack}>{i18n.t("back")}</Button> : null}<div className="pb-page-title"><Text as="h1" variant="headingSm">{editor.document.settings.seoTitle ?? editor.document.pageId}</Text><Text as="p" variant="bodySm" tone="subdued">PageDocument V{editor.document.schemaVersion} · {editor.document.target}</Text>{pageStatus ? <PageStatusCard status={pageStatus} sessionState={editor.sessionState} /> : null}</div><div className="pb-header-sidebar-toggles" role="group" aria-label={i18n.t("toggleSidebars")} data-testid="sidebar-toggles"><IconButton type="button" title={i18n.t("toggleLeftSidebar")} onClick={() => setLeftRailOpen((open) => !open)}><PuckPanelIcon side="left" /></IconButton><IconButton type="button" title={i18n.t("toggleRightSidebar")} onClick={() => setRightPanelOpen((open) => !open)}><PuckPanelIcon side="right" /></IconButton></div></div>
+            <div className="pb-header-title-group">{onBack ? <Button variant="tertiary" onClick={requestBack}>{i18n.t("back")}</Button> : null}<div className="pb-page-title"><Text as="h1" variant="headingSm">{editor.document.settings.seoTitle ?? editor.document.pageId}</Text><Text as="p" variant="bodySm" tone="subdued">PageDocument V{editor.document.schemaVersion} · {editor.document.target}</Text>{pageStatus ? <PageStatusCard status={pageStatus} sessionState={editor.sessionState} /> : null}</div></div>
+            <div className="pb-header-controls">
             <div className="pb-header-device-toolbar"><ButtonGroup variant="segmented">{(Object.keys(deviceLabels) as Array<keyof typeof deviceLabels>).map((device) => <Button key={device} pressed={editor.device === device} onClick={() => editor.setDevice(device)}>{i18n.t(deviceLabels[device])}</Button>)}</ButtonGroup><div className="pb-zoom-control"><Select label={i18n.t("zoom")} labelHidden options={[{ label: i18n.t("zoomAuto"), value: "auto" }, { label: "50%", value: "50" }, { label: "70%", value: "70" }, { label: "100%", value: "100" }]} value={zoom} onChange={(value) => setZoom(value as typeof zoom)} /></div></div>
-            <div className="pb-header-actions"><InlineStack gap="150" blockAlign="center" wrap={false}>
+            <div className="pb-header-actions"><InlineStack gap="150" blockAlign="center" wrap>
               <Badge tone={saveBadgeTone}>{saveBadgeLabel}</Badge>
+              {onHistory ? <span data-editor-history=""><Button disabled={request !== "idle"} onClick={() => onHistory({ document: editor.document, draftRevision, session: editor.session })}>{i18n.t("history")}</Button></span> : null}
               <Button disabled={!canPersistDraft || !editor.isDirty || request !== "idle" || validationIssues.length > 0 || !isOnline} onClick={() => void save()}>{saveButtonLabel}</Button>
               {onPreview ? <Button disabled={request !== "idle" || !isOnline} onClick={() => void onPreview({ document: editor.document, draftRevision, session: editor.session })}>{i18n.t("preview")}</Button> : null}
               {onAddToStore ? <Button disabled={request !== "idle" || pageStatus?.publicationStatus === "unpublished"} onClick={() => void onAddToStore({ document: editor.document, session: editor.session })}>{i18n.t("addToStore")}</Button> : null}
@@ -301,6 +301,7 @@ function PageDocumentEditor({ iframe = false, registry, adminLocale, onSave, onP
               <Button accessibilityLabel={i18n.t("undo")} icon={UndoIcon} variant="tertiary" disabled={!editor.actionState.canUndo} onClick={editor.undo} />
               <Button accessibilityLabel={i18n.t("redo")} icon={RedoIcon} variant="tertiary" disabled={!editor.actionState.canRedo} onClick={editor.redo} />
             </InlineStack></div>
+            </div>
           </div>
         </header>
         {editor.loadState === "success" ? <Banner tone="success">{i18n.t("success")}</Banner> : null}
@@ -331,7 +332,7 @@ function PageDocumentEditor({ iframe = false, registry, adminLocale, onSave, onP
           </main>
           <aside className={`pb-right-panel${rightPanelOpen ? "" : " pb-panel--closed"}`} aria-label="PageDocument 属性">
             <InlineStack align="space-between" blockAlign="center"><Text as="h2" variant="headingSm">{i18n.t("properties")}</Text><Button accessibilityLabel={i18n.t("collapseRight")} icon={XIcon} variant="tertiary" onClick={() => setRightPanelOpen(false)} /></InlineStack>
-            {editor.selectedBlock ? <><DocumentInspector pageId={editor.document.pageId} assetPicker={assetPicker} block={editor.selectedBlock} registry={registry} disabled={!editor.actionState.canEdit} appearanceControls={appearanceControls} onChange={(props) => editor.updateBlockProps(editor.selectedBlock!.id, props)} onPresentationChange={(presentation) => updateBlockPresentation(editor.selectedBlock!.id, presentation)} /><InspectorActions block={editor.selectedBlock} canDuplicate={editor.actionState.canDuplicate} canDelete={editor.actionState.canDelete} canMove={editor.actionState.canReorder} canMoveUp={editor.document.blocks[0]?.id !== editor.selectedBlock.id} canMoveDown={editor.document.blocks.at(-1)?.id !== editor.selectedBlock.id} i18n={i18n} onDuplicate={() => editor.duplicateBlock(editor.selectedBlock!.id)} onDelete={() => editor.requestDeleteBlock(editor.selectedBlock!.id)} onMove={(direction) => editor.moveBlock(editor.selectedBlock!.id, direction)} /></> : <Text as="p" tone="subdued">{i18n.t("selectBlock")}</Text>}
+            {editor.selectedBlock ? <><DocumentInspector pageId={editor.document.pageId} assetPicker={assetPicker} productPicker={productPicker} i18n={i18n} block={editor.selectedBlock} registry={registry} disabled={!editor.actionState.canEdit} appearanceControls={appearanceControls} onChange={(props) => editor.updateBlockProps(editor.selectedBlock!.id, props)} onPresentationChange={(presentation) => updateBlockPresentation(editor.selectedBlock!.id, presentation)} /><InspectorActions block={editor.selectedBlock} canDuplicate={editor.actionState.canDuplicate} canDelete={editor.actionState.canDelete} canMove={editor.actionState.canReorder} canMoveUp={editor.document.blocks[0]?.id !== editor.selectedBlock.id} canMoveDown={editor.document.blocks.at(-1)?.id !== editor.selectedBlock.id} i18n={i18n} onDuplicate={() => editor.duplicateBlock(editor.selectedBlock!.id)} onDelete={() => editor.requestDeleteBlock(editor.selectedBlock!.id)} onMove={(direction) => editor.moveBlock(editor.selectedBlock!.id, direction)} /></> : <Text as="p" tone="subdued">{i18n.t("selectBlock")}</Text>}
           </aside>
         </div>
         {editor.pendingDeleteBlock ? <DeleteConfirmation block={editor.pendingDeleteBlock} config={deleteConfirmation} i18n={i18n} onCancel={editor.cancelDeleteBlock} onConfirm={editor.confirmDeleteBlock} /> : null}
@@ -400,19 +401,46 @@ function InspectorSection({ title, children, defaultOpen = true }: { title: stri
   </details>;
 }
 
-function InspectorTextControl({ label, value, control, disabled, onChange }: { label: string; value: unknown; control: NonNullable<FieldConfig["control"]>; disabled: boolean; onChange: (value: string) => void }) {
+function InspectorTextControl({ label, value, control, disabled, onChange }: { label: string; value: unknown; control: Exclude<NonNullable<FieldConfig["control"]>, "products">; disabled: boolean; onChange: (value: string) => void }) {
   const stringValue = typeof value === "string" ? value : "";
   if (control === "color") return <input aria-label={label} type="color" value={/^#[\da-f]{6}$/i.test(stringValue) ? stringValue : "#000000"} disabled={disabled} onChange={(event) => onChange(event.currentTarget.value)} />;
   return <TextField label={label} labelHidden value={stringValue} onChange={onChange} autoComplete="off" disabled={disabled} multiline={control === "textarea" ? 4 : false} type={control === "url" ? "url" : "text"} />;
 }
 
-function InspectorField({ name, field, value, registry, disabled, onChange }: { name: string; field: FieldConfig; value: unknown; registry?: ExtensionRegistry; disabled: boolean; onChange: (value: JsonValue) => void }) {
+function InspectorProductsControl({ value, disabled, picker, pageId, blockId, i18n, onChange }: { value: unknown; disabled: boolean; picker?: ProductPickerAdapter; pageId: string; blockId: string; i18n: ReturnType<typeof createAdminI18n>; onChange: (value: JsonValue) => void }) {
+  const products = parseProductReferences(value);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const preview = products.slice(0, 4);
+  return <div className="pb-product-picker" data-testid="product-picker">
+    <div className="pb-product-picker__summary">
+      {preview.length ? <span className="pb-product-picker__thumbs" aria-hidden="true">{preview.map((product, index) => <span key={product.id} className="pb-product-picker__thumb" style={{ zIndex: preview.length - index }}>{product.imageUrl ? <img src={product.imageUrl} alt="" /> : <span className="pb-product-picker__thumb-fallback" />}</span>)}</span> : null}
+      <Text as="p" variant="bodySm">{products.length ? `${products.length} ${i18n.t("productCountSuffix")}` : i18n.t("emptyProducts")}</Text>
+    </div>
+    <Button fullWidth icon={ProductIcon} variant="secondary" disabled={disabled || busy || !picker} onClick={() => void (async () => {
+      if (!picker) return;
+      setBusy(true);
+      setError(null);
+      try {
+        const next = await picker.selectProducts({ pageId, blockId, current: products, multiple: true });
+        if (next) onChange(parseProductReferences(next).map(toProductReferenceJson));
+      } catch {
+        setError(i18n.t("selectProductsFailed"));
+      } finally {
+        setBusy(false);
+      }
+    })()}>{busy ? i18n.t("selectingProducts") : i18n.t("selectProducts")}</Button>
+    {error ? <Text as="p" variant="bodySm" tone="critical">{error}</Text> : null}
+  </div>;
+}
+
+function InspectorField({ name, field, value, registry, disabled, productPicker, pageId, blockId, i18n, onChange }: { name: string; field: FieldConfig; value: unknown; registry?: ExtensionRegistry; disabled: boolean; productPicker?: ProductPickerAdapter; pageId: string; blockId: string; i18n: ReturnType<typeof createAdminI18n>; onChange: (value: JsonValue) => void }) {
   const label = field.label ?? name;
   const issues = validateFieldValue(field, value);
   const Field = registry?.getField(field.field)?.component;
   return <div className="pb-inspector-field" data-control={field.control ?? "custom"}>
     <div className="pb-inspector-field__heading"><Text as="p" variant="bodySm" fontWeight="semibold">{label}</Text>{field.description ? <Text as="p" variant="bodySm" tone="subdued">{field.description}</Text> : null}</div>
-    {field.control ? <InspectorTextControl label={label} value={value} control={field.control} disabled={disabled} onChange={(next) => onChange(next)} /> : Field ? <Field value={value} onChange={onChange} /> : null}
+    {field.control === "products" ? <InspectorProductsControl value={value} disabled={disabled} picker={productPicker} pageId={pageId} blockId={blockId} i18n={i18n} onChange={onChange} /> : field.control ? <InspectorTextControl label={label} value={value} control={field.control} disabled={disabled} onChange={(next) => onChange(next)} /> : Field ? <Field value={value} onChange={onChange} /> : null}
     {issues.map((issue) => <Text key={issue.message} as="p" variant="bodySm" tone="critical">{issue.message}</Text>)}
   </div>;
 }
@@ -446,7 +474,7 @@ function inspectorFieldConfig(name: string, field: FieldConfig): FieldConfig {
 
 const appearanceTokens: Array<[ThemeTokenName, string]> = [["color.primary", "主色"], ["color.surface", "表面色"], ["radius", "圆角"], ["spacing", "间距"]];
 
-function DocumentInspector({ pageId, assetPicker, block, registry, disabled, appearanceControls, onChange, onPresentationChange }: { pageId: string; assetPicker?: AssetPickerAdapter; block: BlockNode; registry?: ExtensionRegistry; disabled: boolean; appearanceControls: boolean; onChange: (props: Record<string, JsonValue>) => void; onPresentationChange: (presentation: Pick<BlockNode, "variant" | "style">) => void }) {
+function DocumentInspector({ pageId, assetPicker, productPicker, i18n, block, registry, disabled, appearanceControls, onChange, onPresentationChange }: { pageId: string; assetPicker?: AssetPickerAdapter; productPicker?: ProductPickerAdapter; i18n: ReturnType<typeof createAdminI18n>; block: BlockNode; registry?: ExtensionRegistry; disabled: boolean; appearanceControls: boolean; onChange: (props: Record<string, JsonValue>) => void; onPresentationChange: (presentation: Pick<BlockNode, "variant" | "style">) => void }) {
   const [assetError, setAssetError] = useState<string | null>(null);
   const [selectingAsset, setSelectingAsset] = useState(false);
   const definition = registry?.getBlock(block.type);
@@ -459,8 +487,8 @@ function DocumentInspector({ pageId, assetPicker, block, registry, disabled, app
   }, {}) : {};
   return <div className="pb-inspector" data-testid="document-inspector">
     <header className="pb-inspector__header"><Badge>{block.type}</Badge><div><Text as="p" variant="headingSm">{blockLabel(block, registry)}</Text><Text as="p" variant="bodySm" tone="subdued">{definition?.category ?? "Core block"}</Text></div></header>
-    {block.type === "core.text" ? <InspectorSection title="Content"><InspectorField name="content" field={{ field: "", label: "文本内容", control: "textarea", description: "支持较长的正文内容。" }} value={block.props.content} registry={registry} disabled={disabled} onChange={(content) => onChange({ content })} /></InspectorSection> : null}
-    {block.type === "core.image" ? <InspectorSection title="Image"><InspectorField name="src" field={{ field: "", label: "图片 URL", control: "url", description: "使用 HTTPS 图片地址。" }} value={block.props.src} registry={registry} disabled={disabled} onChange={(src) => onChange({ src })} /><InspectorField name="alt" field={{ field: "", label: "替代文本", control: "text", description: "用于无障碍阅读和图片加载失败场景。" }} value={block.props.alt} registry={registry} disabled={disabled} onChange={(alt) => onChange({ alt })} />{assetPicker ? <><Button disabled={disabled || selectingAsset} onClick={() => void (async () => {
+    {block.type === "core.text" ? <InspectorSection title="Content"><InspectorField name="content" field={{ field: "", label: "文本内容", control: "textarea", description: "支持较长的正文内容。" }} value={block.props.content} registry={registry} disabled={disabled} productPicker={productPicker} pageId={pageId} blockId={block.id} i18n={i18n} onChange={(content) => onChange({ content })} /></InspectorSection> : null}
+    {block.type === "core.image" ? <InspectorSection title="Image"><InspectorField name="src" field={{ field: "", label: "图片 URL", control: "url", description: "使用 HTTPS 图片地址。" }} value={block.props.src} registry={registry} disabled={disabled} productPicker={productPicker} pageId={pageId} blockId={block.id} i18n={i18n} onChange={(src) => onChange({ src })} /><InspectorField name="alt" field={{ field: "", label: "替代文本", control: "text", description: "用于无障碍阅读和图片加载失败场景。" }} value={block.props.alt} registry={registry} disabled={disabled} productPicker={productPicker} pageId={pageId} blockId={block.id} i18n={i18n} onChange={(alt) => onChange({ alt })} />{assetPicker ? <><Button disabled={disabled || selectingAsset} onClick={() => void (async () => {
       setSelectingAsset(true);
       setAssetError(null);
       try {
@@ -472,7 +500,7 @@ function DocumentInspector({ pageId, assetPicker, block, registry, disabled, app
         setSelectingAsset(false);
       }
     })()}>{selectingAsset ? "正在选择素材…" : "选择素材"}</Button>{assetError ? <Text as="p" variant="bodySm" tone="critical">{assetError}</Text> : null}</> : null}</InspectorSection> : null}
-    {Object.entries(groupedFields).map(([group, fields]) => <InspectorSection key={group} title={group} defaultOpen={group !== "Advanced"}>{fields.map(([name, field]) => <InspectorField key={name} name={name} field={field} value={block.props[name]} registry={registry} disabled={disabled} onChange={(value) => onChange({ ...block.props, [name]: value })} />)}</InspectorSection>)}
+    {Object.entries(groupedFields).map(([group, fields]) => <InspectorSection key={group} title={group} defaultOpen={group !== "Advanced"}>{fields.map(([name, field]) => <InspectorField key={name} name={name} field={field} value={block.props[name]} registry={registry} disabled={disabled} productPicker={productPicker} pageId={pageId} blockId={block.id} i18n={i18n} onChange={(value) => onChange({ ...block.props, [name]: value })} />)}</InspectorSection>)}
     {appearanceControls && definition?.variants?.length ? <InspectorSection title="外观"><Select label="样式变体" options={definition.variants.map((variant) => ({ label: variant.label, value: variant.id }))} value={block.variant} disabled={disabled} onChange={(variant) => onPresentationChange({ variant, style: block.style })} /></InspectorSection> : null}
     {appearanceControls && definition ? <InspectorSection title="样式覆盖" defaultOpen={false}>{appearanceTokens.map(([token, label]) => <TextField key={token} label={label} value={block.style[token] ?? ""} placeholder="继承页面或模板设置" autoComplete="off" disabled={disabled} onChange={(value) => {
       const style: ThemeTokens = { ...block.style };

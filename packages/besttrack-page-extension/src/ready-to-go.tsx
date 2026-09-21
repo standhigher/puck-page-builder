@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent, type ReactNode } from "react";
-import type { BlockEditorProps, FieldProps } from "@standhigher/puck-page-builder/runtime";
+import { parseProductReferences, type BlockEditorProps, type FieldProps } from "@standhigher/puck-page-builder/runtime";
 import {
   createShopifyRecommendationsQuery,
   createShopifyTrackQuery,
@@ -321,7 +321,7 @@ export function ReadyToGoQueryEditor(block: ReadyToGoEditorProps) {
 export function ReadyToGoProgressEditor() {
   return <section aria-label="Ready-to-go progress editor" style={{ ...pageFont, background: "var(--pb-color-background, #fff)", color: "var(--pb-color-text, #0f172a)", borderBottom: "1px solid #f1f5f9" }}>
     <div style={{ ...contentWidth, textAlign: "center", width: "min(1248px, 100%)" }}>
-      <ProgressResult result={previewReadyToGoTracking()} />
+      <ProgressResult result={previewReadyToGoTracking()} showEstimatedDelivery={false} />
     </div>
   </section>;
 }
@@ -338,11 +338,18 @@ export function ReadyToGoDeliveryEditor(block: ReadyToGoEditorProps) {
 }
 
 export function ReadyToGoRecommendationsEditor(block: ReadyToGoEditorProps) {
-  const preview = previewReadyToGoTracking();
+  const selected = parseProductReferences(block.products).map((product) => ({
+    id: product.id,
+    title: product.title || product.id,
+    description: "",
+    imageUrl: product.imageUrl,
+    href: product.handle ? `/products/${product.handle}` : undefined
+  }));
+  const items = selected.length ? selected : previewReadyToGoTracking().recommendations ?? [];
   return <section aria-label="Ready-to-go recommendations editor" style={{ ...pageFont, background: "var(--pb-color-background, #fff)", color: "var(--pb-color-text, #0f172a)" }}>
     <div style={{ ...contentWidth, padding: "48px 24px" }}>
       <h3 style={{ margin: 0, textAlign: "center", fontSize: 20, lineHeight: "20px", fontWeight: 700 }}><InlineText block={block} name="heading" fallback="You may also like..." /></h3>
-      <div style={{ marginTop: 24 }}><RecommendationCards items={preview.recommendations ?? []} /></div>
+      <div style={{ marginTop: 24 }}><RecommendationCards items={items} /></div>
     </div>
   </section>;
 }

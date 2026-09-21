@@ -173,25 +173,6 @@ describe("PageDocumentEditorShell V0.4", () => {
     expect(screen.getByLabelText("PageDocument 属性")).not.toHaveClass("pb-panel--closed");
   });
 
-  it("toggles both sidebars from the header controls", () => {
-    renderEditor();
-    const editor = screen.getByTestId("page-document-editor");
-    const leftToggle = within(screen.getByTestId("sidebar-toggles")).getByRole("button", { name: "切换左侧面板" });
-    const rightToggle = within(screen.getByTestId("sidebar-toggles")).getByRole("button", { name: "切换属性面板" });
-    fireEvent.click(leftToggle);
-    expect(editor).toHaveAttribute("data-left-panel", "closed");
-    expect(screen.getByLabelText("PageDocument 区块")).toHaveClass("pb-panel--closed");
-    fireEvent.click(leftToggle);
-    expect(editor).toHaveAttribute("data-left-panel", "open");
-    expect(screen.getByTestId("blocks-view")).toBeVisible();
-    fireEvent.click(rightToggle);
-    expect(editor).toHaveAttribute("data-right-panel", "closed");
-    expect(screen.getByLabelText("PageDocument 属性")).toHaveClass("pb-panel--closed");
-    fireEvent.click(rightToggle);
-    expect(editor).toHaveAttribute("data-right-panel", "open");
-    expect(screen.getByLabelText("PageDocument 属性")).not.toHaveClass("pb-panel--closed");
-  });
-
   it("synchronizes selected canvas edits and Inspector edits in both directions", async () => {
     renderEditor();
     const canvasText = screen.getAllByText("First block").find((element) => element.tagName === "P");
@@ -302,8 +283,8 @@ describe("PageDocumentEditorShell V0.4", () => {
     expect(screen.getByTestId("page-document-editor").querySelector(".pb-canvas-frame")).toHaveAttribute("data-device", "mobile");
     expect(screen.getByTestId("blocks-view").querySelector('[data-block-type="core.text"]')).toBeVisible();
     expect(screen.getByRole("button", { name: "Undo" })).toHaveAttribute("aria-disabled", "true");
-    expect(screen.getByRole("button", { name: "Toggle left sidebar" })).toBeVisible();
-    expect(screen.getByRole("button", { name: "Toggle right sidebar" })).toBeVisible();
+    expect(screen.queryByTestId("sidebar-toggles")).not.toBeInTheDocument();
+    expect(screen.getByTestId("page-document-editor").querySelector(".pb-header-controls")).not.toBeNull();
   });
 
   it.each(["loading", "empty", "error", "disabled"] as const)("renders the %s state without interactive controls", (loadState) => {
@@ -332,6 +313,16 @@ describe("PageDocumentEditorShell V0.4", () => {
     await waitFor(() => expect(screen.getByTestId("page-document-editor")).toHaveAttribute("data-dirty", "false"));
     fireEvent.keyDown(window, { key: "z", ctrlKey: true });
     expect(screen.getByTestId("page-document-editor")).toHaveAttribute("data-dirty", "true");
+  });
+
+  it("places the history action immediately before save draft", () => {
+    const onHistory = vi.fn();
+    renderEditor({ onSave: vi.fn(), onHistory });
+    const history = screen.getByRole("button", { name: "历史记录" });
+    const save = screen.getByRole("button", { name: "保存草稿" });
+    expect(history.compareDocumentPosition(save) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    fireEvent.click(history);
+    expect(onHistory).toHaveBeenCalledWith(expect.objectContaining({ document: expect.objectContaining({ pageId: "v04-demo" }) }));
   });
 
   it("autosaves the latest draft after 800ms and preserves the persisted snapshot", async () => {
@@ -380,6 +371,32 @@ describe("PageDocumentEditorShell V0.4", () => {
     await waitFor(() => expect(screen.getByRole("button", { name: "选择素材" })).toBeVisible());
     fireEvent.click(screen.getByRole("button", { name: "选择素材" }));
     await waitFor(() => expect(changed.at(-1)?.blocks[0]?.props).toMatchObject({ assetId: "asset-2", src: "https://cdn.example/image.png", alt: "New" }));
+  });
+
+  it("shows selected products in the inspector and delegates picking to the host", async () => {
+    const selectProducts = vi.fn().mockResolvedValue([
+      { id: "gid://shopify/Product/1", title: "Studio Wireless Headphones", imageUrl: "https://cdn.example/headphones.jpg" },
+      { id: "gid://shopify/Product/2", title: "Cloud Buds Pro", imageUrl: "https://cdn.example/buds.jpg" }
+    ]);
+    const changed: PageDocument[] = [];
+    const registry = createExtensionRegistry([bestTrackPageExtension]);
+    renderEditor({ initialDocument: registry.getTemplate("besttrack.ready-to-go")!.create(), registry, productPicker: { selectProducts }, onDocumentChange: (next) => changed.push(next) });
+    fireEvent.click(screen.getByRole("group", { name: "Select Recommended products in canvas" }));
+    const picker = await screen.findByTestId("product-picker");
+    expect(screen.getByText("推荐商品 (Shopify)")).toBeVisible();
+    expect(within(picker).getByText("未选择商品")).toBeVisible();
+    expect(within(picker).getByRole("button", { name: "从 Shopify 选择商品" })).toBeVisible();
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    fireEvent.click(within(picker).getByRole("button", { name: "从 Shopify 选择商品" }));
+    await waitFor(() => expect(selectProducts).toHaveBeenCalledWith(expect.objectContaining({ multiple: true, current: [] })));
+    await waitFor(() => expect(within(picker).getByText("2 件商品")).toBeVisible());
+    expect(picker.querySelectorAll(".pb-product-picker__thumb img")).toHaveLength(2);
+    expect(within(picker).queryByText("Studio Wireless Headphones")).not.toBeInTheDocument();
+    expect(changed.at(-1)?.blocks.find((block) => block.type === "besttrack.ready-to-go.recommendations")?.props.products).toEqual([
+      { id: "gid://shopify/Product/1", title: "Studio Wireless Headphones", imageUrl: "https://cdn.example/headphones.jpg" },
+      { id: "gid://shopify/Product/2", title: "Cloud Buds Pro", imageUrl: "https://cdn.example/buds.jpg" }
+    ]);
+    expect(screen.getByText("Studio Wireless Headphones")).toBeVisible();
   });
 
   it("renders the reusable page lifecycle summary in the editor header", () => {

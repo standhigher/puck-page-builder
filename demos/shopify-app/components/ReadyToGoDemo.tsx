@@ -61,7 +61,7 @@ export function ReadyToGoDemo({ getSessionToken }: { getSessionToken?: GetSessio
             {!getSessionToken ? <Banner tone="info">独立模式使用显式 Mock Runtime；在 Shopify 嵌入式应用中会改用受控的 Live DataSource，失败不会回退为 Mock。</Banner> : null}
           </BlockStack>
         </Card>
-        {loadState === "ready" ? <PageDocumentEditorShell initialDocument={document} registry={registry} iframe={false} onDocumentChange={setDocument} onSave={(next) => save(next, "draft")} onPublish={(next) => save(next, "published")} /> : <Banner tone="info">正在加载 Ready-to-go 草稿…</Banner>}
+        {loadState === "ready" ? <PageDocumentEditorShell initialDocument={document} registry={registry} iframe={false} productPicker={{ async selectProducts({ current }) { return current.length ? current : [{ id: "gid://shopify/Product/101", title: "Studio Wireless Headphones", imageUrl: "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&w=200&q=80" }, { id: "gid://shopify/Product/102", title: "Cloud Buds Pro", imageUrl: "https://images.unsplash.com/photo-1590658268037-6bf12165a8df?auto=format&fit=crop&w=200&q=80" }, { id: "gid://shopify/Product/103", title: "Compact Mechanical Keyboard", imageUrl: "https://images.unsplash.com/photo-1511467687858-23d96c32e4ae?auto=format&fit=crop&w=200&q=80" }, { id: "gid://shopify/Product/104", title: "Travel tote", imageUrl: "https://images.unsplash.com/photo-1547949003-9792a18a2601?auto=format&fit=crop&w=200&q=80" }]; } }} onDocumentChange={setDocument} onSave={(next) => save(next, "draft")} onPublish={(next) => save(next, "published")} /> : <Banner tone="info">正在加载 Ready-to-go 草稿…</Banner>}
         <Card>
           <BlockStack gap="200">
             <Text as="h2" variant="headingSm">Consumer WebRenderer preview</Text>

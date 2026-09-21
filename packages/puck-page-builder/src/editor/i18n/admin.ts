@@ -24,6 +24,7 @@ const messages = {
     unsaved: "未保存变更",
     saved: "所有更改已保留在当前会话中",
     save: "保存草稿",
+    history: "历史记录",
     saving: "正在保存…",
     publish: "发布",
     publishing: "正在发布…",
@@ -52,9 +53,11 @@ const messages = {
     collapseRight: "收起属性面板",
     expandLeft: "打开区块面板",
     expandRight: "打开属性面板",
-    toggleSidebars: "侧栏显示",
-    toggleLeftSidebar: "切换左侧面板",
-    toggleRightSidebar: "切换属性面板"
+    selectProducts: "从 Shopify 选择商品",
+    selectingProducts: "正在选择商品…",
+    selectProductsFailed: "无法选择商品，请重试。",
+    emptyProducts: "未选择商品",
+    productCountSuffix: "件商品"
   },
   en: {
     blocks: "Blocks",
@@ -79,6 +82,7 @@ const messages = {
     unsaved: "Unsaved changes",
     saved: "Changes are kept in this session",
     save: "Save draft",
+    history: "History",
     saving: "Saving…",
     publish: "Publish",
     publishing: "Publishing…",
@@ -107,9 +111,11 @@ const messages = {
     collapseRight: "Collapse properties panel",
     expandLeft: "Open blocks panel",
     expandRight: "Open properties panel",
-    toggleSidebars: "Sidebar visibility",
-    toggleLeftSidebar: "Toggle left sidebar",
-    toggleRightSidebar: "Toggle right sidebar"
+    selectProducts: "Select from Shopify",
+    selectingProducts: "Selecting products…",
+    selectProductsFailed: "Could not select products. Try again.",
+    emptyProducts: "No products selected",
+    productCountSuffix: "products"
   }
 } as const;
 

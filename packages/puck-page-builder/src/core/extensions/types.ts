@@ -45,7 +45,7 @@ export type FieldConfig = {
   field: string;
   label?: string;
   /** Product-facing editor metadata. Custom field components remain supported. */
-  control?: "text" | "textarea" | "url" | "color";
+  control?: "text" | "textarea" | "url" | "color" | "products";
   description?: string;
   group?: string;
   /** Kept for compatibility; it participates in the built-in validation. */

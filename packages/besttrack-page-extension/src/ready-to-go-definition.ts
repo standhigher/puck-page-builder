@@ -65,10 +65,13 @@ const readyToGoBlocks: BlockDefinition[] = withTemplatePolicy([
     label: "Recommended products",
     category: "BestTrack Ready-to-go",
     targets: ["web"],
-    defaultProps: { heading: "You may also like..." },
+    defaultProps: { heading: "You may also like...", products: [] },
     defaultVariant: "default",
     variants: [{ id: "default", label: "Default" }, { id: "grid", label: "Grid", theme: { "color.surface": "#ffffff" } }],
-    fields: { heading: text("Heading") },
+    fields: {
+      heading: text("Heading"),
+      products: { field: "besttrack.ready-to-go.products", label: "推荐商品 (Shopify)", control: "products", group: "Content" }
+    },
     render: { web: ReadyToGoRecommendationsBlock, editor: ReadyToGoRecommendationsEditor }
   }
 ], ["besttrack.ready-to-go.query"]);

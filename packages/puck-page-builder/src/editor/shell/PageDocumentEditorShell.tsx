@@ -290,7 +290,8 @@ function PageDocumentEditor({ iframe = false, registry, adminLocale, onSave, onP
           <div className="pb-header-content">
             <div className="pb-header-title-group">{onBack ? <Button variant="tertiary" onClick={requestBack}>{i18n.t("back")}</Button> : null}<div className="pb-page-title"><Text as="h1" variant="headingSm">{editor.document.settings.seoTitle ?? editor.document.pageId}</Text><Text as="p" variant="bodySm" tone="subdued">PageDocument V{editor.document.schemaVersion} · {editor.document.target}</Text>{pageStatus ? <PageStatusCard status={pageStatus} sessionState={editor.sessionState} /> : null}</div></div>
             <div className="pb-header-controls">
-            <div className="pb-header-device-toolbar"><ButtonGroup variant="segmented">{(Object.keys(deviceLabels) as Array<keyof typeof deviceLabels>).map((device) => <Button key={device} pressed={editor.device === device} onClick={() => editor.setDevice(device)}>{i18n.t(deviceLabels[device])}</Button>)}</ButtonGroup><div className="pb-zoom-control"><Select label={i18n.t("zoom")} labelHidden options={[{ label: i18n.t("zoomAuto"), value: "auto" }, { label: "50%", value: "50" }, { label: "70%", value: "70" }, { label: "100%", value: "100" }]} value={zoom} onChange={(value) => setZoom(value as typeof zoom)} /></div></div>
+              <div className="pb-header-device-toolbar"><ButtonGroup variant="segmented">{(Object.keys(deviceLabels) as Array<keyof typeof deviceLabels>).map((device) => <Button key={device} pressed={editor.device === device} onClick={() => editor.setDevice(device)}>{i18n.t(deviceLabels[device])}</Button>)}</ButtonGroup><div className="pb-zoom-control"><Select label={i18n.t("zoom")} labelHidden options={[{ label: i18n.t("zoomAuto"), value: "auto" }, { label: "50%", value: "50" }, { label: "70%", value: "70" }, { label: "100%", value: "100" }]} value={zoom} onChange={(value) => setZoom(value as typeof zoom)} /></div></div>
+            </div>
             <div className="pb-header-actions"><InlineStack gap="150" blockAlign="center" wrap>
               <Badge tone={saveBadgeTone}>{saveBadgeLabel}</Badge>
               {onHistory ? <span data-editor-history=""><Button disabled={request !== "idle"} onClick={() => onHistory({ document: editor.document, draftRevision, session: editor.session })}>{i18n.t("history")}</Button></span> : null}
@@ -301,7 +302,6 @@ function PageDocumentEditor({ iframe = false, registry, adminLocale, onSave, onP
               <Button accessibilityLabel={i18n.t("undo")} icon={UndoIcon} variant="tertiary" disabled={!editor.actionState.canUndo} onClick={editor.undo} />
               <Button accessibilityLabel={i18n.t("redo")} icon={RedoIcon} variant="tertiary" disabled={!editor.actionState.canRedo} onClick={editor.redo} />
             </InlineStack></div>
-            </div>
           </div>
         </header>
         {editor.loadState === "success" ? <Banner tone="success">{i18n.t("success")}</Banner> : null}

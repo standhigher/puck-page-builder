@@ -94,7 +94,15 @@ export function ProductImage({ src, alt, size = 60 }: { src?: string; alt: strin
   return <img src={safeSrc} alt={alt} onError={() => setFailed(true)} style={box} />;
 }
 
-export function TrackingProgress({ steps }: { steps: ReadyToGoTrackingStep[] }) {
+const hexColor = /^#(?:[\da-f]{3}|[\da-f]{4}|[\da-f]{6}|[\da-f]{8})$/i;
+const defaultProgressColor = "#0f172a";
+
+function progressColor(value?: string) {
+  return value && hexColor.test(value) ? value : defaultProgressColor;
+}
+
+export function TrackingProgress({ steps, color }: { steps: ReadyToGoTrackingStep[]; color?: string }) {
+  const active = progressColor(color);
   const cells = Math.max(steps.length, 1);
   return <div className="bt-progress" role="region" aria-label="Delivery progress" style={{ marginTop: 32, width: "100%", maxWidth: 1200, marginLeft: "auto", marginRight: "auto", overflow: "visible" }}>
     <style>{trackingProgressStyles}</style>
@@ -103,13 +111,13 @@ export function TrackingProgress({ steps }: { steps: ReadyToGoTrackingStep[] }) 
         {steps.slice(0, -1).map((step, index) => {
           const done = step.state === "complete" || step.state === "current";
           const nextDone = steps[index + 1]?.state === "complete" || steps[index + 1]?.state === "current";
-          return <span key={step.id + "-line"} style={{ flex: 1, height: 6, borderRadius: 999, background: done && nextDone ? "#1a1a1a" : "rgba(0, 0, 0, 0.25)" }} />;
+          return <span key={step.id + "-line"} style={{ flex: 1, height: 6, borderRadius: 999, background: done && nextDone ? active : `color-mix(in srgb, ${active} 25%, transparent)` }} />;
         })}
       </div> : null}
       {steps.map((step, index) => {
         const done = step.state === "complete" || step.state === "current";
         return <div key={step.id} style={{ minWidth: 0, display: "flex", flexDirection: "column", alignItems: "center", position: "relative", zIndex: 1 }}>
-          <span className="bt-progress__icon" aria-label={step.label + " " + step.state} style={{ display: "flex", flexShrink: 0, alignItems: "center", justifyContent: "center", borderRadius: 9999, border: "1px solid #0f172a", background: done ? "#0f172a" : "#fff", color: "#0f172a" }}>
+          <span className="bt-progress__icon" aria-label={step.label + " " + step.state} style={{ display: "flex", flexShrink: 0, alignItems: "center", justifyContent: "center", borderRadius: 9999, border: `1px solid ${active}`, background: done ? active : "#fff", color: active }}>
             <StepIcon name={step.icon ?? (index === 0 || index === steps.length - 1 ? "check" : index === 1 ? "bag" : index === 2 ? "truck" : "box")} done={done} />
           </span>
           <div className="bt-progress__copy" style={{ width: "100%", maxWidth: "100%", boxSizing: "border-box", textAlign: "center", padding: "0 2px" }}>

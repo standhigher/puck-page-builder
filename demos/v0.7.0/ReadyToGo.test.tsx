@@ -42,6 +42,8 @@ describe("V0.7.0 Ready-to-go", () => {
     }
     expect(registry.getBlock("besttrack.ready-to-go.query")?.fields.submitButtonColor).toMatchObject({ control: "color", label: "Button color" });
     expect(document?.blocks[0]?.props.submitButtonColor).toBe("#111111");
+    expect(registry.getBlock("besttrack.ready-to-go.progress")?.fields.progressColor).toMatchObject({ control: "color", label: "Progress color" });
+    expect(document?.blocks[1]?.props.progressColor).toBe("#0f172a");
   });
 
   it("applies submitButtonColor to the query submit button", () => {
@@ -51,6 +53,15 @@ describe("V0.7.0 Ready-to-go", () => {
       </ReadyToGoRuntimeProvider>
     );
     expect(screen.getByRole("button", { name: "Find" })).toHaveStyle({ backgroundColor: "rgb(0, 91, 211)" });
+  });
+
+  it("applies progressColor to completed progress steps", () => {
+    render(
+      <ReadyToGoRuntimeProvider>
+        <ReadyToGoProgressEditor progressColor="#005bd3" blockId="progress" selected onPropsChange={vi.fn()} />
+      </ReadyToGoRuntimeProvider>
+    );
+    expect(screen.getByLabelText("In Transit current")).toHaveStyle({ backgroundColor: "rgb(0, 91, 211)", borderColor: "rgb(0, 91, 211)" });
   });
 
   it("edits Ready-to-go copy on the canvas without running a tracking query", () => {

@@ -390,8 +390,8 @@ describe("PageDocumentEditorShell V0.4", () => {
     renderEditor({ onPublish: vi.fn().mockResolvedValue(undefined) });
     fireEvent.click(screen.getByRole("button", { name: "发布" }));
     await waitFor(() => expect(screen.getByTestId("editor-notice")).toHaveAttribute("data-notice", "published"));
-    expect(screen.getByRole("dialog", { name: "发布成功" })).toBeVisible();
-    expect(screen.getByText("页面已发布，消费者将看到当前版本。")).toBeVisible();
+    expect(screen.queryByRole("dialog", { name: "发布成功" })).not.toBeInTheDocument();
+    expect(screen.getByText("发布成功")).toBeVisible();
   });
 
   it("uses the host asset picker and persists its stable asset reference", async () => {

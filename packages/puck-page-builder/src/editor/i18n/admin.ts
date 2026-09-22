@@ -57,7 +57,12 @@ const messages = {
     selectingProducts: "正在选择商品…",
     selectProductsFailed: "无法选择商品，请重试。",
     emptyProducts: "未选择商品",
-    productCountSuffix: "件商品"
+    productCountSuffix: "件商品",
+    selectAsset: "选择图片",
+    selectingAsset: "正在上传图片…",
+    selectAssetFailed: "无法上传图片，请重试。",
+    emptyAsset: "未设置图片",
+    removeAsset: "移除图片"
   },
   en: {
     blocks: "Blocks",
@@ -115,7 +120,12 @@ const messages = {
     selectingProducts: "Selecting products…",
     selectProductsFailed: "Could not select products. Try again.",
     emptyProducts: "No products selected",
-    productCountSuffix: "products"
+    productCountSuffix: "products",
+    selectAsset: "Select image",
+    selectingAsset: "Uploading image…",
+    selectAssetFailed: "Could not upload the image. Try again.",
+    emptyAsset: "No image selected",
+    removeAsset: "Remove image"
   }
 } as const;
 

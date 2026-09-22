@@ -56,7 +56,13 @@ const readyToGoBlocks: BlockDefinition[] = withTemplatePolicy([
     defaultProps: { heading: "Shipping Details", contentsHeading: "Package Contents", carrierHeading: "Carrier" },
     defaultVariant: "default",
     variants: [{ id: "default", label: "Default" }, { id: "compact", label: "Compact", theme: { spacing: "12px" } }],
-    fields: { heading: text("Heading"), contentsHeading: text("Package contents heading"), carrierHeading: text("Carrier heading") },
+    fields: {
+      heading: text("Heading"),
+      contentsHeading: text("Package contents heading"),
+      carrierHeading: text("Carrier heading"),
+      adImageUrl: { field: "besttrack.ready-to-go.asset", label: "Advertisement image", control: "asset", persist: false, group: "Advertisement" },
+      adLinkUrl: { field: "besttrack.ready-to-go.url", label: "Advertisement link", control: "url", persist: false, group: "Advertisement", validation: { allowRelativeUrl: true, allowedUrlProtocols: ["https:", "http:"] } }
+    },
     render: { web: ReadyToGoDeliveryBlock, editor: ReadyToGoDeliveryEditor }
   },
   {

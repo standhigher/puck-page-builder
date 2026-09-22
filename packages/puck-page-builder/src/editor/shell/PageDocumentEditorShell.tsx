@@ -47,6 +47,13 @@ export type PageDocumentEditorShellProps = {
   publishAction?: PublishAction;
   /** Host-owned picker/uploader for shop-scoped assets. */
   assetPicker?: AssetPickerAdapter;
+  /** External settings, keyed by block id (or block type for shared settings), outside document history and persistence. */
+  inspectorSettings?: Record<string, {
+    values: Record<string, JsonValue>;
+    disabled?: boolean;
+    onChange: (fieldName: string, value: JsonValue) => void;
+    footer?: ReactNode;
+  }>;
   /** Host-owned product picker. The shell only shows the selected snapshot and a button. */
   productPicker?: ProductPickerAdapter;
   /** Optional reusable page lifecycle summary. */
@@ -135,7 +142,7 @@ export function PageDocumentEditorShell(props: PageDocumentEditorShellProps) {
   </EditorProvider>;
 }
 
-function PageDocumentEditor({ iframe = false, registry, adminLocale, onSave, onPublish, draftPersistence, draftRevision: initialDraftRevision, autoSave = true, autoSaveDelayMs = 800, publishAction, assetPicker, productPicker, pageStatus, onBack, onHistory, onPreview, onAddToStore, deleteConfirmation, availableBlockTypes, appearanceControls = false }: PageDocumentEditorShellProps) {
+function PageDocumentEditor({ iframe = false, registry, adminLocale, onSave, onPublish, draftPersistence, draftRevision: initialDraftRevision, autoSave = true, autoSaveDelayMs = 800, publishAction, assetPicker, inspectorSettings, productPicker, pageStatus, onBack, onHistory, onPreview, onAddToStore, deleteConfirmation, availableBlockTypes, appearanceControls = false }: PageDocumentEditorShellProps) {
   const editor = useEditorContext();
   const [blockView, setBlockView] = useState<"blocks" | "outline">("blocks");
   const [leftRailOpen, setLeftRailOpen] = useState(true);
@@ -332,7 +339,7 @@ function PageDocumentEditor({ iframe = false, registry, adminLocale, onSave, onP
           </main>
           <aside className={`pb-right-panel${rightPanelOpen ? "" : " pb-panel--closed"}`} aria-label="PageDocument 属性">
             <InlineStack align="space-between" blockAlign="center"><Text as="h2" variant="headingSm">{i18n.t("properties")}</Text><Button accessibilityLabel={i18n.t("collapseRight")} icon={XIcon} variant="tertiary" onClick={() => setRightPanelOpen(false)} /></InlineStack>
-            {editor.selectedBlock ? <><DocumentInspector pageId={editor.document.pageId} assetPicker={assetPicker} productPicker={productPicker} i18n={i18n} block={editor.selectedBlock} registry={registry} disabled={!editor.actionState.canEdit} appearanceControls={appearanceControls} onChange={(props) => editor.updateBlockProps(editor.selectedBlock!.id, props)} onPresentationChange={(presentation) => updateBlockPresentation(editor.selectedBlock!.id, presentation)} /><InspectorActions block={editor.selectedBlock} canDuplicate={editor.actionState.canDuplicate} canDelete={editor.actionState.canDelete} canMove={editor.actionState.canReorder} canMoveUp={editor.document.blocks[0]?.id !== editor.selectedBlock.id} canMoveDown={editor.document.blocks.at(-1)?.id !== editor.selectedBlock.id} i18n={i18n} onDuplicate={() => editor.duplicateBlock(editor.selectedBlock!.id)} onDelete={() => editor.requestDeleteBlock(editor.selectedBlock!.id)} onMove={(direction) => editor.moveBlock(editor.selectedBlock!.id, direction)} /></> : <Text as="p" tone="subdued">{i18n.t("selectBlock")}</Text>}
+            {editor.selectedBlock ? <><DocumentInspector key={editor.selectedBlock.id} settings={inspectorSettings?.[editor.selectedBlock.id] ?? inspectorSettings?.[editor.selectedBlock.type]} pageId={editor.document.pageId} assetPicker={assetPicker} productPicker={productPicker} i18n={i18n} block={editor.selectedBlock} registry={registry} disabled={!editor.actionState.canEdit} appearanceControls={appearanceControls} onChange={(props) => editor.updateBlockProps(editor.selectedBlock!.id, props)} onPresentationChange={(presentation) => updateBlockPresentation(editor.selectedBlock!.id, presentation)} /><InspectorActions block={editor.selectedBlock} canDuplicate={editor.actionState.canDuplicate} canDelete={editor.actionState.canDelete} canMove={editor.actionState.canReorder} canMoveUp={editor.document.blocks[0]?.id !== editor.selectedBlock.id} canMoveDown={editor.document.blocks.at(-1)?.id !== editor.selectedBlock.id} i18n={i18n} onDuplicate={() => editor.duplicateBlock(editor.selectedBlock!.id)} onDelete={() => editor.requestDeleteBlock(editor.selectedBlock!.id)} onMove={(direction) => editor.moveBlock(editor.selectedBlock!.id, direction)} /></> : <Text as="p" tone="subdued">{i18n.t("selectBlock")}</Text>}
           </aside>
         </div>
         {editor.pendingDeleteBlock ? <DeleteConfirmation block={editor.pendingDeleteBlock} config={deleteConfirmation} i18n={i18n} onCancel={editor.cancelDeleteBlock} onConfirm={editor.confirmDeleteBlock} /> : null}
@@ -401,10 +408,39 @@ function InspectorSection({ title, children, defaultOpen = true }: { title: stri
   </details>;
 }
 
-function InspectorTextControl({ label, value, control, disabled, onChange }: { label: string; value: unknown; control: Exclude<NonNullable<FieldConfig["control"]>, "products">; disabled: boolean; onChange: (value: string) => void }) {
+function InspectorTextControl({ label, value, control, disabled, onChange }: { label: string; value: unknown; control: Exclude<NonNullable<FieldConfig["control"]>, "products" | "asset">; disabled: boolean; onChange: (value: string) => void }) {
   const stringValue = typeof value === "string" ? value : "";
   if (control === "color") return <input aria-label={label} type="color" value={/^#[\da-f]{6}$/i.test(stringValue) ? stringValue : "#000000"} disabled={disabled} onChange={(event) => onChange(event.currentTarget.value)} />;
   return <TextField label={label} labelHidden value={stringValue} onChange={onChange} autoComplete="off" disabled={disabled} multiline={control === "textarea" ? 4 : false} type={control === "url" ? "url" : "text"} />;
+}
+
+function InspectorAssetControl({ value, disabled, picker, pageId, blockId, i18n, onChange }: { value: unknown; disabled: boolean; picker?: AssetPickerAdapter; pageId: string; blockId: string; i18n: ReturnType<typeof createAdminI18n>; onChange: (value: JsonValue) => void }) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const active = useRef(true);
+  useEffect(() => { active.current = !disabled; return () => { active.current = false; }; }, [disabled]);
+  const url = typeof value === "string" && validateFieldValue({ field: "", control: "asset" }, value).length === 0 ? value : "";
+  return <div className="pb-asset-picker" data-testid="asset-picker">
+    {url ? <img src={url} alt="" className="pb-asset-picker__preview" /> : <Text as="p" variant="bodySm" tone="subdued">{i18n.t("emptyAsset")}</Text>}
+    {url ? <Button fullWidth variant="tertiary" disabled={disabled || busy} onClick={() => onChange("")}>{i18n.t("removeAsset")}</Button> : null}
+    <Button fullWidth disabled={disabled || busy || !picker} onClick={() => void (async () => {
+      if (!picker) return;
+      setBusy(true);
+      setError(null);
+      try {
+        const asset = await picker.selectAsset({ pageId, blockId, current: { url } });
+        if (asset && active.current) {
+          if (validateFieldValue({ field: "", control: "asset", required: true }, asset.url).length) throw new Error("Invalid image URL");
+          onChange(asset.url);
+        }
+      } catch {
+        setError(i18n.t("selectAssetFailed"));
+      } finally {
+        setBusy(false);
+      }
+    })()}>{busy ? i18n.t("selectingAsset") : i18n.t("selectAsset")}</Button>
+    {error ? <Text as="p" variant="bodySm" tone="critical">{error}</Text> : null}
+  </div>;
 }
 
 function InspectorProductsControl({ value, disabled, picker, pageId, blockId, i18n, onChange }: { value: unknown; disabled: boolean; picker?: ProductPickerAdapter; pageId: string; blockId: string; i18n: ReturnType<typeof createAdminI18n>; onChange: (value: JsonValue) => void }) {
@@ -434,13 +470,13 @@ function InspectorProductsControl({ value, disabled, picker, pageId, blockId, i1
   </div>;
 }
 
-function InspectorField({ name, field, value, registry, disabled, productPicker, pageId, blockId, i18n, onChange }: { name: string; field: FieldConfig; value: unknown; registry?: ExtensionRegistry; disabled: boolean; productPicker?: ProductPickerAdapter; pageId: string; blockId: string; i18n: ReturnType<typeof createAdminI18n>; onChange: (value: JsonValue) => void }) {
+function InspectorField({ name, field, value, registry, disabled, assetPicker, productPicker, pageId, blockId, i18n, onChange }: { name: string; field: FieldConfig; value: unknown; registry?: ExtensionRegistry; disabled: boolean; assetPicker?: AssetPickerAdapter; productPicker?: ProductPickerAdapter; pageId: string; blockId: string; i18n: ReturnType<typeof createAdminI18n>; onChange: (value: JsonValue) => void }) {
   const label = field.label ?? name;
   const issues = validateFieldValue(field, value);
   const Field = registry?.getField(field.field)?.component;
   return <div className="pb-inspector-field" data-control={field.control ?? "custom"}>
     <div className="pb-inspector-field__heading"><Text as="p" variant="bodySm" fontWeight="semibold">{label}</Text>{field.description ? <Text as="p" variant="bodySm" tone="subdued">{field.description}</Text> : null}</div>
-    {field.control === "products" ? <InspectorProductsControl value={value} disabled={disabled} picker={productPicker} pageId={pageId} blockId={blockId} i18n={i18n} onChange={onChange} /> : field.control ? <InspectorTextControl label={label} value={value} control={field.control} disabled={disabled} onChange={(next) => onChange(next)} /> : Field ? <Field value={value} onChange={onChange} /> : null}
+    {field.control === "products" ? <InspectorProductsControl value={value} disabled={disabled} picker={productPicker} pageId={pageId} blockId={blockId} i18n={i18n} onChange={onChange} /> : field.control === "asset" ? <InspectorAssetControl value={value} disabled={disabled} picker={assetPicker} pageId={pageId} blockId={blockId} i18n={i18n} onChange={onChange} /> : field.control ? <InspectorTextControl label={label} value={value} control={field.control} disabled={disabled} onChange={(next) => onChange(next)} /> : Field ? <Field value={value} onChange={onChange} /> : null}
     {issues.map((issue) => <Text key={issue.message} as="p" variant="bodySm" tone="critical">{issue.message}</Text>)}
   </div>;
 }
@@ -474,7 +510,7 @@ function inspectorFieldConfig(name: string, field: FieldConfig): FieldConfig {
 
 const appearanceTokens: Array<[ThemeTokenName, string]> = [["color.primary", "主色"], ["color.surface", "表面色"], ["radius", "圆角"], ["spacing", "间距"]];
 
-function DocumentInspector({ pageId, assetPicker, productPicker, i18n, block, registry, disabled, appearanceControls, onChange, onPresentationChange }: { pageId: string; assetPicker?: AssetPickerAdapter; productPicker?: ProductPickerAdapter; i18n: ReturnType<typeof createAdminI18n>; block: BlockNode; registry?: ExtensionRegistry; disabled: boolean; appearanceControls: boolean; onChange: (props: Record<string, JsonValue>) => void; onPresentationChange: (presentation: Pick<BlockNode, "variant" | "style">) => void }) {
+function DocumentInspector({ settings, pageId, assetPicker, productPicker, i18n, block, registry, disabled, appearanceControls, onChange, onPresentationChange }: { settings?: NonNullable<PageDocumentEditorShellProps["inspectorSettings"]>[string]; pageId: string; assetPicker?: AssetPickerAdapter; productPicker?: ProductPickerAdapter; i18n: ReturnType<typeof createAdminI18n>; block: BlockNode; registry?: ExtensionRegistry; disabled: boolean; appearanceControls: boolean; onChange: (props: Record<string, JsonValue>) => void; onPresentationChange: (presentation: Pick<BlockNode, "variant" | "style">) => void }) {
   const [assetError, setAssetError] = useState<string | null>(null);
   const [selectingAsset, setSelectingAsset] = useState(false);
   const definition = registry?.getBlock(block.type);
@@ -500,7 +536,8 @@ function DocumentInspector({ pageId, assetPicker, productPicker, i18n, block, re
         setSelectingAsset(false);
       }
     })()}>{selectingAsset ? "正在选择素材…" : "选择素材"}</Button>{assetError ? <Text as="p" variant="bodySm" tone="critical">{assetError}</Text> : null}</> : null}</InspectorSection> : null}
-    {Object.entries(groupedFields).map(([group, fields]) => <InspectorSection key={group} title={group} defaultOpen={group !== "Advanced"}>{fields.map(([name, field]) => <InspectorField key={name} name={name} field={field} value={block.props[name]} registry={registry} disabled={disabled} productPicker={productPicker} pageId={pageId} blockId={block.id} i18n={i18n} onChange={(value) => onChange({ ...block.props, [name]: value })} />)}</InspectorSection>)}
+    {Object.entries(groupedFields).map(([group, fields]) => <InspectorSection key={group} title={group} defaultOpen={group !== "Advanced"}>{fields.map(([name, field]) => <InspectorField key={name} name={name} field={field} value={field.persist === false ? settings?.values[name] : block.props[name]} registry={registry} disabled={disabled || (field.persist === false && (!settings || Boolean(settings.disabled)))} assetPicker={assetPicker} productPicker={productPicker} pageId={pageId} blockId={block.id} i18n={i18n} onChange={(value) => field.persist === false ? settings?.onChange(name, value) : onChange({ [name]: value })} />)}</InspectorSection>)}
+    {Object.values(definition?.fields ?? {}).some((field) => field.persist === false) ? settings?.footer : null}
     {appearanceControls && definition?.variants?.length ? <InspectorSection title="外观"><Select label="样式变体" options={definition.variants.map((variant) => ({ label: variant.label, value: variant.id }))} value={block.variant} disabled={disabled} onChange={(variant) => onPresentationChange({ variant, style: block.style })} /></InspectorSection> : null}
     {appearanceControls && definition ? <InspectorSection title="样式覆盖" defaultOpen={false}>{appearanceTokens.map(([token, label]) => <TextField key={token} label={label} value={block.style[token] ?? ""} placeholder="继承页面或模板设置" autoComplete="off" disabled={disabled} onChange={(value) => {
       const style: ThemeTokens = { ...block.style };

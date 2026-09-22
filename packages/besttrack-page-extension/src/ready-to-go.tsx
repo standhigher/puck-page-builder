@@ -26,6 +26,7 @@ import {
 import { TrackingNotFound } from "./tracking-not-found";
 import { isEmptyTrackingPageResult } from "./tracking-page-runtime";
 import type {
+  TrackingPageAd,
   TrackingPageOrderItem,
   TrackingPageQuery,
   TrackingPageQueryRequest,
@@ -52,6 +53,8 @@ type ReadyToGoRuntime = ReadyToGoRuntimeState & {
   recommendations: TrackingPageRecommendationsState;
   autoQueryFromUrl: boolean;
   watermark?: TrackingPageWatermark;
+  /** Admin-only promotion preview; live storefronts continue to use result.ad. */
+  adPreview?: TrackingPageAd | null;
 };
 
 const initialRuntime: ReadyToGoRuntime = {
@@ -77,6 +80,8 @@ export type ReadyToGoRuntimeProviderProps = {
   autoQueryFromUrl?: boolean;
   /** Host-decided display state. Omitted values follow the original powered-by hide rule. */
   watermark?: TrackingPageWatermark;
+  /** Admin-only promotion preview; live storefronts continue to use result.ad. */
+  adPreview?: TrackingPageAd | null;
 };
 
 /** Mock is an explicit preview default, never a fallback for an injected live query. */
@@ -106,7 +111,7 @@ async function queryMockReadyToGoTracking(request: TrackingPageQueryRequest): Pr
   return previewReadyToGoTracking(request.mode === "tracking" ? request.trackingNumber : request.orderNumber);
 }
 
-export function ReadyToGoRuntimeProvider({ children, query: injectedQuery, queryRecommendations, transport, autoQueryFromUrl, watermark }: ReadyToGoRuntimeProviderProps) {
+export function ReadyToGoRuntimeProvider({ children, query: injectedQuery, queryRecommendations, transport, autoQueryFromUrl, watermark, adPreview }: ReadyToGoRuntimeProviderProps) {
   const [state, setState] = useState<ReadyToGoRuntimeState>({ phase: "idle" });
   const [recommendations, setRecommendations] = useState<TrackingPageRecommendationsState>(() => (
     queryRecommendations || transport
@@ -156,7 +161,7 @@ export function ReadyToGoRuntimeProvider({ children, query: injectedQuery, query
     () => watermark ?? { visible: !shouldHidePoweredBy() },
     [watermark]
   );
-  const value = useMemo<ReadyToGoRuntime>(() => ({ ...state, query, recommendations, autoQueryFromUrl: resolveAutoQuery, watermark: resolvedWatermark }), [query, recommendations, resolveAutoQuery, resolvedWatermark, state]);
+  const value = useMemo<ReadyToGoRuntime>(() => ({ ...state, adPreview, query, recommendations, autoQueryFromUrl: resolveAutoQuery, watermark: resolvedWatermark }), [adPreview, query, recommendations, resolveAutoQuery, resolvedWatermark, state]);
   return <ReadyToGoRuntimeContext.Provider value={value}>{children}</ReadyToGoRuntimeContext.Provider>;
 }
 
@@ -264,14 +269,14 @@ function ProgressResult({ result, showEstimatedDelivery = true }: { result: Read
   </>;
 }
 
-function DeliveryResult({ heading, contentsHeading, carrierHeading, result }: { heading: ReactNode; contentsHeading: ReactNode; carrierHeading: ReactNode; result: ReadyToGoTrackingResult }) {
+function DeliveryResult({ heading, contentsHeading, carrierHeading, result, editing }: { heading: ReactNode; contentsHeading: ReactNode; carrierHeading: ReactNode; result: ReadyToGoTrackingResult; editing?: boolean }) {
   return <div style={{ ...contentWidth, display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 280px), 500px))", gap: 40, justifyContent: "center", alignItems: "start" }}>
     <div>
       <h3 style={{ margin: 0, fontSize: 20, lineHeight: "20px", fontWeight: 700 }}>{heading}</h3>
       <ShippingTimeline events={eventsFrom(result)} />
     </div>
     <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
-      <TrackingPageAdSlot ad={result.ad} />
+      <TrackingPageAdSlot ad={result.ad} disableLink={editing} />
       <div>
         <h3 style={{ margin: "0 0 12px", fontSize: 18, fontWeight: 700 }}>{contentsHeading}</h3>
         <PackageContents items={result.orderItems ?? []} />
@@ -327,12 +332,14 @@ export function ReadyToGoProgressEditor() {
 }
 
 export function ReadyToGoDeliveryEditor(block: ReadyToGoEditorProps) {
+  const { adPreview } = useReadyToGoRuntime();
   return <section aria-label="Ready-to-go delivery editor" style={{ ...pageFont, background: "var(--pb-color-background, #fff)", color: "var(--pb-color-text, #0f172a)", borderBottom: "1px solid #f1f5f9" }}>
     <DeliveryResult
       heading={<InlineText block={block} name="heading" fallback="Shipping Details" />}
       contentsHeading={<InlineText block={block} name="contentsHeading" fallback="Package Contents" />}
       carrierHeading={<InlineText block={block} name="carrierHeading" fallback="Carrier" />}
-      result={previewReadyToGoTracking()}
+      editing
+      result={{ ...previewReadyToGoTracking(), ad: adPreview ?? undefined }}
     />
   </section>;
 }

@@ -161,11 +161,11 @@ export function RecommendationCards({ items }: { items: ReadyToGoRecommendation[
 
   useEffect(() => {
     if (!emblaApi) return;
+    const frame = window.requestAnimationFrame(onSelect);
     emblaApi.on("select", onSelect);
     emblaApi.on("reInit", onSelect);
-    const frame = requestAnimationFrame(onSelect);
     return () => {
-      cancelAnimationFrame(frame);
+      window.cancelAnimationFrame(frame);
       emblaApi.off("select", onSelect);
       emblaApi.off("reInit", onSelect);
     };
@@ -175,12 +175,9 @@ export function RecommendationCards({ items }: { items: ReadyToGoRecommendation[
     if (typeof window.matchMedia !== "function") return;
     const media = window.matchMedia("(max-width: 768px)");
     const update = () => setHideButtons(media.matches);
-    const frame = requestAnimationFrame(update);
+    update();
     media.addEventListener("change", update);
-    return () => {
-      cancelAnimationFrame(frame);
-      media.removeEventListener("change", update);
-    };
+    return () => media.removeEventListener("change", update);
   }, []);
 
   if (items.length === 0) return null;
@@ -238,7 +235,7 @@ export function RecommendationCards({ items }: { items: ReadyToGoRecommendation[
  * The legacy Track Page only rendered the promotion when the API returned an
  * image. The slot stays collapsed when `ad` is absent, including in the editor.
  */
-export function TrackingPageAdSlot({ ad }: { ad?: TrackingPageAd }) {
+export function TrackingPageAdSlot({ ad, disableLink = false }: { ad?: TrackingPageAd; disableLink?: boolean }) {
   const [failedUrl, setFailedUrl] = useState<string>();
   const imageUrl = safeImageUrl(ad?.imageUrl);
   if (!imageUrl || failedUrl === imageUrl) return null;
@@ -248,7 +245,7 @@ export function TrackingPageAdSlot({ ad }: { ad?: TrackingPageAd }) {
   );
 
   const href = safeHref(ad?.href);
-  if (!href) return <div data-tracking-page-ad>{content}</div>;
+  if (!href || disableLink) return <div data-tracking-page-ad>{content}</div>;
   return <a data-tracking-page-ad href={href} target="_blank" rel="noopener noreferrer">{content}</a>;
 }
 

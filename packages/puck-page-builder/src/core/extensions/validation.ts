@@ -37,7 +37,7 @@ export function validateFieldValue(config: FieldConfig, value: unknown): Validat
   if (control === "text" && /[\r\n]/.test(value)) issues.push({ path: "", message: "必须为单行文本。" });
   if (config.validation?.minLength !== undefined && stringLength(value) < config.validation.minLength) issues.push({ path: "", message: `至少需要 ${config.validation.minLength} 个字符。` });
   if (config.validation?.maxLength !== undefined && stringLength(value) > config.validation.maxLength) issues.push({ path: "", message: `最多允许 ${config.validation.maxLength} 个字符。` });
-  if (value && control === "url" && !isSafeUrl(value, config)) issues.push({ path: "", message: "必须是站内相对路径或允许的 HTTP(S) URL。" });
+  if (value && (control === "url" || control === "asset") && !isSafeUrl(value, config)) issues.push({ path: "", message: "必须是站内相对路径或允许的 HTTP(S) URL。" });
   if (value && control === "color" && !hexColor.test(value)) issues.push({ path: "", message: "必须是十六进制颜色，例如 #005BD3。" });
   return issues;
 }

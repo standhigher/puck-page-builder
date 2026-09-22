@@ -373,6 +373,34 @@ describe("PageDocumentEditorShell V0.4", () => {
     await waitFor(() => expect(changed.at(-1)?.blocks[0]?.props).toMatchObject({ assetId: "asset-2", src: "https://cdn.example/image.png", alt: "New" }));
   });
 
+  it("edits external ad settings only on Delivery without changing the document", async () => {
+    const registry = createExtensionRegistry([bestTrackPageExtension]);
+    const initial = registry.getTemplate("besttrack.ready-to-go")!.create();
+    const change = vi.fn();
+    const changed: PageDocument[] = [];
+    renderEditor({ initialDocument: initial, registry,
+      inspectorSettings: { "besttrack.ready-to-go.delivery": { values: { adImageUrl: "", adLinkUrl: "" }, onChange: change } },
+      assetPicker: { selectAsset: vi.fn().mockResolvedValue({ id: "promo", url: "https://cdn.example/promo.png" }) },
+      onDocumentChange: (next) => changed.push(next) });
+    expect(screen.queryByLabelText("Advertisement link")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("group", { name: "Select Delivery information in canvas" }));
+    fireEvent.change(await screen.findByLabelText("Advertisement link"), { target: { value: "https://example.com/sale" } });
+    expect(change).toHaveBeenCalledWith("adLinkUrl", "https://example.com/sale");
+    fireEvent.click(screen.getByRole("button", { name: "选择图片" }));
+    await waitFor(() => expect(change).toHaveBeenCalledWith("adImageUrl", "https://cdn.example/promo.png"));
+    expect(changed.at(-1)).toEqual(initial);
+    fireEvent.click(screen.getByRole("group", { name: "Select Shipment progress in canvas" }));
+    await waitFor(() => expect(screen.queryByLabelText("Advertisement link")).not.toBeInTheDocument());
+  });
+
+  it("keeps external ad fields disabled when no host integration is supplied", async () => {
+    const registry = createExtensionRegistry([bestTrackPageExtension]);
+    renderEditor({ initialDocument: registry.getTemplate("besttrack.ready-to-go")!.create(), registry });
+    fireEvent.click(screen.getByRole("group", { name: "Select Delivery information in canvas" }));
+    expect(await screen.findByLabelText("Advertisement link")).toBeDisabled();
+    expect(screen.getByRole("button", { name: "选择图片" })).toHaveAttribute("aria-disabled", "true");
+  });
+
   it("shows selected products in the inspector and delegates picking to the host", async () => {
     const selectProducts = vi.fn().mockResolvedValue([
       { id: "gid://shopify/Product/1", title: "Studio Wireless Headphones", imageUrl: "https://cdn.example/headphones.jpg" },

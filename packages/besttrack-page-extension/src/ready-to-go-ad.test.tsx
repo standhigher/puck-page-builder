@@ -43,6 +43,15 @@ describe("Ready-to-go dynamic promotion slot", () => {
     expect(container.querySelector("[data-tracking-page-ad]")).toBeNull();
   });
 
+  it("previews host ad changes without making the editor image navigate", () => {
+    const editor = <ReadyToGoDeliveryEditor blockId="delivery" selected onPropsChange={vi.fn()} />;
+    const { container, rerender } = render(<ReadyToGoRuntimeProvider adPreview={{ imageUrl: "https://cdn.example/promo.png", href: "https://example.com/sale" }}>{editor}</ReadyToGoRuntimeProvider>);
+    expect(container.querySelector("[data-tracking-page-ad] img")).toHaveAttribute("src", "https://cdn.example/promo.png");
+    expect(container.querySelector("[data-tracking-page-ad]")?.tagName).toBe("DIV");
+    rerender(<ReadyToGoRuntimeProvider adPreview={null}>{editor}</ReadyToGoRuntimeProvider>);
+    expect(container.querySelector("[data-tracking-page-ad]")).toBeNull();
+  });
+
   it("hides the editor ad slot when preview data has no ad", () => {
     const { container, queryByText } = render(
       <ReadyToGoDeliveryEditor heading="Shipping Details" contentsHeading="Package Contents" carrierHeading="Carrier" blockId="delivery" selected onPropsChange={vi.fn()} />

@@ -29,11 +29,12 @@ function validateBlock(document: PageDocument, index: number, registry: Extensio
   if (!supportsTarget(definition, document.target)) issues.push({ path, message: `区块不支持 ${document.target} target。` });
   if (definition.variants?.length && !definition.variants.some((variant) => variant.id === block.variant)) issues.push({ path: `${path}.variant`, message: `不支持的 variant：${block.variant}。` });
 
-  const allowedProps = new Set([...Object.keys(definition.defaultProps), ...Object.keys(definition.fields)]);
+  const allowedProps = new Set([...Object.keys(definition.defaultProps), ...Object.entries(definition.fields).filter(([, field]) => field.persist !== false).map(([name]) => name)]);
   for (const key of Object.keys(block.props)) {
     if (!allowedProps.has(key)) issues.push({ path: `${path}.props.${key}`, message: "不允许保存未知字段。" });
   }
   for (const [name, field] of Object.entries(definition.fields)) {
+    if (field.persist === false) continue;
     for (const issue of validateFieldValue(field, block.props[name])) {
       issues.push({ ...issue, path: issue.path ? `${path}.props.${name}.${issue.path}` : `${path}.props.${name}` });
     }

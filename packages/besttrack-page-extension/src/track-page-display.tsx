@@ -10,9 +10,23 @@ export const pageFont = { fontFamily: "var(--pb-font-family, Inter, system-ui, s
 export const contentWidth = {
   width: "min(1248px, 100%)",
   margin: "0 auto",
-  padding: "48px 24px",
+  padding: "48px clamp(16px, 4%, 24px)",
   boxSizing: "border-box" as const
 } satisfies CSSProperties;
+
+const trackingProgressStyles = `
+.bt-progress { container-type: inline-size; }
+.bt-progress__icon { width: 44px; height: 44px; }
+.bt-progress__line { top: 19px; }
+.bt-progress__copy { margin-top: 16px; }
+.bt-progress__label { font-size: 16px; line-height: 20px; }
+@container (max-width: 640px) {
+  .bt-progress__icon { width: 32px; height: 32px; }
+  .bt-progress__line { top: 13px; }
+  .bt-progress__copy { margin-top: 8px; }
+  .bt-progress__label { font-size: 11px; line-height: 14px; }
+}
+`;
 
 export function text(props: Record<string, unknown>, key: string, fallback = "") {
   return typeof props[key] === "string" ? props[key] : fallback;
@@ -82,28 +96,27 @@ export function ProductImage({ src, alt, size = 60 }: { src?: string; alt: strin
 
 export function TrackingProgress({ steps }: { steps: ReadyToGoTrackingStep[] }) {
   const cells = Math.max(steps.length, 1);
-  const columns = cells <= 1
-    ? "44px"
-    : Array.from({ length: cells - 1 }, () => "44px minmax(20px, 1fr)").join(" ") + " 44px";
-  return <div role="region" aria-label="Delivery progress" style={{ marginTop: 32, width: "100%", maxWidth: 1200, marginLeft: "auto", marginRight: "auto", overflow: "visible" }}>
-    <div style={{ display: "grid", gridTemplateColumns: columns, alignItems: "start", columnGap: 8, width: "100%" }}>
+  return <div className="bt-progress" role="region" aria-label="Delivery progress" style={{ marginTop: 32, width: "100%", maxWidth: 1200, marginLeft: "auto", marginRight: "auto", overflow: "visible" }}>
+    <style>{trackingProgressStyles}</style>
+    <div style={{ position: "relative", display: "grid", gridTemplateColumns: `repeat(${cells}, minmax(0, 1fr))`, columnGap: 4, width: "100%", alignItems: "start" }}>
+      {cells > 1 ? <div className="bt-progress__line" aria-hidden="true" style={{ position: "absolute", left: `calc(50% / ${cells})`, right: `calc(50% / ${cells})`, height: 6, display: "flex", zIndex: 0, pointerEvents: "none" }}>
+        {steps.slice(0, -1).map((step, index) => {
+          const done = step.state === "complete" || step.state === "current";
+          const nextDone = steps[index + 1]?.state === "complete" || steps[index + 1]?.state === "current";
+          return <span key={step.id + "-line"} style={{ flex: 1, height: 6, borderRadius: 999, background: done && nextDone ? "#1a1a1a" : "rgba(0, 0, 0, 0.25)" }} />;
+        })}
+      </div> : null}
       {steps.map((step, index) => {
         const done = step.state === "complete" || step.state === "current";
-        const nextDone = steps[index + 1]?.state === "complete" || steps[index + 1]?.state === "current";
-        return (
-          <div key={step.id} style={{ display: "contents" }}>
-            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", overflow: "visible" }}>
-              <span aria-label={step.label + " " + step.state} style={{ display: "flex", width: 44, height: 44, flexShrink: 0, alignItems: "center", justifyContent: "center", borderRadius: 9999, border: "1px solid #0f172a", background: done ? "#0f172a" : "#fff", color: "#0f172a" }}>
-                <StepIcon name={step.icon ?? (index === 0 || index === steps.length - 1 ? "check" : index === 1 ? "bag" : index === 2 ? "truck" : "box")} done={done} />
-              </span>
-              <div style={{ width: "max-content", textAlign: "center", marginTop: 16 }}>
-                <p style={{ margin: 0, fontSize: 16, lineHeight: "20px", fontWeight: 500, color: "#334155" }}>{step.label}</p>
-                {step.date ? <p style={{ margin: "8px 0 0", fontSize: 14, lineHeight: "18px", color: "#94a3b8" }}>{step.date}</p> : null}
-              </div>
-            </div>
-            {index < steps.length - 1 ? <span aria-hidden="true" style={{ display: "block", width: "100%", minWidth: 0, height: 6, marginTop: 19, borderRadius: 999, background: done && nextDone ? "#1a1a1a" : "rgba(0, 0, 0, 0.25)" }} /> : null}
+        return <div key={step.id} style={{ minWidth: 0, display: "flex", flexDirection: "column", alignItems: "center", position: "relative", zIndex: 1 }}>
+          <span className="bt-progress__icon" aria-label={step.label + " " + step.state} style={{ display: "flex", flexShrink: 0, alignItems: "center", justifyContent: "center", borderRadius: 9999, border: "1px solid #0f172a", background: done ? "#0f172a" : "#fff", color: "#0f172a" }}>
+            <StepIcon name={step.icon ?? (index === 0 || index === steps.length - 1 ? "check" : index === 1 ? "bag" : index === 2 ? "truck" : "box")} done={done} />
+          </span>
+          <div className="bt-progress__copy" style={{ width: "100%", maxWidth: "100%", boxSizing: "border-box", textAlign: "center", padding: "0 2px" }}>
+            <p className="bt-progress__label" style={{ margin: 0, fontWeight: 500, color: "#334155", overflowWrap: "anywhere", wordBreak: "break-word" }}>{step.label}</p>
+            {step.date ? <p style={{ margin: "6px 0 0", fontSize: 12, lineHeight: "16px", color: "#94a3b8", overflowWrap: "anywhere" }}>{step.date}</p> : null}
           </div>
-        );
+        </div>;
       })}
     </div>
   </div>;
@@ -205,7 +218,7 @@ export function RecommendationCards({ items }: { items: ReadyToGoRecommendation[
     padding: 0
   };
 
-  return <div aria-label="Recommended products carousel" style={{ position: "relative", marginLeft: 48, marginRight: 48 }}>
+  return <div aria-label="Recommended products carousel" style={{ position: "relative", marginLeft: "min(48px, 4%)", marginRight: "min(48px, 4%)" }}>
     {!hideButtons && canScrollPrev ? <button type="button" aria-label="Previous" onClick={() => emblaApi?.scrollPrev()} style={{ ...buttonStyle, left: -40 }}>{arrow("15 18 9 12 15 6")}</button> : null}
     <div ref={emblaRef} style={{ overflow: "hidden" }}>
       <div style={{ display: "flex" }}>
@@ -286,7 +299,9 @@ export function IdleMessage({ children }: { children: ReactNode }) {
 }
 
 export function SkeletonRow() {
-  return <div aria-hidden="true" style={{ display: "grid", gridTemplateColumns: "44px minmax(20px, 1fr) 44px minmax(20px, 1fr) 44px minmax(20px, 1fr) 44px minmax(20px, 1fr) 44px", columnGap: 8, width: "100%", maxWidth: 1200, margin: "32px auto 0" }}>
-    {Array.from({ length: 5 }, (_, index) => <span key={index} style={{ display: "block", width: 44, height: 44, borderRadius: 9999, background: "#e2e8f0" }} />).flatMap((circle, index, list) => index < list.length - 1 ? [circle, <span key={"line-" + index} style={{ display: "block", height: 6, marginTop: 19, borderRadius: 999, background: "#e2e8f0" }} />] : [circle])}
+  return <div className="bt-progress" aria-hidden="true" style={{ position: "relative", display: "grid", gridTemplateColumns: "repeat(5, minmax(0, 1fr))", columnGap: 4, width: "100%", maxWidth: 1200, margin: "32px auto 0" }}>
+    <style>{trackingProgressStyles}</style>
+    <span className="bt-progress__line" style={{ position: "absolute", left: "10%", right: "10%", height: 6, borderRadius: 999, background: "#e2e8f0" }} />
+    {Array.from({ length: 5 }, (_, index) => <span key={index} className="bt-progress__icon" style={{ display: "block", justifySelf: "center", borderRadius: 9999, background: "#e2e8f0" }} />)}
   </div>;
 }

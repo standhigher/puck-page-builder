@@ -20,13 +20,19 @@ describe("Ready-to-go dynamic promotion slot", () => {
     fireEvent.click(getByRole("button", { name: "Find" }));
     await waitFor(() => expect(query).toHaveBeenCalledWith({ mode: "tracking", trackingNumber: "BT-2048-DEMO" }));
 
-    const ad = container.querySelector("[data-tracking-page-ad]");
+    const ad = container.querySelector<HTMLElement>("[data-tracking-page-ad]");
     const image = ad?.querySelector("img");
     const link = ad?.closest("a");
     expect(image).not.toBeNull();
     expect(link).not.toBeNull();
     expect(image?.getAttribute("src")).toBe("https://cdn.example.test/promo.png");
     expect(link?.getAttribute("href")).toBe("https://example.test/promo");
+    expect(ad?.style.aspectRatio).toBe("20 / 9");
+    expect(ad?.style.width).toBe("100%");
+    expect(ad?.style.maxWidth).toBe("500px");
+    expect(image?.style.objectFit).toBe("fill");
+    expect(image?.style.width).toBe("100%");
+    expect(image?.style.height).toBe("100%");
   });
 
   it("keeps the live ad slot collapsed when the response has no ad", async () => {

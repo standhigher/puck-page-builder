@@ -27,8 +27,9 @@ export type PageRecord = {
 
 type Store = { records: PageRecord[] };
 const listeners = new Set<() => void>();
+const emptyStore: Store = { records: [] };
 let cachedSerialized: string | null = null;
-let cachedStore: Store = { records: [] };
+let cachedStore: Store = emptyStore;
 
 function clone<T>(value: T): T { return JSON.parse(JSON.stringify(value)) as T; }
 function now() { return new Date().toISOString(); }
@@ -63,7 +64,7 @@ function normalizeRecord(value: unknown): PageRecord | null {
   };
 }
 function readStore(): Store {
-  if (typeof window === "undefined") return { records: [] };
+  if (typeof window === "undefined") return emptyStore;
   try {
     const serialized = window.localStorage.getItem(storageKey) ?? "{}";
     if (serialized === cachedSerialized) return cachedStore;
@@ -97,6 +98,8 @@ export function subscribeToPages(listener: () => void) {
   return () => { listeners.delete(listener); window.removeEventListener("storage", onStorage); };
 }
 export function pageListSnapshot() { return readStore().records; }
+/** Stable SSR snapshot. A fresh array on each call makes useSyncExternalStore loop. */
+export function pageListServerSnapshot() { return emptyStore.records; }
 export function pageSnapshot(pageId: string) { return readStore().records.find((item) => item.pageId === pageId) ?? null; }
 export function getPage(pageId: string) {
   const record = readStore().records.find((item) => item.pageId === pageId);

@@ -176,7 +176,7 @@ const heroStyle: CSSProperties = {
   placeItems: "center",
   overflow: "hidden",
   backgroundColor: "#fff",
-  padding: "48px 24px",
+  padding: "48px clamp(16px, 4%, 24px)",
   boxSizing: "border-box"
 };
 const editorHeroStyle: CSSProperties = {
@@ -185,7 +185,7 @@ const editorHeroStyle: CSSProperties = {
   display: "grid",
   placeItems: "center",
   backgroundColor: "#fff",
-  padding: "48px 24px",
+  padding: "48px clamp(16px, 4%, 24px)",
   boxSizing: "border-box"
 };
 const formCardStyle: CSSProperties = {
@@ -197,7 +197,7 @@ const formCardStyle: CSSProperties = {
   borderRadius: "var(--pb-radius, 8px)",
   background: "var(--pb-color-surface, #fff)",
   color: "var(--pb-color-text, #0f172a)",
-  padding: 40,
+  padding: "clamp(20px, 7%, 40px)",
   boxSizing: "border-box",
   boxShadow: "0 8px 24px rgba(0, 0, 0, 0.12)"
 };
@@ -205,9 +205,10 @@ const editorFormCardStyle: CSSProperties = { ...formCardStyle, minHeight: 0 };
 const tabStyle = (active: boolean): CSSProperties => ({
   appearance: "none",
   flex: 1,
+  minWidth: 0,
   minHeight: 53,
   margin: 0,
-  padding: "16px 10px",
+  padding: "12px 6px",
   font: "inherit",
   fontSize: 15,
   lineHeight: "21px",
@@ -217,7 +218,9 @@ const tabStyle = (active: boolean): CSSProperties => ({
   borderBottom: active ? "2px solid #0f172a" : "2px solid transparent",
   borderRadius: 0,
   color: active ? "#0f172a" : "#94a3b8",
-  cursor: "pointer"
+  cursor: "pointer",
+  textAlign: "center",
+  overflowWrap: "anywhere"
 });
 const inputStyle: CSSProperties = {
   width: "100%",
@@ -232,6 +235,30 @@ const inputStyle: CSSProperties = {
   color: "#334155",
   boxSizing: "border-box"
 };
+const hexColor = /^#(?:[\da-f]{3}|[\da-f]{4}|[\da-f]{6}|[\da-f]{8})$/i;
+const defaultSubmitButtonColor = "var(--pb-color-primary, #111)";
+
+function submitButtonBackground(props: Record<string, unknown>, loading = false) {
+  if (loading) return "#475569";
+  const value = text(props, "submitButtonColor");
+  return hexColor.test(value) ? value : defaultSubmitButtonColor;
+}
+
+function submitButtonStyle(props: Record<string, unknown>, loading = false): CSSProperties {
+  return {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    width: "100%",
+    minHeight: 58,
+    marginTop: 8,
+    borderRadius: "var(--pb-radius, 8px)",
+    background: submitButtonBackground(props, loading),
+    color: "#fff",
+    fontSize: 15,
+    fontWeight: 600
+  };
+}
 
 export function ReadyToGoTextField({ value, onChange }: FieldProps) {
   return <input aria-label="Ready-to-go text" value={typeof value === "string" ? value : ""} onChange={(event) => onChange(event.target.value)} />;
@@ -262,8 +289,8 @@ function eventsFrom(result: ReadyToGoTrackingResult | undefined): ReadyToGoTrack
 function ProgressResult({ result, showEstimatedDelivery = true }: { result: ReadyToGoTrackingResult; showEstimatedDelivery?: boolean }) {
   const steps = result.progress?.length ? result.progress : defaultProgress(result.status);
   return <>
-    <p style={{ margin: 0, fontSize: 20, lineHeight: 1.4, color: "#000" }}>Tracking: {result.trackingNumber}</p>
-    <h2 style={{ margin: "48px 0 0", fontSize: 32, lineHeight: "40px", fontWeight: 700, color: "#303030" }}>{result.status}</h2>
+    <p style={{ margin: 0, fontSize: 20, lineHeight: 1.4, color: "#000", overflowWrap: "anywhere" }}>Tracking: {result.trackingNumber}</p>
+    <h2 style={{ margin: "clamp(24px, 8%, 48px) 0 0", fontSize: 32, lineHeight: 1.25, fontWeight: 700, color: "#303030", overflowWrap: "anywhere" }}>{result.status}</h2>
     {showEstimatedDelivery && result.estimatedDelivery ? <EstimatedDeliveryCard dateText={result.estimatedDelivery} /> : null}
     <TrackingProgress steps={steps} />
   </>;
@@ -293,7 +320,7 @@ function DeliveryResult({ heading, contentsHeading, carrierHeading, result, edit
 export function ReadyToGoQueryEditor(block: ReadyToGoEditorProps) {
   return <section aria-label="Ready-to-go query editor" style={editorHeroStyle}>
     <div role="region" aria-label="Ready-to-go tracking query" style={editorFormCardStyle}>
-      <h1 style={{ margin: "0 0 24px", textAlign: "center", fontSize: 28, lineHeight: 1.15 }}>
+      <h1 style={{ margin: "0 0 24px", textAlign: "center", fontSize: 28, lineHeight: 1.15, overflowWrap: "anywhere" }}>
         <InlineText block={block} name="heading" fallback="Track your order" />
       </h1>
       <div style={{ display: "flex", width: "100%", borderBottom: "1px solid #cbd5e1" }}>
@@ -314,7 +341,7 @@ export function ReadyToGoQueryEditor(block: ReadyToGoEditorProps) {
           onChange={(event) => block.onPropsChange({ defaultTrackingNumber: event.currentTarget.value })}
           style={{ ...inputStyle /* , border: block.selected ? "1px dashed #111" : inputStyle.border */ }}
         />
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", width: "100%", minHeight: 58, marginTop: 8, borderRadius: "var(--pb-radius, 8px)", background: "var(--pb-color-primary, #111)", color: "#fff", fontSize: 15, fontWeight: 600 }}>
+        <div style={submitButtonStyle(block)}>
           <InlineText block={block} name="submitLabel" fallback="Track Your Order" />
         </div>
       </div>
@@ -354,7 +381,7 @@ export function ReadyToGoRecommendationsEditor(block: ReadyToGoEditorProps) {
   }));
   const items = selected.length ? selected : previewReadyToGoTracking().recommendations ?? [];
   return <section aria-label="Ready-to-go recommendations editor" style={{ ...pageFont, background: "var(--pb-color-background, #fff)", color: "var(--pb-color-text, #0f172a)" }}>
-    <div style={{ ...contentWidth, padding: "48px 24px" }}>
+    <div style={contentWidth}>
       <h3 style={{ margin: 0, textAlign: "center", fontSize: 20, lineHeight: "20px", fontWeight: 700 }}><InlineText block={block} name="heading" fallback="You may also like..." /></h3>
       <div style={{ marginTop: 24 }}><RecommendationCards items={items} /></div>
     </div>
@@ -406,7 +433,7 @@ export function ReadyToGoQueryBlock(props: Record<string, unknown>) {
   const loading = runtime.phase === "loading";
   return <section style={heroStyle}>
     <div role="region" aria-label="Ready-to-go tracking query" style={formCardStyle}>
-      {heading ? <h1 style={{ margin: "0 0 24px", textAlign: "center", fontSize: 28, lineHeight: 1.15 }}>{heading}</h1> : null}
+      {heading ? <h1 style={{ margin: "0 0 24px", textAlign: "center", fontSize: 28, lineHeight: 1.15, overflowWrap: "anywhere" }}>{heading}</h1> : null}
       <div role="tablist" aria-label="Tracking method" style={{ display: "flex", width: "100%", borderBottom: "1px solid #cbd5e1" }}>
         <button type="button" role="tab" aria-selected={mode === "tracking"} onClick={() => { setMode("tracking"); setLocalError(""); }} style={tabStyle(mode === "tracking")}>{trackingTabLabel}</button>
         <button type="button" role="tab" aria-selected={mode === "order"} onClick={() => { setMode("order"); setLocalError(""); }} style={tabStyle(mode === "order")}>{orderTabLabel}</button>
@@ -422,7 +449,7 @@ export function ReadyToGoQueryBlock(props: Record<string, unknown>) {
           <input id="ready-to-go-tracking-number" aria-label="Tracking number" value={trackingNumber} onChange={(event) => setTrackingNumber(event.target.value)} placeholder="Tracking Number" style={inputStyle} />
         </>}
         {localError ? <p style={{ margin: 0, textAlign: "center", fontSize: 12, color: "#f43f5e" }}>{localError}</p> : null}
-        <button type="submit" disabled={loading} style={{ display: "flex", alignItems: "center", justifyContent: "center", width: "100%", minHeight: 58, marginTop: 8, border: 0, borderRadius: "var(--pb-radius, 8px)", background: loading ? "#475569" : "var(--pb-color-primary, #111)", color: "#fff", font: "inherit", fontSize: 15, fontWeight: 600, cursor: loading ? "wait" : "pointer", opacity: loading ? 0.7 : 1 }}>{loading ? "Tracking..." : submitLabel}</button>
+        <button type="submit" disabled={loading} style={{ ...submitButtonStyle(props, loading), border: 0, font: "inherit", fontSize: 15, fontWeight: 600, cursor: loading ? "wait" : "pointer", opacity: loading ? 0.7 : 1 }}>{loading ? "Tracking..." : submitLabel}</button>
         {runtime.phase === "error" ? <p role="alert" style={{ margin: 0, textAlign: "center", fontSize: 12, color: "#f43f5e" }}>{runtime.error}</p> : null}
       </form>
       <RuntimeWatermark watermark={runtime.watermark} />
@@ -467,7 +494,7 @@ export function ReadyToGoRecommendationsBlock(props: Record<string, unknown>) {
   const heading = text(props, "heading", "You may also like...");
   if (runtime.recommendations.phase !== "success" || runtime.recommendations.items.length === 0) return null;
   return <SectionShell title={heading} bordered={false}>
-    <div style={{ ...contentWidth, padding: "48px 24px" }}>
+    <div style={contentWidth}>
       <h3 style={{ margin: 0, textAlign: "center", fontSize: 20, lineHeight: "20px", fontWeight: 700 }}>{heading}</h3>
       <div style={{ marginTop: 24 }}><RecommendationCards items={runtime.recommendations.items} /></div>
     </div>

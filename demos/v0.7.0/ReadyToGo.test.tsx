@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { bestTrackPageExtension, ReadyToGoRuntimeProvider, type TrackingPageQuery, type TrackingPageRecommendationsQuery } from "../../packages/besttrack-page-extension/src";
-import { ReadyToGoDeliveryEditor, ReadyToGoProgressEditor, ReadyToGoQueryEditor, ReadyToGoRecommendationsEditor } from "../../packages/besttrack-page-extension/src/ready-to-go";
+import { ReadyToGoDeliveryEditor, ReadyToGoProgressEditor, ReadyToGoQueryBlock, ReadyToGoQueryEditor, ReadyToGoRecommendationsEditor } from "../../packages/besttrack-page-extension/src/ready-to-go";
 import { createExtensionRegistry } from "../../packages/puck-page-builder/src/core/extensions";
 import { WebRenderer } from "../../packages/puck-page-builder/src/renderer/web/WebRenderer";
 
@@ -40,6 +40,17 @@ describe("V0.7.0 Ready-to-go", () => {
     for (const type of document!.blocks.map((block) => block.type)) {
       expect(registry.getBlock(type)?.render.editor).toEqual(expect.any(Function));
     }
+    expect(registry.getBlock("besttrack.ready-to-go.query")?.fields.submitButtonColor).toMatchObject({ control: "color", label: "Button color" });
+    expect(document?.blocks[0]?.props.submitButtonColor).toBe("#111111");
+  });
+
+  it("applies submitButtonColor to the query submit button", () => {
+    render(
+      <ReadyToGoRuntimeProvider>
+        <ReadyToGoQueryBlock submitLabel="Find" submitButtonColor="#005bd3" />
+      </ReadyToGoRuntimeProvider>
+    );
+    expect(screen.getByRole("button", { name: "Find" })).toHaveStyle({ backgroundColor: "rgb(0, 91, 211)" });
   });
 
   it("edits Ready-to-go copy on the canvas without running a tracking query", () => {
@@ -132,6 +143,16 @@ describe("V0.7.0 Ready-to-go", () => {
     );
     expect(screen.getByLabelText("Ready-to-go query editor")).not.toHaveStyle({ minHeight: "520px" });
     expect(screen.getByLabelText("Ready-to-go tracking query")).not.toHaveStyle({ minHeight: "388px" });
+    expect(screen.getByLabelText("Canvas submitLabel").parentElement?.style.background).toBe("var(--pb-color-primary, #111)");
+  });
+
+  it("wraps progress labels inside equal columns instead of overlapping them", () => {
+    render(<ReadyToGoProgressEditor />);
+    const track = screen.getByLabelText("Delivery progress").querySelector(":scope > div");
+    expect(track).toHaveStyle({ display: "grid" });
+    expect((track as HTMLElement).style.gridTemplateColumns).toContain("minmax(0, 1fr)");
+    expect(screen.getByText("Out for Delivery")).toHaveStyle({ overflowWrap: "anywhere" });
+    expect(screen.getByText("Out for Delivery").parentElement).toHaveStyle({ width: "100%" });
   });
 
   it("uses one query result as shared RuntimeState for every result block", async () => {

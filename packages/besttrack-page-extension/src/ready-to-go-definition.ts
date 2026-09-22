@@ -16,6 +16,7 @@ const readyToGoBlocks: BlockDefinition[] = withTemplatePolicy([
     defaultProps: {
       heading: "Track your order",
       submitLabel: "Track Your Order",
+      submitButtonColor: "#111111",
       defaultTrackingNumber: "BT-2048-DEMO",
       defaultOrderNumber: "",
       defaultQueryMode: "tracking",
@@ -27,6 +28,7 @@ const readyToGoBlocks: BlockDefinition[] = withTemplatePolicy([
     fields: {
       heading: text("Heading"),
       submitLabel: text("Button label"),
+      submitButtonColor: { field: "besttrack.ready-to-go.text", label: "Button color", control: "color" as const, group: "Style" },
       defaultTrackingNumber: text("Default tracking number"),
       defaultOrderNumber: text("Default order number"),
       defaultQueryMode: text("Default query mode"),

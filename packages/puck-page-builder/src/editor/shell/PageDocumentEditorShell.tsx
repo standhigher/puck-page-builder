@@ -1,12 +1,12 @@
 import { Puck, usePuck } from "@puckeditor/core";
-import { Badge, Banner, Button, ButtonGroup, InlineStack, Select, Text, TextField } from "@shopify/polaris";
+import { Badge, Banner, Button, ButtonGroup, InlineStack, Modal, Select, Text, TextField } from "@shopify/polaris";
 import { DragHandleIcon, LayoutSectionIcon, MenuIcon, ProductIcon, RedoIcon, UndoIcon, XIcon } from "@shopify/polaris-icons";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPageDocumentPuckConfig } from "../../adapters/puck/page-document-config";
 import { fromEngineData, toEngineData } from "../../adapters/puck/page-document";
 import { parseProductReferences, toProductReferenceJson, validateFieldValue, validatePageDocumentWithRegistry, type ExtensionRegistry, type FieldConfig, type ValidationIssue } from "../../core/extensions";
 import type { BlockNode, JsonValue, PageDocument } from "../../core/schema/page-document";
-import type { ThemeTokenName, ThemeTokens } from "../../core/theme";
+import { mergeThemeTokens, toThemeStyle, type ThemeTokenName, type ThemeTokens } from "../../core/theme";
 import { EditorProvider, useEditorContext, type EditorLoadState } from "../context/EditorContext";
 import { PageStatusCard } from "../components/PageStatusCard";
 import type { AssetPickerAdapter, DraftPersistenceAdapter, DraftSaveResult, EditorSession, EditorSessionAdapter, EditorSessionState, PageStatus, ProductPickerAdapter, PublishAction } from "../contracts";
@@ -38,7 +38,7 @@ export type PageDocumentEditorShellProps = {
   /** Host-owned single-editor lock. Without this adapter the package stays backwards-compatible and editable. */
   sessionAdapter?: EditorSessionAdapter;
   onSessionStateChange?: (state: EditorSessionState) => void;
-  /** Host-owned draft persistence shared by the manual-save and 800ms autosave paths. */
+  /** Host-owned draft persistence used by the 800ms autosave path. */
   draftPersistence?: DraftPersistenceAdapter;
   draftRevision?: number;
   autoSave?: boolean;
@@ -160,6 +160,10 @@ function PageDocumentEditor({ iframe = false, registry, adminLocale, onSave, onP
   const [confirmBack, setConfirmBack] = useState(false);
   const i18n = createAdminI18n(adminLocale);
   const engineData = useMemo(() => toEngineData(editor.document, registry), [editor.document, registry]);
+  const canvasThemeStyle = useMemo(() => {
+    const template = editor.document.templateId ? registry?.getTemplate(editor.document.templateId) : undefined;
+    return toThemeStyle(mergeThemeTokens(template?.theme, editor.document.theme));
+  }, [editor.document, registry]);
   const validationIssues = useMemo(() => validateDocumentBlocks(editor.document, registry), [editor.document, registry]);
   const { confirmCanvasSelection, selectedBlockId, updateBlockProps, updateBlockPresentation } = editor;
   const updateFromCanvasInput = useCallback((id: string, props: Record<string, JsonValue>, preserveCanvasValue = false) => {
@@ -196,7 +200,7 @@ function PageDocumentEditor({ iframe = false, registry, adminLocale, onSave, onP
     const document = editor.document;
     setRequest("saving");
     setSaveState("saving");
-    setNotice(null);
+    setNotice((current) => current === "published" ? current : null);
     try {
       const result: DraftSaveResult | void = draftPersistence
         ? await draftPersistence.saveDraft({ document, expectedRevision: draftRevision, session: editor.session })
@@ -213,7 +217,7 @@ function PageDocumentEditor({ iframe = false, registry, adminLocale, onSave, onP
   }, [canPersistDraft, draftPersistence, draftRevision, editor, isOnline, onSave, request, validationIssues.length]);
 
   useEffect(() => {
-    if (!autoSave || !canPersistDraft || !editor.isDirty || resolvedSaveState !== "dirty" || !isOnline || request !== "idle" || validationIssues.length > 0 || editor.sessionState !== "active") return;
+    if (!autoSave || !canPersistDraft || !editor.isDirty || (resolvedSaveState !== "dirty" && resolvedSaveState !== "failed") || !isOnline || request !== "idle" || validationIssues.length > 0 || editor.sessionState !== "active") return;
     const timer = window.setTimeout(() => { void save(); }, autoSaveDelayMs);
     return () => window.clearTimeout(timer);
   }, [autoSave, autoSaveDelayMs, canPersistDraft, editor.isDirty, editor.sessionState, isOnline, request, resolvedSaveState, save, validationIssues.length]);
@@ -281,7 +285,6 @@ function PageDocumentEditor({ iframe = false, registry, adminLocale, onSave, onP
   };
   const saveBadgeTone = resolvedSaveState === "failed" ? "critical" : resolvedSaveState === "offline" || resolvedSaveState === "dirty" ? "attention" : "success";
   const saveBadgeLabel = resolvedSaveState === "saving" ? i18n.t("saving") : resolvedSaveState === "failed" ? i18n.t("saveFailed") : resolvedSaveState === "offline" ? i18n.t("offline") : resolvedSaveState === "dirty" ? i18n.t("unsaved") : i18n.t("saved");
-  const saveButtonLabel = request === "saving" ? i18n.t("saving") : resolvedSaveState === "failed" ? i18n.t("retrySave") : i18n.t("save");
   const requestBack = () => {
     if (!onBack) return;
     if (editor.isDirty || request === "saving") setConfirmBack(true);
@@ -300,19 +303,18 @@ function PageDocumentEditor({ iframe = false, registry, adminLocale, onSave, onP
               <div className="pb-header-device-toolbar"><ButtonGroup variant="segmented">{(Object.keys(deviceLabels) as Array<keyof typeof deviceLabels>).map((device) => <Button key={device} pressed={editor.device === device} onClick={() => editor.setDevice(device)}>{i18n.t(deviceLabels[device])}</Button>)}</ButtonGroup><div className="pb-zoom-control"><Select label={i18n.t("zoom")} labelHidden options={[{ label: i18n.t("zoomAuto"), value: "auto" }, { label: "50%", value: "50" }, { label: "70%", value: "70" }, { label: "100%", value: "100" }]} value={zoom} onChange={(value) => setZoom(value as typeof zoom)} /></div></div>
             </div>
             <div className="pb-header-actions"><InlineStack gap="150" blockAlign="center" wrap>
+              <Button accessibilityLabel={i18n.t("undo")} icon={UndoIcon} variant="tertiary" disabled={!editor.actionState.canUndo} onClick={editor.undo} />
+              <Button accessibilityLabel={i18n.t("redo")} icon={RedoIcon} variant="tertiary" disabled={!editor.actionState.canRedo} onClick={editor.redo} />
               <Badge tone={saveBadgeTone}>{saveBadgeLabel}</Badge>
               {onHistory ? <span data-editor-history=""><Button disabled={request !== "idle"} onClick={() => onHistory({ document: editor.document, draftRevision, session: editor.session })}>{i18n.t("history")}</Button></span> : null}
-              <Button disabled={!canPersistDraft || !editor.isDirty || request !== "idle" || validationIssues.length > 0 || !isOnline} onClick={() => void save()}>{saveButtonLabel}</Button>
               {onPreview ? <Button disabled={request !== "idle" || !isOnline} onClick={() => void onPreview({ document: editor.document, draftRevision, session: editor.session })}>{i18n.t("preview")}</Button> : null}
               {onAddToStore ? <Button disabled={request !== "idle" || pageStatus?.publicationStatus === "unpublished"} onClick={() => void onAddToStore({ document: editor.document, session: editor.session })}>{i18n.t("addToStore")}</Button> : null}
               <Button variant="primary" disabled={(!publishAction && !onPublish) || request !== "idle" || validationIssues.length > 0 || !isOnline} onClick={() => void publish()}>{request === "publishing" ? i18n.t("publishing") : i18n.t("publish")}</Button>
-              <Button accessibilityLabel={i18n.t("undo")} icon={UndoIcon} variant="tertiary" disabled={!editor.actionState.canUndo} onClick={editor.undo} />
-              <Button accessibilityLabel={i18n.t("redo")} icon={RedoIcon} variant="tertiary" disabled={!editor.actionState.canRedo} onClick={editor.redo} />
             </InlineStack></div>
           </div>
         </header>
         {editor.loadState === "success" ? <Banner tone="success">{i18n.t("success")}</Banner> : null}
-        {notice ? <Banner tone={notice === "published" ? "success" : "critical"}>{i18n.t(notice)}</Banner> : null}
+        {notice && notice !== "published" ? <div className={`pb-editor-notice pb-editor-notice--${notice}`} data-testid="editor-notice" data-notice={notice}><Banner tone="critical">{i18n.t(notice)}</Banner></div> : null}
         {validationIssues.length > 0 ? <Banner tone="critical" title="区块属性未通过校验"><ul>{validationIssues.map((issue) => <li key={`${issue.path}-${issue.message}`}>{issue.path}: {issue.message}</li>)}</ul></Banner> : null}
         <div className={`pb-workspace pb-workspace--document${leftRailOpen ? "" : " pb-workspace--left-closed"}${rightPanelOpen ? "" : " pb-workspace--right-closed"}`} data-left-panel={leftRailOpen ? "open" : "closed"} data-right-panel={rightPanelOpen ? "open" : "closed"}>
           <nav className="pb-tool-rail" aria-label="编辑器工具">
@@ -334,7 +336,7 @@ function PageDocumentEditor({ iframe = false, registry, adminLocale, onSave, onP
             </div>}
           </aside>
           <main className="pb-canvas-area">
-            <div className="pb-canvas-stage"><div ref={canvasFrameRef} className={`pb-canvas-frame pb-canvas-frame--${editor.device}${zoom === "auto" ? "" : ` pb-canvas-frame--zoom-${zoom}`}`} data-device={editor.device} data-zoom={zoom}><Puck.Preview /></div>{draggingLibraryType ? <div className="pb-canvas-drop-target" data-testid="canvas-drop-target" role="region" aria-label="区块投放区" onDragOver={(event) => event.preventDefault()} onDrop={dropFromLibrary}>松开以添加 {blockTypeLabel(draggingLibraryType, registry)}</div> : null}{editor.selectedBlock ? <div className="pb-canvas-overlay" aria-label={`已选择 ${blockLabel(editor.selectedBlock, registry)}`}><span>{blockLabel(editor.selectedBlock, registry)}</span><span>Selected</span></div> : null}</div>
+            <div className="pb-canvas-stage"><div ref={canvasFrameRef} className={`pb-canvas-frame pb-canvas-frame--${editor.device}${zoom === "auto" ? "" : ` pb-canvas-frame--zoom-${zoom}`}`} data-device={editor.device} data-zoom={zoom} style={canvasThemeStyle}><Puck.Preview /></div>{draggingLibraryType ? <div className="pb-canvas-drop-target" data-testid="canvas-drop-target" role="region" aria-label="区块投放区" onDragOver={(event) => event.preventDefault()} onDrop={dropFromLibrary}>松开以添加 {blockTypeLabel(draggingLibraryType, registry)}</div> : null}{editor.selectedBlock ? <div className="pb-canvas-overlay" aria-label={`已选择 ${blockLabel(editor.selectedBlock, registry)}`}><span>{blockLabel(editor.selectedBlock, registry)}</span><span>Selected</span></div> : null}</div>
             {!leftRailOpen || !rightPanelOpen ? <div className="pb-collapsed-actions">{!leftRailOpen ? <Button onClick={() => setLeftRailOpen(true)}>{i18n.t("expandLeft")}</Button> : null}{!rightPanelOpen ? <Button onClick={() => setRightPanelOpen(true)}>{i18n.t("expandRight")}</Button> : null}</div> : null}
           </main>
           <aside className={`pb-right-panel${rightPanelOpen ? "" : " pb-panel--closed"}`} aria-label="PageDocument 属性">
@@ -342,6 +344,11 @@ function PageDocumentEditor({ iframe = false, registry, adminLocale, onSave, onP
             {editor.selectedBlock ? <><DocumentInspector key={editor.selectedBlock.id} settings={inspectorSettings?.[editor.selectedBlock.id] ?? inspectorSettings?.[editor.selectedBlock.type]} pageId={editor.document.pageId} assetPicker={assetPicker} productPicker={productPicker} i18n={i18n} block={editor.selectedBlock} registry={registry} disabled={!editor.actionState.canEdit} appearanceControls={appearanceControls} onChange={(props) => editor.updateBlockProps(editor.selectedBlock!.id, props)} onPresentationChange={(presentation) => updateBlockPresentation(editor.selectedBlock!.id, presentation)} /><InspectorActions block={editor.selectedBlock} canDuplicate={editor.actionState.canDuplicate} canDelete={editor.actionState.canDelete} canMove={editor.actionState.canReorder} canMoveUp={editor.document.blocks[0]?.id !== editor.selectedBlock.id} canMoveDown={editor.document.blocks.at(-1)?.id !== editor.selectedBlock.id} i18n={i18n} onDuplicate={() => editor.duplicateBlock(editor.selectedBlock!.id)} onDelete={() => editor.requestDeleteBlock(editor.selectedBlock!.id)} onMove={(direction) => editor.moveBlock(editor.selectedBlock!.id, direction)} /></> : <Text as="p" tone="subdued">{i18n.t("selectBlock")}</Text>}
           </aside>
         </div>
+        <Modal instant open={notice === "published"} onClose={() => setNotice(null)} title={i18n.t("publishSuccessTitle")} primaryAction={{ content: i18n.t("publishSuccessClose"), onAction: () => setNotice(null) }}>
+          <Modal.Section>
+            <div className="pb-publish-success" data-testid="editor-notice" data-notice="published"><Text as="p">{i18n.t("publishSuccessMessage")}</Text></div>
+          </Modal.Section>
+        </Modal>
         {editor.pendingDeleteBlock ? <DeleteConfirmation block={editor.pendingDeleteBlock} config={deleteConfirmation} i18n={i18n} onCancel={editor.cancelDeleteBlock} onConfirm={editor.confirmDeleteBlock} /> : null}
         {confirmBack ? <LeaveConfirmation i18n={i18n} onCancel={() => setConfirmBack(false)} onConfirm={() => { setConfirmBack(false); onBack?.(); }} /> : null}
       </div>

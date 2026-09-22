@@ -246,7 +246,11 @@ describe("PageDocumentEditorShell V0.4", () => {
 
     const buttonInput = screen.getByLabelText("Button label");
     await waitFor(() => expect(buttonInput).toHaveValue("Check delivery"));
-    expect(changes.at(-1)?.blocks.find((block) => block.type === "besttrack.ready-to-go.query")?.props).toMatchObject({ heading: "Find your parcel", submitLabel: "Check delivery" });
+    const colorInput = screen.getByLabelText("Button color");
+    expect(colorInput).toHaveAttribute("type", "color");
+    expect(colorInput).toHaveValue("#111111");
+    fireEvent.change(colorInput, { target: { value: "#005bd3" } });
+    expect(changes.at(-1)?.blocks.find((block) => block.type === "besttrack.ready-to-go.query")?.props).toMatchObject({ heading: "Find your parcel", submitLabel: "Check delivery", submitButtonColor: "#005bd3" });
   });
 
   it("synchronizes Sales editor-preview text with the inspector", async () => {
@@ -305,22 +309,33 @@ describe("PageDocumentEditorShell V0.4", () => {
   });
 
   it("only clears the leave-protection snapshot after a successful V0.5 draft save", async () => {
-    const save = vi.fn<React.ComponentProps<typeof PageDocumentEditorShell>["onSave"]>().mockResolvedValue(undefined);
-    renderEditor({ onSave: save });
-    fireEvent.change(screen.getByLabelText("文本内容"), { target: { value: "Persist me" } });
-    fireEvent.click(screen.getByRole("button", { name: "保存草稿" }));
-    await waitFor(() => expect(save).toHaveBeenCalledWith(expect.objectContaining({ pageId: "v04-demo" })));
-    await waitFor(() => expect(screen.getByTestId("page-document-editor")).toHaveAttribute("data-dirty", "false"));
-    fireEvent.keyDown(window, { key: "z", ctrlKey: true });
-    expect(screen.getByTestId("page-document-editor")).toHaveAttribute("data-dirty", "true");
+    vi.useFakeTimers();
+    try {
+      const save = vi.fn<React.ComponentProps<typeof PageDocumentEditorShell>["onSave"]>().mockResolvedValue(undefined);
+      renderEditor({ onSave: save });
+      fireEvent.change(screen.getByLabelText("文本内容"), { target: { value: "Persist me" } });
+      await act(async () => { await vi.advanceTimersByTimeAsync(800); });
+      expect(save).toHaveBeenCalledWith(expect.objectContaining({ pageId: "v04-demo" }));
+      expect(screen.getByTestId("page-document-editor")).toHaveAttribute("data-dirty", "false");
+      fireEvent.keyDown(window, { key: "z", ctrlKey: true });
+      expect(screen.getByTestId("page-document-editor")).toHaveAttribute("data-dirty", "true");
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
-  it("places the history action immediately before save draft", () => {
+  it("places undo and redo before the session-save badge, then history before publish", () => {
     const onHistory = vi.fn();
-    renderEditor({ onSave: vi.fn(), onHistory });
+    renderEditor({ onSave: vi.fn(), onHistory, onPublish: vi.fn() });
+    expect(screen.queryByRole("button", { name: "保存草稿" })).not.toBeInTheDocument();
+    const undo = screen.getByRole("button", { name: "撤销" });
+    const redo = screen.getByRole("button", { name: "恢复" });
+    const saved = screen.getByText("所有更改已保留在当前会话中");
     const history = screen.getByRole("button", { name: "历史记录" });
-    const save = screen.getByRole("button", { name: "保存草稿" });
-    expect(history.compareDocumentPosition(save) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    const publish = screen.getByRole("button", { name: "发布" });
+    expect(undo.compareDocumentPosition(redo) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(redo.compareDocumentPosition(saved) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(history.compareDocumentPosition(publish) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     fireEvent.click(history);
     expect(onHistory).toHaveBeenCalledWith(expect.objectContaining({ document: expect.objectContaining({ pageId: "v04-demo" }) }));
   });
@@ -339,15 +354,22 @@ describe("PageDocumentEditorShell V0.4", () => {
     }
   });
 
-  it("surfaces a failed save as an explicit retry action", async () => {
-    const save = vi.fn().mockRejectedValueOnce(new Error("offline")).mockResolvedValueOnce(undefined);
-    renderEditor({ autoSave: false, onSave: save });
-    fireEvent.change(screen.getByLabelText("文本内容"), { target: { value: "Retry me" } });
-    fireEvent.click(screen.getByRole("button", { name: "保存草稿" }));
-    await waitFor(() => expect(screen.getByRole("button", { name: "重试保存" })).toBeVisible());
-    fireEvent.click(screen.getByRole("button", { name: "重试保存" }));
-    await waitFor(() => expect(save).toHaveBeenCalledTimes(2));
-    expect(screen.getByTestId("page-document-editor")).toHaveAttribute("data-dirty", "false");
+  it("retries a failed autosave without exposing a manual save action", async () => {
+    vi.useFakeTimers();
+    try {
+      const save = vi.fn().mockRejectedValueOnce(new Error("offline")).mockResolvedValueOnce(undefined);
+      renderEditor({ onSave: save });
+      fireEvent.change(screen.getByLabelText("文本内容"), { target: { value: "Retry me" } });
+      await act(async () => { await vi.advanceTimersByTimeAsync(800); });
+      expect(screen.queryByRole("button", { name: "保存草稿" })).not.toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "重试保存" })).not.toBeInTheDocument();
+      expect(screen.getByTestId("editor-notice")).toHaveAttribute("data-notice", "saveFailed");
+      await act(async () => { await vi.advanceTimersByTimeAsync(800); });
+      expect(save).toHaveBeenCalledTimes(2);
+      expect(screen.getByTestId("page-document-editor")).toHaveAttribute("data-dirty", "false");
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("does not open an editable canvas when the host reports an existing editor lock", async () => {
@@ -362,6 +384,14 @@ describe("PageDocumentEditorShell V0.4", () => {
     renderEditor({ draftRevision: 6, publishAction: { publish } });
     fireEvent.click(screen.getByRole("button", { name: "发布" }));
     await waitFor(() => expect(publish).toHaveBeenCalledWith(expect.objectContaining({ expectedRevision: 6, validationIssues: [] })));
+  });
+
+  it("keeps the published notice visible after publish succeeds", async () => {
+    renderEditor({ onPublish: vi.fn().mockResolvedValue(undefined) });
+    fireEvent.click(screen.getByRole("button", { name: "发布" }));
+    await waitFor(() => expect(screen.getByTestId("editor-notice")).toHaveAttribute("data-notice", "published"));
+    expect(screen.getByRole("dialog", { name: "发布成功" })).toBeVisible();
+    expect(screen.getByText("页面已发布，消费者将看到当前版本。")).toBeVisible();
   });
 
   it("uses the host asset picker and persists its stable asset reference", async () => {

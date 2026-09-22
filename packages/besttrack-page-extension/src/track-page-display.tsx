@@ -232,21 +232,40 @@ export function RecommendationCards({ items }: { items: ReadyToGoRecommendation[
 }
 
 /**
- * The legacy Track Page only rendered the promotion when the API returned an
- * image. The slot stays collapsed when `ad` is absent, including in the editor.
+ * Legacy Track Page `bst-ad-placeholder`: the slot is always 20:9 and at most
+ * 500px wide. The image fills that box (`object-fit: fill`) instead of keeping
+ * its intrinsic size. The slot stays collapsed when `ad` is absent, including
+ * in the editor.
  */
+const trackingPageAdSlotStyle: CSSProperties = {
+  display: "block",
+  width: "100%",
+  maxWidth: 500,
+  aspectRatio: "20 / 9",
+  borderRadius: 8,
+  overflow: "hidden",
+  textDecoration: "none"
+};
+const trackingPageAdImageStyle: CSSProperties = {
+  display: "block",
+  width: "100%",
+  height: "100%",
+  objectFit: "fill",
+  objectPosition: "center"
+};
+
 export function TrackingPageAdSlot({ ad, disableLink = false }: { ad?: TrackingPageAd; disableLink?: boolean }) {
   const [failedUrl, setFailedUrl] = useState<string>();
   const imageUrl = safeImageUrl(ad?.imageUrl);
   if (!imageUrl || failedUrl === imageUrl) return null;
 
   const content = (
-    <img src={imageUrl} alt={ad?.alt ?? "Promotion"} loading="lazy" onError={() => setFailedUrl(imageUrl)} style={{ display: "block", width: "100%", height: "auto", objectFit: "cover" }} />
+    <img src={imageUrl} alt={ad?.alt ?? "Promotion"} loading="lazy" onError={() => setFailedUrl(imageUrl)} style={trackingPageAdImageStyle} />
   );
 
   const href = safeHref(ad?.href);
-  if (!href || disableLink) return <div data-tracking-page-ad>{content}</div>;
-  return <a data-tracking-page-ad href={href} target="_blank" rel="noopener noreferrer">{content}</a>;
+  if (!href || disableLink) return <div data-tracking-page-ad style={trackingPageAdSlotStyle}>{content}</div>;
+  return <a data-tracking-page-ad href={href} target="_blank" rel="noopener noreferrer" style={trackingPageAdSlotStyle}>{content}</a>;
 }
 
 /** Original Track Page `bst-edd-card`: full-width advisory dates, hidden when the mapper omits them. */

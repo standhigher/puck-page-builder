@@ -2,8 +2,8 @@
 
 import { usePathname, useRouter } from "next/navigation";
 import { useSyncExternalStore } from "react";
-import { customTemplateListSnapshot, subscribeToCustomTemplates } from "../lib/custom-template-repository";
-import { pageListSnapshot, subscribeToPages } from "../lib/local-page-repository";
+import { customTemplateListServerSnapshot, customTemplateListSnapshot, subscribeToCustomTemplates } from "../lib/custom-template-repository";
+import { pageListServerSnapshot, pageListSnapshot, subscribeToPages } from "../lib/local-page-repository";
 
 const templatePreviews = [
   { label: "Ready-to-go 预览", href: "/templates/besttrack.ready-to-go/preview" },
@@ -14,8 +14,8 @@ const templatePreviews = [
 export function RouteNavigator() {
   const pathname = usePathname();
   const router = useRouter();
-  const pages = useSyncExternalStore(subscribeToPages, pageListSnapshot, () => []);
-  const templates = useSyncExternalStore(subscribeToCustomTemplates, customTemplateListSnapshot, () => []);
+  const pages = useSyncExternalStore(subscribeToPages, pageListSnapshot, pageListServerSnapshot);
+  const templates = useSyncExternalStore(subscribeToCustomTemplates, customTemplateListSnapshot, customTemplateListServerSnapshot);
   return <nav className="studio-route-nav" aria-label="Studio 页面导航">
     <a className="studio-route-nav__brand" href="/templates">BestTrack Studio</a>
     <div className="studio-route-nav__links">

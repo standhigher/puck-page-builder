@@ -43,10 +43,12 @@ const readyToGoBlocks: BlockDefinition[] = withTemplatePolicy([
     label: "Shipment progress",
     category: "BestTrack Ready-to-go",
     targets: ["web"],
-    defaultProps: {},
+    defaultProps: { progressColor: "#0f172a" },
     defaultVariant: "default",
     variants: [{ id: "default", label: "Default" }],
-    fields: {},
+    fields: {
+      progressColor: { field: "besttrack.ready-to-go.text", label: "Progress color", control: "color" as const, group: "Style" }
+    },
     render: { web: ReadyToGoProgressBlock, editor: ReadyToGoProgressEditor }
   },
   {

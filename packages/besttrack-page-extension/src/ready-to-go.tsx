@@ -286,13 +286,13 @@ function eventsFrom(result: ReadyToGoTrackingResult | undefined): ReadyToGoTrack
   return [];
 }
 
-function ProgressResult({ result, showEstimatedDelivery = true }: { result: ReadyToGoTrackingResult; showEstimatedDelivery?: boolean }) {
+function ProgressResult({ result, showEstimatedDelivery = true, color }: { result: ReadyToGoTrackingResult; showEstimatedDelivery?: boolean; color?: string }) {
   const steps = result.progress?.length ? result.progress : defaultProgress(result.status);
   return <>
     <p style={{ margin: 0, fontSize: 20, lineHeight: 1.4, color: "#000", overflowWrap: "anywhere" }}>Tracking: {result.trackingNumber}</p>
     <h2 style={{ margin: "clamp(24px, 8%, 48px) 0 0", fontSize: 32, lineHeight: 1.25, fontWeight: 700, color: "#303030", overflowWrap: "anywhere" }}>{result.status}</h2>
     {showEstimatedDelivery && result.estimatedDelivery ? <EstimatedDeliveryCard dateText={result.estimatedDelivery} /> : null}
-    <TrackingProgress steps={steps} />
+    <TrackingProgress steps={steps} color={color} />
   </>;
 }
 
@@ -350,10 +350,10 @@ export function ReadyToGoQueryEditor(block: ReadyToGoEditorProps) {
   </section>;
 }
 
-export function ReadyToGoProgressEditor() {
+export function ReadyToGoProgressEditor(block: ReadyToGoEditorProps) {
   return <section aria-label="Ready-to-go progress editor" style={{ ...pageFont, background: "var(--pb-color-background, #fff)", color: "var(--pb-color-text, #0f172a)", borderBottom: "1px solid #f1f5f9" }}>
     <div style={{ ...contentWidth, textAlign: "center", width: "min(1248px, 100%)" }}>
-      <ProgressResult result={previewReadyToGoTracking()} showEstimatedDelivery={false} />
+      <ProgressResult result={previewReadyToGoTracking()} showEstimatedDelivery={false} color={text(block, "progressColor")} />
     </div>
   </section>;
 }
@@ -457,7 +457,7 @@ export function ReadyToGoQueryBlock(props: Record<string, unknown>) {
   </section>;
 }
 
-export function ReadyToGoProgressBlock() {
+export function ReadyToGoProgressBlock(props: Record<string, unknown>) {
   const runtime = useReadyToGoRuntime();
   const result = runtime.result;
   if (runtime.phase === "idle") return null;
@@ -466,7 +466,7 @@ export function ReadyToGoProgressBlock() {
     <div style={{ ...contentWidth, textAlign: "center", width: "min(1248px, 100%)" }}>
       {runtime.phase === "loading" ? <div aria-label="Loading shipment progress"><IdleMessage>Loading shipment progress…</IdleMessage><SkeletonRow /></div> : null}
       {runtime.phase === "error" ? <p style={{ margin: 0, color: "#b42318" }}>Shipment progress is temporarily unavailable.</p> : null}
-      {runtime.phase === "success" && result ? <ProgressResult result={result} /> : null}
+      {runtime.phase === "success" && result ? <ProgressResult result={result} color={text(props, "progressColor")} /> : null}
     </div>
   </SectionShell>;
 }

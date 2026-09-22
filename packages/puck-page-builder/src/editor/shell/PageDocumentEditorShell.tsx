@@ -1,5 +1,5 @@
 import { Puck, usePuck } from "@puckeditor/core";
-import { Badge, Banner, Button, ButtonGroup, InlineStack, Modal, Select, Text, TextField } from "@shopify/polaris";
+import { Badge, Banner, Button, ButtonGroup, Frame, InlineStack, Select, Text, TextField, Toast } from "@shopify/polaris";
 import { DragHandleIcon, LayoutSectionIcon, MenuIcon, ProductIcon, RedoIcon, UndoIcon, XIcon } from "@shopify/polaris-icons";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPageDocumentPuckConfig } from "../../adapters/puck/page-document-config";
@@ -200,7 +200,7 @@ function PageDocumentEditor({ iframe = false, registry, adminLocale, onSave, onP
     const document = editor.document;
     setRequest("saving");
     setSaveState("saving");
-    setNotice((current) => current === "published" ? current : null);
+    setNotice(null);
     try {
       const result: DraftSaveResult | void = draftPersistence
         ? await draftPersistence.saveDraft({ document, expectedRevision: draftRevision, session: editor.session })
@@ -290,7 +290,9 @@ function PageDocumentEditor({ iframe = false, registry, adminLocale, onSave, onP
     if (editor.isDirty || request === "saving") setConfirmBack(true);
     else onBack();
   };
-  return <Puck config={config} data={engineData} iframe={{ enabled: iframe }} onChange={(data) => {
+  const dismissPublishedNotice = () => setNotice((current) => current === "published" ? null : current);
+  return <>
+  <Puck config={config} data={engineData} iframe={{ enabled: iframe }} onChange={(data) => {
     if (!editor.updateFromCanvas(fromEngineData(data, editor.document, registry))) setCanvasResetVersion((version) => version + 1);
   }}>
     <Puck.Layout>
@@ -298,7 +300,7 @@ function PageDocumentEditor({ iframe = false, registry, adminLocale, onSave, onP
       <div className="pb-shell pb-shell--v04" data-testid="page-document-editor" data-page-id={editor.document.pageId} data-dirty={editor.isDirty} data-editor-state={editor.loadState} data-editor-session-state={editor.sessionState} data-save-state={resolvedSaveState} data-left-panel={leftRailOpen ? "open" : "closed"} data-right-panel={rightPanelOpen ? "open" : "closed"}>
         <header className="pb-header">
           <div className="pb-header-content">
-            <div className="pb-header-title-group">{onBack ? <Button variant="tertiary" onClick={requestBack}>{i18n.t("back")}</Button> : null}<div className="pb-page-title"><Text as="h1" variant="headingSm">{editor.document.settings.seoTitle ?? editor.document.pageId}</Text><Text as="p" variant="bodySm" tone="subdued">PageDocument V{editor.document.schemaVersion} · {editor.document.target}</Text>{pageStatus ? <PageStatusCard status={pageStatus} sessionState={editor.sessionState} /> : null}</div></div>
+            <div className="pb-header-title-group">{onBack ? <Button variant="tertiary" onClick={requestBack}>{i18n.t("back")}</Button> : null}<div className="pb-page-title"><Text as="h1" variant="headingSm">{editor.document.settings.seoTitle ?? editor.document.pageId}</Text>{pageStatus ? <PageStatusCard status={pageStatus} sessionState={editor.sessionState} /> : null}</div></div>
             <div className="pb-header-controls">
               <div className="pb-header-device-toolbar"><ButtonGroup variant="segmented">{(Object.keys(deviceLabels) as Array<keyof typeof deviceLabels>).map((device) => <Button key={device} pressed={editor.device === device} onClick={() => editor.setDevice(device)}>{i18n.t(deviceLabels[device])}</Button>)}</ButtonGroup><div className="pb-zoom-control"><Select label={i18n.t("zoom")} labelHidden options={[{ label: i18n.t("zoomAuto"), value: "auto" }, { label: "50%", value: "50" }, { label: "70%", value: "70" }, { label: "100%", value: "100" }]} value={zoom} onChange={(value) => setZoom(value as typeof zoom)} /></div></div>
             </div>
@@ -344,16 +346,17 @@ function PageDocumentEditor({ iframe = false, registry, adminLocale, onSave, onP
             {editor.selectedBlock ? <><DocumentInspector key={editor.selectedBlock.id} settings={inspectorSettings?.[editor.selectedBlock.id] ?? inspectorSettings?.[editor.selectedBlock.type]} pageId={editor.document.pageId} assetPicker={assetPicker} productPicker={productPicker} i18n={i18n} block={editor.selectedBlock} registry={registry} disabled={!editor.actionState.canEdit} appearanceControls={appearanceControls} onChange={(props) => editor.updateBlockProps(editor.selectedBlock!.id, props)} onPresentationChange={(presentation) => updateBlockPresentation(editor.selectedBlock!.id, presentation)} /><InspectorActions block={editor.selectedBlock} canDuplicate={editor.actionState.canDuplicate} canDelete={editor.actionState.canDelete} canMove={editor.actionState.canReorder} canMoveUp={editor.document.blocks[0]?.id !== editor.selectedBlock.id} canMoveDown={editor.document.blocks.at(-1)?.id !== editor.selectedBlock.id} i18n={i18n} onDuplicate={() => editor.duplicateBlock(editor.selectedBlock!.id)} onDelete={() => editor.requestDeleteBlock(editor.selectedBlock!.id)} onMove={(direction) => editor.moveBlock(editor.selectedBlock!.id, direction)} /></> : <Text as="p" tone="subdued">{i18n.t("selectBlock")}</Text>}
           </aside>
         </div>
-        <Modal instant open={notice === "published"} onClose={() => setNotice(null)} title={i18n.t("publishSuccessTitle")} primaryAction={{ content: i18n.t("publishSuccessClose"), onAction: () => setNotice(null) }}>
-          <Modal.Section>
-            <div className="pb-publish-success" data-testid="editor-notice" data-notice="published"><Text as="p">{i18n.t("publishSuccessMessage")}</Text></div>
-          </Modal.Section>
-        </Modal>
         {editor.pendingDeleteBlock ? <DeleteConfirmation block={editor.pendingDeleteBlock} config={deleteConfirmation} i18n={i18n} onCancel={editor.cancelDeleteBlock} onConfirm={editor.confirmDeleteBlock} /> : null}
         {confirmBack ? <LeaveConfirmation i18n={i18n} onCancel={() => setConfirmBack(false)} onConfirm={() => { setConfirmBack(false); onBack?.(); }} /> : null}
       </div>
     </Puck.Layout>
-  </Puck>;
+  </Puck>
+  <div className="pb-toast-host" {...(notice === "published" ? { "data-testid": "editor-notice", "data-notice": "published" } : {})}>
+    <Frame>
+      {notice === "published" ? <Toast content={i18n.t("publishSuccessTitle")} onDismiss={dismissPublishedNotice} /> : null}
+    </Frame>
+  </div>
+  </>;
 }
 
 /** Bridges list-originated selection requests into Puck, then waits for Puck's selected item before updating the inspector. */

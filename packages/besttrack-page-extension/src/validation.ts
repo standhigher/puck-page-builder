@@ -4,17 +4,19 @@ import { isSafeTrackingPageUrl } from "./tracking-page-url";
 import { isShopifyResourceReference } from "./shopify-resource-contract";
 
 const textField: FieldConfig = { field: "besttrack.validation.text", control: "text" };
+const colorField: FieldConfig = { field: "besttrack.validation.color", control: "color" };
+const productsField: FieldConfig = { field: "besttrack.validation.products", control: "products" };
 const strictUrlField: FieldConfig = {
   field: "besttrack.validation.url",
   control: "url",
   validation: { allowRelativeUrl: false, allowedUrlProtocols: ["https:"], allowLocalhost: true }
 };
 
-function fields(keys: readonly string[], urlKeys: readonly string[] = [], resourceKeys: readonly string[] = []) {
-  return Object.fromEntries(keys.map((key) => [key, resourceKeys.includes(key) ? { field: "besttrack.validation.resource" } : urlKeys.includes(key) ? strictUrlField : textField]));
+function fields(keys: readonly string[], urlKeys: readonly string[] = [], resourceKeys: readonly string[] = [], productsKeys: readonly string[] = []) {
+  return Object.fromEntries(keys.map((key) => [key, productsKeys.includes(key) ? productsField : resourceKeys.includes(key) ? { field: "besttrack.validation.resource" } : urlKeys.includes(key) ? strictUrlField : /color$/i.test(key) ? colorField : textField]));
 }
 
-function block(type: string, version: number, keys: readonly string[], variants: readonly string[], validate?: BlockDefinition["validate"], urlKeys: readonly string[] = [], resourceKeys: readonly string[] = []): BlockDefinition {
+function block(type: string, version: number, keys: readonly string[], variants: readonly string[], validate?: BlockDefinition["validate"], urlKeys: readonly string[] = [], resourceKeys: readonly string[] = [], productsKeys: readonly string[] = []): BlockDefinition {
   return {
     type,
     version,
@@ -22,7 +24,7 @@ function block(type: string, version: number, keys: readonly string[], variants:
     category: "BestTrack",
     targets: ["web"],
     defaultProps: {},
-    fields: fields(keys, urlKeys, resourceKeys),
+    fields: fields(keys, urlKeys, resourceKeys, productsKeys),
     defaultVariant: variants[0],
     variants: variants.map((id) => ({ id, label: id })),
     validate,
@@ -71,10 +73,10 @@ function validateFeaturedProduct(props: Record<string, unknown>) {
 }
 
 const readyToGoContracts: BlockDefinition[] = [
-  block("besttrack.ready-to-go.query", 1, ["heading", "submitLabel", "defaultTrackingNumber", "defaultOrderNumber", "defaultQueryMode", "trackingTabLabel", "orderTabLabel"], ["default"]),
-  block("besttrack.ready-to-go.progress", 1, [], ["default"]),
+  block("besttrack.ready-to-go.query", 1, ["heading", "submitLabel", "submitButtonColor", "defaultTrackingNumber", "defaultOrderNumber", "defaultQueryMode", "trackingTabLabel", "orderTabLabel"], ["default"]),
+  block("besttrack.ready-to-go.progress", 1, ["progressColor"], ["default"]),
   block("besttrack.ready-to-go.delivery", 1, ["heading", "contentsHeading", "carrierHeading"], ["default", "compact"]),
-  block("besttrack.ready-to-go.recommendations", 1, ["heading"], ["default", "grid"])
+  block("besttrack.ready-to-go.recommendations", 1, ["heading", "products"], ["default", "grid"], undefined, [], [], ["products"])
 ];
 
 const brandedContracts: BlockDefinition[] = [

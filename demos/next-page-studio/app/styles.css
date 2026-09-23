@@ -55,7 +55,4 @@ button, input { font: inherit; }
 .studio-editor-bar > div:last-child { display: flex; align-items: center; gap: 10px; }
 .studio-editor-bar .Polaris-TextField { min-width: 220px; }
 .studio-editor-bar .studio-link-button { min-height: 32px; padding: 5px 10px; }
-.history-list { display: grid; gap: 10px; }
-.history-list > div { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 12px; border: 1px solid #e1e3ec; border-radius: 8px; }
-.history-list small { display: block; margin-top: 3px; color: #6b7487; }
 @media (max-width: 820px) { .studio-route-nav { gap: 10px; padding: 7px 12px; } .studio-route-nav__brand { display: none; } .studio-route-nav__picker span { display: none; } .studio-route-nav__picker select { max-width: 145px; } .template-grid { grid-template-columns: 1fr; } .studio-page__header, .page-list article { align-items: flex-start; flex-direction: column; } .studio-page__actions { width: 100%; } .template-creator { grid-template-columns: 1fr; } .template-creator > div { justify-content: flex-end; } .page-list__actions { flex-wrap: wrap; } .studio-editor-bar { flex-wrap: wrap; } .studio-editor-bar .Polaris-TextField { flex: 1 1 180px; min-width: 0; } .preview-bar { padding: 10px 14px; } .preview-bar > span { display: none; } }

@@ -1,16 +1,32 @@
 /* eslint-disable react-refresh/only-export-components -- Shared visual primitives intentionally export components and token-aware helpers. */
-import { useState, type CSSProperties, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react";
+import Autoplay from "embla-carousel-autoplay";
+import useEmblaCarousel from "embla-carousel-react";
 import type { ReadyToGoOrderItem, ReadyToGoRecommendation, ReadyToGoTrackingEvent, ReadyToGoTrackingStep } from "./ready-to-go";
-import { formatTrackingPageMoney } from "./tracking-page-runtime";
+import { formatTrackingPageMoney, type TrackingPageAd } from "./tracking-page-runtime";
 import { safeTrackingPageUrl } from "./tracking-page-url";
 
 export const pageFont = { fontFamily: "var(--pb-font-family, Inter, system-ui, sans-serif)" } satisfies CSSProperties;
 export const contentWidth = {
   width: "min(1248px, 100%)",
   margin: "0 auto",
-  padding: "48px 24px",
+  padding: "48px clamp(16px, 4%, 24px)",
   boxSizing: "border-box" as const
 } satisfies CSSProperties;
+
+const trackingProgressStyles = `
+.bt-progress { container-type: inline-size; }
+.bt-progress__icon { width: 44px; height: 44px; }
+.bt-progress__line { top: 19px; }
+.bt-progress__copy { margin-top: 16px; }
+.bt-progress__label { font-size: 16px; line-height: 20px; }
+@container (max-width: 640px) {
+  .bt-progress__icon { width: 32px; height: 32px; }
+  .bt-progress__line { top: 13px; }
+  .bt-progress__copy { margin-top: 8px; }
+  .bt-progress__label { font-size: 11px; line-height: 14px; }
+}
+`;
 
 export function text(props: Record<string, unknown>, key: string, fallback = "") {
   return typeof props[key] === "string" ? props[key] : fallback;
@@ -78,30 +94,37 @@ export function ProductImage({ src, alt, size = 60 }: { src?: string; alt: strin
   return <img src={safeSrc} alt={alt} onError={() => setFailed(true)} style={box} />;
 }
 
-export function TrackingProgress({ steps }: { steps: ReadyToGoTrackingStep[] }) {
+const hexColor = /^#(?:[\da-f]{3}|[\da-f]{4}|[\da-f]{6}|[\da-f]{8})$/i;
+const defaultProgressColor = "#0f172a";
+
+function progressColor(value?: string) {
+  return value && hexColor.test(value) ? value : defaultProgressColor;
+}
+
+export function TrackingProgress({ steps, color }: { steps: ReadyToGoTrackingStep[]; color?: string }) {
+  const active = progressColor(color);
   const cells = Math.max(steps.length, 1);
-  const columns = cells <= 1
-    ? "44px"
-    : Array.from({ length: cells - 1 }, () => "44px minmax(20px, 1fr)").join(" ") + " 44px";
-  return <div role="region" aria-label="Delivery progress" style={{ marginTop: 32, width: "100%", maxWidth: 1200, marginLeft: "auto", marginRight: "auto", overflow: "visible" }}>
-    <div style={{ display: "grid", gridTemplateColumns: columns, alignItems: "start", columnGap: 8, width: "100%" }}>
+  return <div className="bt-progress" role="region" aria-label="Delivery progress" style={{ marginTop: 32, width: "100%", maxWidth: 1200, marginLeft: "auto", marginRight: "auto", overflow: "visible" }}>
+    <style>{trackingProgressStyles}</style>
+    <div style={{ position: "relative", display: "grid", gridTemplateColumns: `repeat(${cells}, minmax(0, 1fr))`, columnGap: 4, width: "100%", alignItems: "start" }}>
+      {cells > 1 ? <div className="bt-progress__line" aria-hidden="true" style={{ position: "absolute", left: `calc(50% / ${cells})`, right: `calc(50% / ${cells})`, height: 6, display: "flex", zIndex: 0, pointerEvents: "none" }}>
+        {steps.slice(0, -1).map((step, index) => {
+          const done = step.state === "complete" || step.state === "current";
+          const nextDone = steps[index + 1]?.state === "complete" || steps[index + 1]?.state === "current";
+          return <span key={step.id + "-line"} style={{ flex: 1, height: 6, borderRadius: 999, background: done && nextDone ? active : `color-mix(in srgb, ${active} 25%, transparent)` }} />;
+        })}
+      </div> : null}
       {steps.map((step, index) => {
         const done = step.state === "complete" || step.state === "current";
-        const nextDone = steps[index + 1]?.state === "complete" || steps[index + 1]?.state === "current";
-        return (
-          <div key={step.id} style={{ display: "contents" }}>
-            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", overflow: "visible" }}>
-              <span aria-label={step.label + " " + step.state} style={{ display: "flex", width: 44, height: 44, flexShrink: 0, alignItems: "center", justifyContent: "center", borderRadius: 9999, border: "1px solid #0f172a", background: done ? "#0f172a" : "#fff", color: "#0f172a" }}>
-                <StepIcon name={step.icon ?? (index === 0 || index === steps.length - 1 ? "check" : index === 1 ? "bag" : index === 2 ? "truck" : "box")} done={done} />
-              </span>
-              <div style={{ width: "max-content", textAlign: "center", marginTop: 16 }}>
-                <p style={{ margin: 0, fontSize: 16, lineHeight: "20px", fontWeight: 500, color: "#334155" }}>{step.label}</p>
-                {step.date ? <p style={{ margin: "8px 0 0", fontSize: 14, lineHeight: "18px", color: "#94a3b8" }}>{step.date}</p> : null}
-              </div>
-            </div>
-            {index < steps.length - 1 ? <span aria-hidden="true" style={{ display: "block", width: "100%", minWidth: 0, height: 6, marginTop: 19, borderRadius: 999, background: done && nextDone ? "#1a1a1a" : "rgba(0, 0, 0, 0.25)" }} /> : null}
+        return <div key={step.id} style={{ minWidth: 0, display: "flex", flexDirection: "column", alignItems: "center", position: "relative", zIndex: 1 }}>
+          <span className="bt-progress__icon" aria-label={step.label + " " + step.state} style={{ display: "flex", flexShrink: 0, alignItems: "center", justifyContent: "center", borderRadius: 9999, border: `1px solid ${active}`, background: done ? active : "#fff", color: active }}>
+            <StepIcon name={step.icon ?? (index === 0 || index === steps.length - 1 ? "check" : index === 1 ? "bag" : index === 2 ? "truck" : "box")} done={done} />
+          </span>
+          <div className="bt-progress__copy" style={{ width: "100%", maxWidth: "100%", boxSizing: "border-box", textAlign: "center", padding: "0 2px" }}>
+            <p className="bt-progress__label" style={{ margin: 0, fontWeight: 500, color: "#334155", overflowWrap: "anywhere", wordBreak: "break-word" }}>{step.label}</p>
+            {step.date ? <p style={{ margin: "6px 0 0", fontSize: 12, lineHeight: "16px", color: "#94a3b8", overflowWrap: "anywhere" }}>{step.date}</p> : null}
           </div>
-        );
+        </div>;
       })}
     </div>
   </div>;
@@ -145,17 +168,133 @@ export function PackageContents({ items }: { items: ReadyToGoOrderItem[] }) {
 }
 
 export function RecommendationCards({ items }: { items: ReadyToGoRecommendation[] }) {
-  return <div style={{ display: "flex", gap: 24, overflowX: "auto", paddingBottom: 8 }}>
-    {items.map((item) => <a key={item.id} href={safeHref(item.href)} style={{ flex: "0 0 262px", width: 262, maxWidth: "100%", textDecoration: "none", color: "inherit" }}>
-      <div style={{ width: 262, height: 262, maxWidth: "100%", borderRadius: "var(--pb-radius, 8px)", border: "1px solid #E3E3E3", overflow: "hidden", background: "#f1f5f9" }}>
-        <ProductImage src={item.imageUrl} alt={item.title} size={262} />
+  const autoplay = useMemo(() => Autoplay({ delay: 3000, stopOnInteraction: false, stopOnMouseEnter: true }), []);
+  const [emblaRef, emblaApi] = useEmblaCarousel({ loop: true, align: "start", slidesToScroll: 1 }, [autoplay]);
+  const [canScrollPrev, setCanScrollPrev] = useState(false);
+  const [canScrollNext, setCanScrollNext] = useState(false);
+  const [hideButtons, setHideButtons] = useState(false);
+
+  const onSelect = useCallback(() => {
+    if (!emblaApi) return;
+    setCanScrollPrev(emblaApi.canScrollPrev());
+    setCanScrollNext(emblaApi.canScrollNext());
+  }, [emblaApi]);
+
+  useEffect(() => {
+    if (!emblaApi) return;
+    const frame = window.requestAnimationFrame(onSelect);
+    emblaApi.on("select", onSelect);
+    emblaApi.on("reInit", onSelect);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      emblaApi.off("select", onSelect);
+      emblaApi.off("reInit", onSelect);
+    };
+  }, [emblaApi, onSelect]);
+
+  useEffect(() => {
+    if (typeof window.matchMedia !== "function") return;
+    const media = window.matchMedia("(max-width: 768px)");
+    const update = () => setHideButtons(media.matches);
+    update();
+    media.addEventListener("change", update);
+    return () => media.removeEventListener("change", update);
+  }, []);
+
+  if (items.length === 0) return null;
+
+  const arrow = (points: string) => (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <polyline points={points} />
+    </svg>
+  );
+  const buttonStyle: CSSProperties = {
+    position: "absolute",
+    top: 115,
+    zIndex: 2,
+    width: 32,
+    height: 32,
+    borderRadius: 99,
+    border: 0,
+    background: "#fff",
+    boxShadow: "0 0 0.5px rgba(0, 0, 0, 0.12)",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    cursor: "pointer",
+    color: "#333",
+    padding: 0
+  };
+
+  return <div aria-label="Recommended products carousel" style={{ position: "relative", marginLeft: "min(48px, 4%)", marginRight: "min(48px, 4%)" }}>
+    {!hideButtons && canScrollPrev ? <button type="button" aria-label="Previous" onClick={() => emblaApi?.scrollPrev()} style={{ ...buttonStyle, left: -40 }}>{arrow("15 18 9 12 15 6")}</button> : null}
+    <div ref={emblaRef} style={{ overflow: "hidden" }}>
+      <div style={{ display: "flex" }}>
+        {items.map((item) => {
+          const href = safeHref(item.href);
+          const card = <>
+            <div style={{ width: 262, height: 262, maxWidth: "100%", borderRadius: 8, border: "1px solid #E3E3E3", overflow: "hidden", background: "#f1f5f9" }}>
+              <ProductImage src={item.imageUrl} alt={item.title} size={262} />
+            </div>
+            <div style={{ padding: "12px 8px", textAlign: "center", fontSize: 14 }}>
+              <p style={{ margin: 0, color: "#334155" }}>{item.title}</p>
+              {item.price && formatTrackingPageMoney(item.price)?.amount ? <p style={{ margin: "4px 0 0", fontWeight: 600, color: "#0f172a" }}>{formatTrackingPageMoney(item.price)!.amount}</p> : null}
+              {item.description ? <p style={{ margin: "4px 0 0", color: "#64748b", fontSize: 13 }}>{item.description}</p> : null}
+            </div>
+          </>;
+          return <div key={item.id} style={{ flex: "0 0 286px", minWidth: 0, paddingRight: 24, boxSizing: "border-box" }}>
+            {href ? <a href={href} style={{ display: "block", width: 262, maxWidth: "100%", textDecoration: "none", color: "inherit" }}>{card}</a> : <div style={{ width: 262, maxWidth: "100%" }}>{card}</div>}
+          </div>;
+        })}
       </div>
-      <div style={{ padding: "12px 8px", textAlign: "center", fontSize: 14 }}>
-        <p style={{ margin: 0, color: "#334155" }}>{item.title}</p>
-        {item.price && formatTrackingPageMoney(item.price)?.amount ? <p style={{ margin: "4px 0 0", fontWeight: 600, color: "#0f172a" }}>{formatTrackingPageMoney(item.price)!.amount}</p> : null}
-        {item.description ? <p style={{ margin: "4px 0 0", color: "#64748b", fontSize: 13 }}>{item.description}</p> : null}
-      </div>
-    </a>)}
+    </div>
+    {!hideButtons && canScrollNext ? <button type="button" aria-label="Next" onClick={() => emblaApi?.scrollNext()} style={{ ...buttonStyle, right: -40 }}>{arrow("9 18 15 12 9 6")}</button> : null}
+  </div>;
+}
+
+/**
+ * Legacy Track Page `bst-ad-placeholder`: the slot is always 20:9 and at most
+ * 500px wide. The image fills that box (`object-fit: fill`) instead of keeping
+ * its intrinsic size. The slot stays collapsed when `ad` is absent, including
+ * in the editor.
+ */
+const trackingPageAdSlotStyle: CSSProperties = {
+  display: "block",
+  width: "100%",
+  maxWidth: 500,
+  aspectRatio: "20 / 9",
+  borderRadius: 8,
+  overflow: "hidden",
+  textDecoration: "none"
+};
+const trackingPageAdImageStyle: CSSProperties = {
+  display: "block",
+  width: "100%",
+  height: "100%",
+  objectFit: "fill",
+  objectPosition: "center"
+};
+
+export function TrackingPageAdSlot({ ad, disableLink = false }: { ad?: TrackingPageAd; disableLink?: boolean }) {
+  const [failedUrl, setFailedUrl] = useState<string>();
+  const imageUrl = safeImageUrl(ad?.imageUrl);
+  if (!imageUrl || failedUrl === imageUrl) return null;
+
+  const content = (
+    <img src={imageUrl} alt={ad?.alt ?? "Promotion"} loading="lazy" onError={() => setFailedUrl(imageUrl)} style={trackingPageAdImageStyle} />
+  );
+
+  const href = safeHref(ad?.href);
+  if (!href || disableLink) return <div data-tracking-page-ad style={trackingPageAdSlotStyle}>{content}</div>;
+  return <a data-tracking-page-ad href={href} target="_blank" rel="noopener noreferrer" style={trackingPageAdSlotStyle}>{content}</a>;
+}
+
+/** Original Track Page `bst-edd-card`: full-width advisory dates, hidden when the mapper omits them. */
+export function EstimatedDeliveryCard({ dateText }: { dateText: string }) {
+  return <div aria-label="Est. Delivery" style={{ margin: "16px auto 0", width: "100%", boxSizing: "border-box", border: "1px solid transparent", borderRadius: 10, backgroundColor: "#eaf4ff", padding: "20px 22px 18px", textAlign: "left" }}>
+    <p style={{ margin: 0, color: "#202124", fontSize: 13, fontWeight: 700, lineHeight: 1.3 }}>Est. Delivery</p>
+    <p style={{ margin: "6px 0 0", color: "#202124", fontSize: 22, fontWeight: 700, lineHeight: 1.15, letterSpacing: 0, overflowWrap: "anywhere", wordBreak: "break-word" }}>{dateText}</p>
+    <p style={{ margin: "6px 0 0", color: "#5f6368", fontSize: 13, fontWeight: 400, lineHeight: 1.35 }}>Estimated time may update as tracking progresses.</p>
   </div>;
 }
 
@@ -168,7 +307,9 @@ export function IdleMessage({ children }: { children: ReactNode }) {
 }
 
 export function SkeletonRow() {
-  return <div aria-hidden="true" style={{ display: "grid", gridTemplateColumns: "44px minmax(20px, 1fr) 44px minmax(20px, 1fr) 44px minmax(20px, 1fr) 44px minmax(20px, 1fr) 44px", columnGap: 8, width: "100%", maxWidth: 1200, margin: "32px auto 0" }}>
-    {Array.from({ length: 5 }, (_, index) => <span key={index} style={{ display: "block", width: 44, height: 44, borderRadius: 9999, background: "#e2e8f0" }} />).flatMap((circle, index, list) => index < list.length - 1 ? [circle, <span key={"line-" + index} style={{ display: "block", height: 6, marginTop: 19, borderRadius: 999, background: "#e2e8f0" }} />] : [circle])}
+  return <div className="bt-progress" aria-hidden="true" style={{ position: "relative", display: "grid", gridTemplateColumns: "repeat(5, minmax(0, 1fr))", columnGap: 4, width: "100%", maxWidth: 1200, margin: "32px auto 0" }}>
+    <style>{trackingProgressStyles}</style>
+    <span className="bt-progress__line" style={{ position: "absolute", left: "10%", right: "10%", height: 6, borderRadius: 999, background: "#e2e8f0" }} />
+    {Array.from({ length: 5 }, (_, index) => <span key={index} className="bt-progress__icon" style={{ display: "block", justifySelf: "center", borderRadius: 9999, background: "#e2e8f0" }} />)}
   </div>;
 }

@@ -65,7 +65,7 @@ const notice = {
 />
 ```
 
-Built-in field controls are `text` (single line), `textarea` (multi-line), `url`, and `color`. Their validation runs in the editor before save or publish; custom fields may continue using a block's `validate` function. `validateFieldValue` is exported from `/extensions` when a host needs the same validation outside the editor.
+Built-in field controls are `text` (single line), `textarea` (multi-line), `url`, `color`, and `products`. `products` only renders the selected snapshot and a host picker button; Shopify search stays in the host `productPicker` adapter. Their validation runs in the editor before save or publish; custom fields may continue using a block's `validate` function. `validateFieldValue` is exported from `/extensions` when a host needs the same validation outside the editor.
 
 Theme values remain deliberately token-based: template theme → page theme → variant theme → block style. A block resets an inherited token by setting its local token explicitly (for example `{ radius: "0" }`), so no incompatible persisted style-reset shape is needed.
 

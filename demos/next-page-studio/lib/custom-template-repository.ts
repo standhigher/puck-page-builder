@@ -16,8 +16,9 @@ export type CustomTemplateRecord = {
 
 type Store = { templates: CustomTemplateRecord[] };
 const listeners = new Set<() => void>();
+const emptyStore: Store = { templates: [] };
 let cachedSerialized: string | null = null;
-let cachedStore: Store = { templates: [] };
+let cachedStore: Store = emptyStore;
 
 function clone<T>(value: T): T { return JSON.parse(JSON.stringify(value)) as T; }
 function now() { return new Date().toISOString(); }
@@ -33,7 +34,7 @@ function normalize(value: unknown): CustomTemplateRecord | null {
   return { id: raw.id, name: raw.name, sourceTemplateId: raw.sourceTemplateId, createdAt: typeof raw.createdAt === "string" ? raw.createdAt : now(), updatedAt: typeof raw.updatedAt === "string" ? raw.updatedAt : now(), document };
 }
 function readStore(): Store {
-  if (typeof window === "undefined") return { templates: [] };
+  if (typeof window === "undefined") return emptyStore;
   try {
     const serialized = window.localStorage.getItem(storageKey) ?? "{}";
     if (serialized === cachedSerialized) return cachedStore;
@@ -63,6 +64,8 @@ export function subscribeToCustomTemplates(listener: () => void) {
   return () => { listeners.delete(listener); window.removeEventListener("storage", onStorage); };
 }
 export function customTemplateListSnapshot() { return readStore().templates; }
+/** Stable SSR snapshot. A fresh array on each call makes useSyncExternalStore loop. */
+export function customTemplateListServerSnapshot() { return emptyStore.templates; }
 export function customTemplateSnapshot(id: string) { return readStore().templates.find((template) => template.id === id) ?? null; }
 export function getCustomTemplate(id: string) {
   const template = customTemplateSnapshot(id);

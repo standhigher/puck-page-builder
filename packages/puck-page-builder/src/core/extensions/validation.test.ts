@@ -11,6 +11,9 @@ describe("generic extension validation", () => {
     expect(validateFieldValue({ field: "", control: "url" }, "javascript:alert(1)")).toHaveLength(1)
     expect(validateFieldValue({ field: "", control: "color" }, "#005BD3")).toEqual([])
     expect(validateFieldValue({ field: "", control: "color" }, "blue")).toHaveLength(1)
+    expect(validateFieldValue({ field: "", control: "products" }, [{ id: "gid://shopify/Product/1", title: "Tote" }])).toEqual([])
+    expect(validateFieldValue({ field: "", control: "products" }, [{ title: "Missing id" }])).toEqual([{ path: "0", message: "必须包含稳定的商品 ID。" }])
+    expect(validateFieldValue({ field: "", control: "products" }, "gid://shopify/Product/1")).toEqual([{ path: "", message: "必须是商品列表。" }])
   });
 
   it("allows missing optional fields for backward-compatible documents", () => {

@@ -1,25 +1,39 @@
-import { createContext, useCallback, useContext, useMemo, useState, type CSSProperties, type FormEvent, type ReactNode } from "react";
-import type { BlockEditorProps, FieldProps } from "@standhigher/puck-page-builder/runtime";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent, type ReactNode } from "react";
+import { parseProductReferences, type BlockEditorProps, type FieldProps } from "@standhigher/puck-page-builder/runtime";
+import {
+  createShopifyRecommendationsQuery,
+  createShopifyTrackQuery,
+  readTrackingQueryLocationState,
+  shouldHidePoweredBy,
+  syncTrackingQueryToUrl,
+  type ShopifyTrackPageTransport
+} from "./shopify-track-query";
 import {
   contentWidth,
   defaultProgress,
   IdleMessage,
   PackageContents,
   pageFont,
+  EstimatedDeliveryCard,
   RecommendationCards,
   SectionShell,
   ShippingTimeline,
   SkeletonRow,
   text,
+  TrackingPageAdSlot,
   TrackingProgress
 } from "./track-page-display";
-import { isValidOrderEmail, isValidOrderNumber, isValidTrackingNumber } from "./tracking-page-runtime";
+import { TrackingNotFound } from "./tracking-not-found";
+import { isEmptyTrackingPageResult } from "./tracking-page-runtime";
 import type {
+  TrackingPageAd,
   TrackingPageOrderItem,
   TrackingPageQuery,
   TrackingPageQueryRequest,
   TrackingPageQueryResult,
   TrackingPageRecommendation,
+  TrackingPageRecommendationsQuery,
+  TrackingPageRecommendationsState,
   TrackingPageShipment,
   TrackingPageTrackingEvent,
   TrackingPageTrackingStep,
@@ -33,17 +47,49 @@ export type ReadyToGoTrackingStep = TrackingPageTrackingStep;
 export type ReadyToGoTrackingEvent = TrackingPageTrackingEvent;
 export type ReadyToGoShipment = TrackingPageShipment;
 export type ReadyToGoTrackingResult = TrackingPageQueryResult;
-export type ReadyToGoRuntimeState = { phase: "idle" | "loading" | "success" | "error"; result?: ReadyToGoTrackingResult; error?: string };
-type ReadyToGoRuntime = ReadyToGoRuntimeState & { query(request: TrackingPageQueryRequest): Promise<void>; watermark?: TrackingPageWatermark };
+export type ReadyToGoRuntimeState = { phase: "idle" | "loading" | "success" | "empty" | "error"; result?: ReadyToGoTrackingResult; error?: string };
+type ReadyToGoRuntime = ReadyToGoRuntimeState & {
+  query(request: TrackingPageQueryRequest): Promise<void>;
+  recommendations: TrackingPageRecommendationsState;
+  autoQueryFromUrl: boolean;
+  /** Preview hosts only; live storefronts stay click-to-query. */
+  autoQueryDemo: boolean;
+  watermark?: TrackingPageWatermark;
+  /** Admin-only promotion preview; live storefronts continue to use result.ad. */
+  adPreview?: TrackingPageAd | null;
+};
 
-const initialRuntime: ReadyToGoRuntime = { phase: "idle", async query() { return undefined; } };
+const initialRuntime: ReadyToGoRuntime = {
+  phase: "idle",
+  recommendations: { phase: "idle", items: [] },
+  autoQueryFromUrl: false,
+  autoQueryDemo: false,
+  async query() { return undefined; }
+};
 const ReadyToGoRuntimeContext = createContext<ReadyToGoRuntime>(initialRuntime);
 export type ReadyToGoRuntimeProviderProps = {
   children: ReactNode;
   /** The discriminated, host-authorized query boundary. */
   query?: TrackingPageQuery;
-  /** Host-decided display state; no entitlement checks happen in this package. */
+  /** Independent recommended-product loader; does not share tracking loading/error. */
+  queryRecommendations?: TrackingPageRecommendationsQuery;
+  /**
+   * Shopify Track Page live transport. When `query` is omitted, lookups use the
+   * original `/track/query` body, `_t` cache-bust, retry, and mapping rules.
+   * Recommendations still POST `/products/recommend` on mount, even if `query` is set.
+   */
+  transport?: ShopifyTrackPageTransport;
+  /** When omitted, URL deep-link auto-query is on only for the Shopify Track Page `transport` path. */
+  autoQueryFromUrl?: boolean;
+  /**
+   * Preview-only: query the form's demo tracking number on mount.
+   * Live storefronts must omit this so consumers still submit the form.
+   */
+  autoQueryDemo?: boolean;
+  /** Host-decided display state. Omitted values follow the original powered-by hide rule. */
   watermark?: TrackingPageWatermark;
+  /** Admin-only promotion preview; live storefronts continue to use result.ad. */
+  adPreview?: TrackingPageAd | null;
 };
 
 /** Mock is an explicit preview default, never a fallback for an injected live query. */
@@ -73,17 +119,57 @@ async function queryMockReadyToGoTracking(request: TrackingPageQueryRequest): Pr
   return previewReadyToGoTracking(request.mode === "tracking" ? request.trackingNumber : request.orderNumber);
 }
 
-export function ReadyToGoRuntimeProvider({ children, query: injectedQuery, watermark }: ReadyToGoRuntimeProviderProps) {
+export function ReadyToGoRuntimeProvider({ children, query: injectedQuery, queryRecommendations, transport, autoQueryFromUrl, autoQueryDemo = false, watermark, adPreview }: ReadyToGoRuntimeProviderProps) {
   const [state, setState] = useState<ReadyToGoRuntimeState>({ phase: "idle" });
+  const [recommendations, setRecommendations] = useState<TrackingPageRecommendationsState>(() => (
+    queryRecommendations || transport
+      ? { phase: "loading", items: [] }
+      : { phase: "success", items: previewReadyToGoTracking().recommendations ?? [] }
+  ));
+  const requestId = useRef(0);
+  const resolvedQuery = useMemo(() => {
+    if (injectedQuery) return injectedQuery;
+    if (transport) return createShopifyTrackQuery(transport);
+    return undefined;
+  }, [injectedQuery, transport]);
+  const resolvedRecommendations = useMemo(() => {
+    if (queryRecommendations) return queryRecommendations;
+    if (transport) return createShopifyRecommendationsQuery(transport.post);
+    return undefined;
+  }, [queryRecommendations, transport]);
+  const live = Boolean(resolvedQuery);
+
+  useEffect(() => {
+    if (!resolvedRecommendations) return;
+    let active = true;
+    void resolvedRecommendations().then((items) => {
+      if (!active) return;
+      setRecommendations({ phase: items.length ? "success" : "empty", items });
+    }).catch(() => {
+      if (!active) return;
+      setRecommendations({ phase: "error", items: [] });
+    });
+    return () => { active = false; };
+  }, [resolvedRecommendations]);
+
   const query = useCallback(async (request: TrackingPageQueryRequest) => {
+    const currentRequestId = ++requestId.current;
     setState({ phase: "loading" });
     try {
-      const result = injectedQuery ? await injectedQuery(request) : await queryMockReadyToGoTracking(request);
-      setState({ phase: "success", result });
+      const result = live ? await resolvedQuery!(request) : await queryMockReadyToGoTracking(request);
+      if (currentRequestId !== requestId.current) return;
+      setState({ phase: isEmptyTrackingPageResult(result) ? "empty" : "success", result });
+    } catch {
+      if (currentRequestId !== requestId.current) return;
+      setState({ phase: "error", error: "We couldn’t retrieve this order right now. Please try again later." });
     }
-    catch { setState({ phase: "error", error: "We couldn’t retrieve this order right now. Please try again later." }); }
-  }, [injectedQuery]);
-  const value = useMemo<ReadyToGoRuntime>(() => ({ ...state, query, watermark }), [query, state, watermark]);
+  }, [live, resolvedQuery]);
+  const resolveAutoQuery = autoQueryFromUrl ?? Boolean(transport && !injectedQuery);
+  const resolvedWatermark = useMemo(
+    () => watermark ?? { visible: !shouldHidePoweredBy() },
+    [watermark]
+  );
+  const value = useMemo<ReadyToGoRuntime>(() => ({ ...state, adPreview, query, recommendations, autoQueryFromUrl: resolveAutoQuery, autoQueryDemo, watermark: resolvedWatermark }), [adPreview, autoQueryDemo, query, recommendations, resolveAutoQuery, resolvedWatermark, state]);
   return <ReadyToGoRuntimeContext.Provider value={value}>{children}</ReadyToGoRuntimeContext.Provider>;
 }
 
@@ -98,7 +184,16 @@ const heroStyle: CSSProperties = {
   placeItems: "center",
   overflow: "hidden",
   backgroundColor: "#fff",
-  padding: "48px 24px",
+  padding: "48px clamp(16px, 4%, 24px)",
+  boxSizing: "border-box"
+};
+const editorHeroStyle: CSSProperties = {
+  ...pageFont,
+  position: "relative",
+  display: "grid",
+  placeItems: "center",
+  backgroundColor: "#fff",
+  padding: "48px clamp(16px, 4%, 24px)",
   boxSizing: "border-box"
 };
 const formCardStyle: CSSProperties = {
@@ -110,16 +205,18 @@ const formCardStyle: CSSProperties = {
   borderRadius: "var(--pb-radius, 8px)",
   background: "var(--pb-color-surface, #fff)",
   color: "var(--pb-color-text, #0f172a)",
-  padding: 40,
+  padding: "clamp(20px, 7%, 40px)",
   boxSizing: "border-box",
   boxShadow: "0 8px 24px rgba(0, 0, 0, 0.12)"
 };
+const editorFormCardStyle: CSSProperties = { ...formCardStyle, minHeight: 0 };
 const tabStyle = (active: boolean): CSSProperties => ({
   appearance: "none",
   flex: 1,
+  minWidth: 0,
   minHeight: 53,
   margin: 0,
-  padding: "16px 10px",
+  padding: "12px 6px",
   font: "inherit",
   fontSize: 15,
   lineHeight: "21px",
@@ -129,7 +226,9 @@ const tabStyle = (active: boolean): CSSProperties => ({
   borderBottom: active ? "2px solid #0f172a" : "2px solid transparent",
   borderRadius: 0,
   color: active ? "#0f172a" : "#94a3b8",
-  cursor: "pointer"
+  cursor: "pointer",
+  textAlign: "center",
+  overflowWrap: "anywhere"
 });
 const inputStyle: CSSProperties = {
   width: "100%",
@@ -144,6 +243,30 @@ const inputStyle: CSSProperties = {
   color: "#334155",
   boxSizing: "border-box"
 };
+const hexColor = /^#(?:[\da-f]{3}|[\da-f]{4}|[\da-f]{6}|[\da-f]{8})$/i;
+const defaultSubmitButtonColor = "var(--pb-color-primary, #111)";
+
+function submitButtonBackground(props: Record<string, unknown>, loading = false) {
+  if (loading) return "#475569";
+  const value = text(props, "submitButtonColor");
+  return hexColor.test(value) ? value : defaultSubmitButtonColor;
+}
+
+function submitButtonStyle(props: Record<string, unknown>, loading = false): CSSProperties {
+  return {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    width: "100%",
+    minHeight: 58,
+    marginTop: 8,
+    borderRadius: "var(--pb-radius, 8px)",
+    background: submitButtonBackground(props, loading),
+    color: "#fff",
+    fontSize: 15,
+    fontWeight: 600
+  };
+}
 
 export function ReadyToGoTextField({ value, onChange }: FieldProps) {
   return <input aria-label="Ready-to-go text" value={typeof value === "string" ? value : ""} onChange={(event) => onChange(event.target.value)} />;
@@ -161,7 +284,7 @@ function InlineText({ block, name, fallback }: { block: ReadyToGoEditorProps; na
     onMouseDown={(event) => event.stopPropagation()}
     onClick={(event) => event.stopPropagation()}
     onChange={(event) => block.onPropsChange({ [name]: event.currentTarget.value })}
-    style={{ display: "inline-block", width: "100%", minWidth: "5ch", boxSizing: "border-box", border: "1px dashed currentColor", borderRadius: 3, padding: "2px 5px", background: "transparent", color: "inherit", font: "inherit", fontWeight: "inherit", lineHeight: "inherit", letterSpacing: "inherit", textAlign: "inherit" }}
+    style={{ display: "inline-block", width: "100%", minWidth: "5ch", boxSizing: "border-box", /* border: "1px dashed currentColor", */ border: "none", borderRadius: 3, padding: "2px 5px", background: "transparent", color: "inherit", font: "inherit", fontWeight: "inherit", lineHeight: "inherit", letterSpacing: "inherit", textAlign: "inherit" }}
   />;
 }
 
@@ -171,26 +294,24 @@ function eventsFrom(result: ReadyToGoTrackingResult | undefined): ReadyToGoTrack
   return [];
 }
 
-function ProgressResult({ result, showEstimatedDelivery = true }: { result: ReadyToGoTrackingResult; showEstimatedDelivery?: boolean }) {
+function ProgressResult({ result, showEstimatedDelivery = true, color }: { result: ReadyToGoTrackingResult; showEstimatedDelivery?: boolean; color?: string }) {
   const steps = result.progress?.length ? result.progress : defaultProgress(result.status);
   return <>
-    <p style={{ margin: 0, fontSize: 20, lineHeight: 1.4, color: "#000" }}>Tracking: {result.trackingNumber}</p>
-    <h2 style={{ margin: "48px 0 0", fontSize: 32, lineHeight: "40px", fontWeight: 700, color: "#303030" }}>{result.status}</h2>
-    {showEstimatedDelivery && result.estimatedDelivery ? <div style={{ margin: "16px auto 0", maxWidth: 720, borderRadius: 10, background: "#eaf4ff", padding: "20px 22px 18px", textAlign: "left" }}>
-      <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: "#202124" }}>Estimated delivery</p>
-      <p style={{ margin: "6px 0 0", fontSize: 22, fontWeight: 700, color: "#202124" }}>{result.estimatedDelivery}</p>
-    </div> : null}
-    <TrackingProgress steps={steps} />
+    <p style={{ margin: 0, fontSize: 20, lineHeight: 1.4, color: "#000", overflowWrap: "anywhere" }}>Tracking: {result.trackingNumber}</p>
+    <h2 style={{ margin: "clamp(24px, 8%, 48px) 0 0", fontSize: 32, lineHeight: 1.25, fontWeight: 700, color: "#303030", overflowWrap: "anywhere" }}>{result.status}</h2>
+    {showEstimatedDelivery && result.estimatedDelivery ? <EstimatedDeliveryCard dateText={result.estimatedDelivery} /> : null}
+    <TrackingProgress steps={steps} color={color} />
   </>;
 }
 
-function DeliveryResult({ heading, contentsHeading, carrierHeading, result }: { heading: ReactNode; contentsHeading: ReactNode; carrierHeading: ReactNode; result: ReadyToGoTrackingResult }) {
+function DeliveryResult({ heading, contentsHeading, carrierHeading, result, editing }: { heading: ReactNode; contentsHeading: ReactNode; carrierHeading: ReactNode; result: ReadyToGoTrackingResult; editing?: boolean }) {
   return <div style={{ ...contentWidth, display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 280px), 500px))", gap: 40, justifyContent: "center", alignItems: "start" }}>
     <div>
       <h3 style={{ margin: 0, fontSize: 20, lineHeight: "20px", fontWeight: 700 }}>{heading}</h3>
       <ShippingTimeline events={eventsFrom(result)} />
     </div>
     <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+      <TrackingPageAdSlot ad={result.ad} disableLink={editing} />
       <div>
         <h3 style={{ margin: "0 0 12px", fontSize: 18, fontWeight: 700 }}>{contentsHeading}</h3>
         <PackageContents items={result.orderItems ?? []} />
@@ -205,9 +326,9 @@ function DeliveryResult({ heading, contentsHeading, carrierHeading, result }: { 
 }
 
 export function ReadyToGoQueryEditor(block: ReadyToGoEditorProps) {
-  return <section aria-label="Ready-to-go query editor" style={heroStyle}>
-    <div role="region" aria-label="Ready-to-go tracking query" style={formCardStyle}>
-      <h1 style={{ margin: "0 0 24px", textAlign: "center", fontSize: 28, lineHeight: 1.15 }}>
+  return <section aria-label="Ready-to-go query editor" style={editorHeroStyle}>
+    <div role="region" aria-label="Ready-to-go tracking query" style={editorFormCardStyle}>
+      <h1 style={{ margin: "0 0 24px", textAlign: "center", fontSize: 28, lineHeight: 1.15, overflowWrap: "anywhere" }}>
         <InlineText block={block} name="heading" fallback="Track your order" />
       </h1>
       <div style={{ display: "flex", width: "100%", borderBottom: "1px solid #cbd5e1" }}>
@@ -226,9 +347,9 @@ export function ReadyToGoQueryEditor(block: ReadyToGoEditorProps) {
           onMouseDown={(event) => block.selected && event.stopPropagation()}
           onClick={(event) => block.selected && event.stopPropagation()}
           onChange={(event) => block.onPropsChange({ defaultTrackingNumber: event.currentTarget.value })}
-          style={{ ...inputStyle, border: block.selected ? "1px dashed #111" : inputStyle.border }}
+          style={{ ...inputStyle /* , border: block.selected ? "1px dashed #111" : inputStyle.border */ }}
         />
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", width: "100%", minHeight: 58, marginTop: 8, borderRadius: "var(--pb-radius, 8px)", background: "var(--pb-color-primary, #111)", color: "#fff", fontSize: 15, fontWeight: 600 }}>
+        <div style={submitButtonStyle(block)}>
           <InlineText block={block} name="submitLabel" fallback="Track Your Order" />
         </div>
       </div>
@@ -237,71 +358,98 @@ export function ReadyToGoQueryEditor(block: ReadyToGoEditorProps) {
   </section>;
 }
 
-export function ReadyToGoProgressEditor() {
+export function ReadyToGoProgressEditor(block: ReadyToGoEditorProps) {
   return <section aria-label="Ready-to-go progress editor" style={{ ...pageFont, background: "var(--pb-color-background, #fff)", color: "var(--pb-color-text, #0f172a)", borderBottom: "1px solid #f1f5f9" }}>
     <div style={{ ...contentWidth, textAlign: "center", width: "min(1248px, 100%)" }}>
-      <ProgressResult showEstimatedDelivery={false} result={previewReadyToGoTracking()} />
+      <ProgressResult result={previewReadyToGoTracking()} showEstimatedDelivery={false} color={text(block, "progressColor")} />
     </div>
   </section>;
 }
 
 export function ReadyToGoDeliveryEditor(block: ReadyToGoEditorProps) {
+  const { adPreview } = useReadyToGoRuntime();
   return <section aria-label="Ready-to-go delivery editor" style={{ ...pageFont, background: "var(--pb-color-background, #fff)", color: "var(--pb-color-text, #0f172a)", borderBottom: "1px solid #f1f5f9" }}>
     <DeliveryResult
       heading={<InlineText block={block} name="heading" fallback="Shipping Details" />}
       contentsHeading={<InlineText block={block} name="contentsHeading" fallback="Package Contents" />}
       carrierHeading={<InlineText block={block} name="carrierHeading" fallback="Carrier" />}
-      result={previewReadyToGoTracking()}
+      editing
+      result={{ ...previewReadyToGoTracking(), ad: adPreview ?? undefined }}
     />
   </section>;
 }
 
 export function ReadyToGoRecommendationsEditor(block: ReadyToGoEditorProps) {
-  const preview = previewReadyToGoTracking();
+  const selected = parseProductReferences(block.products).map((product) => ({
+    id: product.id,
+    title: product.title || product.id,
+    description: "",
+    imageUrl: product.imageUrl,
+    href: product.handle ? `/products/${product.handle}` : undefined
+  }));
+  const items = selected.length ? selected : previewReadyToGoTracking().recommendations ?? [];
   return <section aria-label="Ready-to-go recommendations editor" style={{ ...pageFont, background: "var(--pb-color-background, #fff)", color: "var(--pb-color-text, #0f172a)" }}>
-    <div style={{ ...contentWidth, padding: "48px 24px" }}>
+    <div style={contentWidth}>
       <h3 style={{ margin: 0, textAlign: "center", fontSize: 20, lineHeight: "20px", fontWeight: 700 }}><InlineText block={block} name="heading" fallback="You may also like..." /></h3>
-      <div style={{ marginTop: 24 }}><RecommendationCards items={preview.recommendations ?? []} /></div>
+      <div style={{ marginTop: 24 }}><RecommendationCards items={items} /></div>
     </div>
   </section>;
 }
 
+
 export function ReadyToGoQueryBlock(props: Record<string, unknown>) {
   const runtime = useReadyToGoRuntime();
-  const [mode, setMode] = useState<"tracking" | "order">(text(props, "defaultQueryMode", "tracking") === "order" ? "order" : "tracking");
-  const [trackingNumber, setTrackingNumber] = useState(text(props, "defaultTrackingNumber", "BT-2048-DEMO"));
-  const [orderNumber, setOrderNumber] = useState(text(props, "defaultOrderNumber", ""));
-  const [email, setEmail] = useState("");
+  const [locationState] = useState(() => runtime.autoQueryFromUrl ? readTrackingQueryLocationState() : undefined);
+  const [mode, setMode] = useState<"tracking" | "order">(locationState?.tab ?? (text(props, "defaultQueryMode", "tracking") === "order" ? "order" : "tracking"));
+  const [trackingNumber, setTrackingNumber] = useState(locationState?.trackingNumber || text(props, "defaultTrackingNumber", "BT-2048-DEMO"));
+  const [orderNumber, setOrderNumber] = useState(locationState?.orderNumber || text(props, "defaultOrderNumber", ""));
+  const [email, setEmail] = useState(locationState?.email ?? "");
   const [localError, setLocalError] = useState("");
+  const autoQueryStarted = useRef(false);
+  const previewDemoTrackingNumber = useRef(trackingNumber);
   const heading = text(props, "heading");
   const submitLabel = text(props, "submitLabel", "Track Your Order");
   const trackingTabLabel = text(props, "trackingTabLabel", "Tracking Number");
   const orderTabLabel = text(props, "orderTabLabel", "Order Number");
+
+  useEffect(() => {
+    if (autoQueryStarted.current) return;
+    if (locationState?.canAutoQuery) {
+      autoQueryStarted.current = true;
+      void runtime.query(locationState.tab === "tracking"
+        ? { mode: "tracking", trackingNumber: locationState.trackingNumber }
+        : { mode: "order", orderNumber: locationState.orderNumber, email: locationState.email });
+      return;
+    }
+    const demoTrackingNumber = previewDemoTrackingNumber.current.trim();
+    if (!runtime.autoQueryDemo || !demoTrackingNumber) return;
+    autoQueryStarted.current = true;
+    void runtime.query({ mode: "tracking", trackingNumber: demoTrackingNumber });
+  }, [locationState, runtime]);
+
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setLocalError("");
     if (mode === "order") {
-      if (!isValidOrderNumber(orderNumber.trim())) {
-        setLocalError("Enter an order number using 1–64 non-space characters.");
+      if (!orderNumber.trim() || !email.trim()) {
+        setLocalError("Please enter your order number and email address");
         return;
       }
-      if (!isValidOrderEmail(email.trim())) {
-        setLocalError("Enter a valid email address.");
-        return;
-      }
+      syncTrackingQueryToUrl("order", orderNumber.trim(), email.trim());
       void runtime.query({ mode: "order", orderNumber: orderNumber.trim(), email: email.trim() });
       return;
     }
-    if (!isValidTrackingNumber(trackingNumber.trim())) {
-      setLocalError("Enter a tracking number using 6–64 letters, numbers, hyphens, or underscores.");
+    if (!trackingNumber.trim()) {
+      setLocalError("Please enter your tracking number");
       return;
     }
+    syncTrackingQueryToUrl("tracking", trackingNumber.trim());
     void runtime.query({ mode: "tracking", trackingNumber: trackingNumber.trim() });
   };
   const loading = runtime.phase === "loading";
   return <section style={heroStyle}>
     <div role="region" aria-label="Ready-to-go tracking query" style={formCardStyle}>
-      {heading ? <h1 style={{ margin: "0 0 24px", textAlign: "center", fontSize: 28, lineHeight: 1.15 }}>{heading}</h1> : null}
+      {heading ? <h1 style={{ margin: "0 0 24px", textAlign: "center", fontSize: 28, lineHeight: 1.15, overflowWrap: "anywhere" }}>{heading}</h1> : null}
       <div role="tablist" aria-label="Tracking method" style={{ display: "flex", width: "100%", borderBottom: "1px solid #cbd5e1" }}>
         <button type="button" role="tab" aria-selected={mode === "tracking"} onClick={() => { setMode("tracking"); setLocalError(""); }} style={tabStyle(mode === "tracking")}>{trackingTabLabel}</button>
         <button type="button" role="tab" aria-selected={mode === "order"} onClick={() => { setMode("order"); setLocalError(""); }} style={tabStyle(mode === "order")}>{orderTabLabel}</button>
@@ -309,15 +457,15 @@ export function ReadyToGoQueryBlock(props: Record<string, unknown>) {
       <form onSubmit={submit} style={{ marginTop: 24, display: "flex", flexDirection: "column", gap: 16, flex: 1 }}>
         {mode === "order" ? <>
           <label htmlFor="ready-to-go-order-number" style={{ position: "absolute", width: 1, height: 1, overflow: "hidden", clipPath: "inset(50%)" }}>Order number</label>
-          <input id="ready-to-go-order-number" aria-label="Order number" value={orderNumber} onChange={(event) => setOrderNumber(event.target.value)} required minLength={4} maxLength={64} placeholder="Enter your order number" style={inputStyle} />
+          <input id="ready-to-go-order-number" aria-label="Order number" value={orderNumber} onChange={(event) => setOrderNumber(event.target.value)} placeholder="Order Number" style={inputStyle} />
           <label htmlFor="ready-to-go-email" style={{ position: "absolute", width: 1, height: 1, overflow: "hidden", clipPath: "inset(50%)" }}>Email</label>
-          <input id="ready-to-go-email" aria-label="Email" type="email" value={email} onChange={(event) => setEmail(event.target.value)} required placeholder="Enter your email" style={inputStyle} />
+          <input id="ready-to-go-email" aria-label="Email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="Email" style={inputStyle} />
         </> : <>
           <label htmlFor="ready-to-go-tracking-number" style={{ position: "absolute", width: 1, height: 1, overflow: "hidden", clipPath: "inset(50%)" }}>Tracking number</label>
-          <input id="ready-to-go-tracking-number" aria-label="Tracking number" value={trackingNumber} onChange={(event) => setTrackingNumber(event.target.value)} required minLength={6} maxLength={64} placeholder="Enter your tracking number" style={inputStyle} />
+          <input id="ready-to-go-tracking-number" aria-label="Tracking number" value={trackingNumber} onChange={(event) => setTrackingNumber(event.target.value)} placeholder="Tracking Number" style={inputStyle} />
         </>}
         {localError ? <p style={{ margin: 0, textAlign: "center", fontSize: 12, color: "#f43f5e" }}>{localError}</p> : null}
-        <button type="submit" disabled={loading} style={{ display: "flex", alignItems: "center", justifyContent: "center", width: "100%", minHeight: 58, marginTop: 8, border: 0, borderRadius: "var(--pb-radius, 8px)", background: loading ? "#475569" : "var(--pb-color-primary, #111)", color: "#fff", font: "inherit", fontSize: 15, fontWeight: 600, cursor: loading ? "wait" : "pointer", opacity: loading ? 0.7 : 1 }}>{loading ? "Tracking…" : submitLabel}</button>
+        <button type="submit" disabled={loading} style={{ ...submitButtonStyle(props, loading), border: 0, font: "inherit", fontSize: 15, fontWeight: 600, cursor: loading ? "wait" : "pointer", opacity: loading ? 0.7 : 1 }}>{loading ? "Tracking..." : submitLabel}</button>
         {runtime.phase === "error" ? <p role="alert" style={{ margin: 0, textAlign: "center", fontSize: 12, color: "#f43f5e" }}>{runtime.error}</p> : null}
       </form>
       <RuntimeWatermark watermark={runtime.watermark} />
@@ -325,21 +473,23 @@ export function ReadyToGoQueryBlock(props: Record<string, unknown>) {
   </section>;
 }
 
-export function ReadyToGoProgressBlock() {
+export function ReadyToGoProgressBlock(props: Record<string, unknown>) {
   const runtime = useReadyToGoRuntime();
   const result = runtime.result;
+  if (runtime.phase === "idle") return null;
+  if (runtime.phase === "empty") return <TrackingNotFound />;
   return <SectionShell title="Shipment progress">
     <div style={{ ...contentWidth, textAlign: "center", width: "min(1248px, 100%)" }}>
       {runtime.phase === "loading" ? <div aria-label="Loading shipment progress"><IdleMessage>Loading shipment progress…</IdleMessage><SkeletonRow /></div> : null}
       {runtime.phase === "error" ? <p style={{ margin: 0, color: "#b42318" }}>Shipment progress is temporarily unavailable.</p> : null}
-      {runtime.phase === "idle" ? <IdleMessage>Enter a tracking number to see shipment progress.</IdleMessage> : null}
-      {runtime.phase === "success" && result ? <ProgressResult result={result} /> : null}
+      {runtime.phase === "success" && result ? <ProgressResult result={result} showEstimatedDelivery={!runtime.autoQueryDemo} color={text(props, "progressColor")} /> : null}
     </div>
   </SectionShell>;
 }
 
 export function ReadyToGoDeliveryBlock(props: Record<string, unknown>) {
   const runtime = useReadyToGoRuntime();
+  if (runtime.phase === "idle" || runtime.phase === "empty") return null;
   const heading = text(props, "heading", "Shipping Details");
   const contentsHeading = text(props, "contentsHeading", "Package Contents");
   const carrierHeading = text(props, "carrierHeading", "Carrier");
@@ -350,7 +500,6 @@ export function ReadyToGoDeliveryBlock(props: Record<string, unknown>) {
         <h3 style={{ margin: 0, fontSize: 20, lineHeight: "20px", fontWeight: 700 }}>{heading}</h3>
         {runtime.phase === "loading" ? <IdleMessage>Loading delivery details…</IdleMessage> : null}
         {runtime.phase === "error" ? <p style={{ margin: "16px 0 0", color: "#b42318" }}>Delivery details are temporarily unavailable.</p> : null}
-        {runtime.phase === "idle" ? <p style={{ margin: "16px 0 0", color: "#64748b" }}>Delivery details will appear after a successful query.</p> : null}
       </div>
     </div>}
   </SectionShell>;
@@ -359,17 +508,11 @@ export function ReadyToGoDeliveryBlock(props: Record<string, unknown>) {
 export function ReadyToGoRecommendationsBlock(props: Record<string, unknown>) {
   const runtime = useReadyToGoRuntime();
   const heading = text(props, "heading", "You may also like...");
-  const recommendations = runtime.result?.recommendations ?? [];
+  if (runtime.recommendations.phase !== "success" || runtime.recommendations.items.length === 0) return null;
   return <SectionShell title={heading} bordered={false}>
-    <div style={{ ...contentWidth, padding: "48px 24px" }}>
+    <div style={contentWidth}>
       <h3 style={{ margin: 0, textAlign: "center", fontSize: 20, lineHeight: "20px", fontWeight: 700 }}>{heading}</h3>
-      <div style={{ marginTop: 24 }}>
-        {runtime.phase === "loading" ? <IdleMessage>Loading recommendations…</IdleMessage> : null}
-        {runtime.phase === "error" ? <p style={{ margin: 0, textAlign: "center", color: "#b42318" }}>Recommendations are temporarily unavailable.</p> : null}
-        {runtime.phase === "idle" ? <IdleMessage>Recommendations appear with your shipment result.</IdleMessage> : null}
-        {runtime.phase === "success" && recommendations.length ? <RecommendationCards items={recommendations} /> : null}
-        {runtime.phase === "success" && !recommendations.length ? <IdleMessage>No recommendations are available for this shipment.</IdleMessage> : null}
-      </div>
+      <div style={{ marginTop: 24 }}><RecommendationCards items={runtime.recommendations.items} /></div>
     </div>
   </SectionShell>;
 }

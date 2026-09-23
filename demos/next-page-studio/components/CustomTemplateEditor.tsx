@@ -5,6 +5,8 @@ import { PageDocumentEditorShell, type PageDocument } from "@standhigher/puck-pa
 import { useState, useSyncExternalStore } from "react";
 import { customTemplateSnapshot, saveCustomTemplate, subscribeToCustomTemplates, type CustomTemplateRecord } from "../lib/custom-template-repository";
 import { pageStudioRegistry } from "../lib/registry";
+import { StudioAdPreview } from "../lib/studio-ad";
+import { studioProductPicker } from "../lib/studio-product-picker";
 import { templateProfile } from "../lib/template-profiles";
 
 export function CustomTemplateEditor({ templateId }: { templateId: string }) {
@@ -20,6 +22,6 @@ function LoadedCustomTemplateEditor({ template: initialTemplate }: { template: C
   const availableBlockTypes = profile?.allowedBlockTypes ?? [...new Set(template.document.blocks.map((block) => block.type))];
   const save = async (document: PageDocument) => setTemplate(saveCustomTemplate(template.id, document, name));
   return <AppProvider i18n={{}}><main className="editor-page"><header className="studio-editor-bar"><a href="/templates">← 模板中心</a><TextField label="模板名称" labelHidden value={name || template.name} onChange={setName} autoComplete="off" /><span>自定义模板 · 基于 {profile?.id ?? template.sourceTemplateId}</span><div><a className="studio-link-button" href={`/template-studio/${template.id}/preview`} target="_blank">预览模板</a></div></header>
-    <PageDocumentEditorShell key={template.updatedAt} initialDocument={template.document} registry={pageStudioRegistry} policy={profile?.editorPolicy} availableBlockTypes={availableBlockTypes} appearanceControls onSave={save} />
+    <StudioAdPreview><PageDocumentEditorShell key={template.updatedAt} initialDocument={template.document} registry={pageStudioRegistry} policy={profile?.editorPolicy} availableBlockTypes={availableBlockTypes} appearanceControls productPicker={studioProductPicker} onSave={save} /></StudioAdPreview>
   </main></AppProvider>;
 }

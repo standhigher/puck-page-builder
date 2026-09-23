@@ -14,7 +14,7 @@ const document = registry.getTemplate("besttrack.ready-to-go")!.create();
 
 ## RuntimeState 与数据边界
 
-每个 Ready-to-go 页面都由 `ReadyToGoRuntimeProvider` 包裹。查询区块只发起受控 `query`，物流进度、配送信息和推荐区块都订阅同一份 RuntimeState：
+每个 Ready-to-go 页面都由 `ReadyToGoRuntimeProvider` 包裹。查询区块只发起受控 `query`；物流进度和配送信息订阅查单 RuntimeState。推荐商品与原 Track Page 一样页面打开即加载，不依赖是否点击查询：
 
 ```tsx
 <ReadyToGoRuntimeProvider query={query}>
@@ -22,9 +22,59 @@ const document = registry.getTemplate("besttrack.ready-to-go")!.create();
 </ReadyToGoRuntimeProvider>
 ```
 
-不传 `query` 时，Provider 使用显式 Mock，适用于本地编辑与 Mock Preview。Live 模式必须由宿主注入已鉴权的 Consumer Runtime API 查询函数；失败会显示受控错误，不会回退为 Mock。不要将 Session Token、订单私密数据或查询结果写入 `PageDocument`。
+不传 `query` 且不传 `transport` 时，Provider 使用显式 Mock，适用于本地编辑与 Mock Preview。对接原 Shopify Track Page 后端时注入 `transport.post`，不要再手写一套 camelCase 查询参数。鉴权、超时和 App Proxy 前缀仍由宿主补在 `post` 里。失败不会回退为 Mock，也不要把 Session Token、订单私密数据或查询结果写入 `PageDocument`。
+
+## 预览 Demo 与正式查单
+
+进度和配送区块只在查单成功后渲染。正式店铺页、已发布页和 `transport` 路径必须保持「用户点击查询才出订单内容」。
+
+仅 Mock / Studio 预览可以打开 `autoQueryDemo`：进入预览时用表单上的 demo 运单号自动查一笔订单，用来展示完整效果。预览 Demo 不显示 EDD（`Est. Delivery`），避免把占位日期当成真实预计送达。画布编辑器本身也不渲染 EDD。
+
+```tsx
+<ReadyToGoRuntimeProvider query={mockQuery} autoQueryDemo>
+  <WebRenderer document={document} registry={registry} />
+</ReadyToGoRuntimeProvider>
+```
+
+next-page-studio 只在模板预览、自定义模板预览和草稿预览传入该开关；`/p/:pageId` 已发布页不传。回溯说明、入口对照和测试见 [Ready-to-go 预览 Demo 自动查单](./ready-to-go-preview-demo.md)。线上 `transport` / 消费者页不要打开这个开关。
+
+对接原 Shopify Track Page 后端时注入 `transport.post`：
+
+```tsx
+import {
+  ReadyToGoRuntimeProvider,
+  withShopifyAppProxyPrefix
+} from "@standhigher/besttrack-page-extension";
+
+<ReadyToGoRuntimeProvider
+  transport={{
+    post: (url, body) => apiPost(withShopifyAppProxyPrefix(url, APP_PROXY_PREFIX), body)
+  }}
+>
+  <WebRenderer document={document} registry={registry} />
+</ReadyToGoRuntimeProvider>
+```
+
+Ready-to-go 只换了 PageDocument + WebRenderer 渲染链路。`transport` 路径完整复用原 Track Page 逻辑：
+
+- `POST /track/query?_t=Date.now()`，请求体 `{ order_number, email, tracking_number, lang }`
+- `lang` 来自 `?lang=`、`bestrack_locale` 或宿主传入的 locale
+- 网络失败重试一次；`code !== 0` 或重试耗尽都显示未找到订单
+- 进度、物流时间、预计送达、`ad_config` 按原页面规则映射
+- 表单只校验非空，文案与原页面一致
+- URL 深链读写 `tracking_number` / `order_number` / `email`（search 优先，hash 回退）
+- 独立 `POST /products/recommend`，请求体 `{ page, page_size }`；推荐区复用原页 Embla 轮播（loop、3 秒自动播放、悬停暂停、左右箭头）
+- 未传入 `watermark` 时沿用原 powered-by 隐藏规则
+
+自定义 `query` 仍可用于 Mock、测试或新的 Consumer Runtime；一旦传入 `query`，就不再走 `/track/query`。
 
 Shopify Demo 的 `/page-builder` 已包含该模板的编辑器和 Consumer WebRenderer 预览。独立访问时使用 Mock；通过嵌入式 Shopify 应用访问时才启用现有 Session Token 保护的 Live DataSource。
+
+## 查询未找到订单
+
+原 Track Page 把业务失败和请求失败都显示为未找到订单。`transport` 路径与此一致：`code !== 0` 或重试耗尽后，Ready-to-go 在进度区块显示原插图和 `Can not find order`，配送详情和广告收起。独立加载的推荐商品继续显示。插图随包内联，无需宿主额外复制静态资源。
+
+若宿主注入自定义 `query` 并抛错，Ready-to-go 仍显示受控错误提示，以便新的 Consumer Runtime 区分不可用与未找到。不要把 Mock 结果当作失败回退。
 
 ## 响应式与样式隔离
 

@@ -16,6 +16,7 @@ const readyToGoBlocks: BlockDefinition[] = withTemplatePolicy([
     defaultProps: {
       heading: "Track your order",
       submitLabel: "Track Your Order",
+      submitButtonColor: "#111111",
       defaultTrackingNumber: "BT-2048-DEMO",
       defaultOrderNumber: "",
       defaultQueryMode: "tracking",
@@ -27,6 +28,7 @@ const readyToGoBlocks: BlockDefinition[] = withTemplatePolicy([
     fields: {
       heading: text("Heading"),
       submitLabel: text("Button label"),
+      submitButtonColor: { field: "besttrack.ready-to-go.text", label: "Button color", control: "color" as const, group: "Style" },
       defaultTrackingNumber: text("Default tracking number"),
       defaultOrderNumber: text("Default order number"),
       defaultQueryMode: text("Default query mode"),
@@ -41,10 +43,12 @@ const readyToGoBlocks: BlockDefinition[] = withTemplatePolicy([
     label: "Shipment progress",
     category: "BestTrack Ready-to-go",
     targets: ["web"],
-    defaultProps: {},
+    defaultProps: { progressColor: "#0f172a" },
     defaultVariant: "default",
     variants: [{ id: "default", label: "Default" }],
-    fields: {},
+    fields: {
+      progressColor: { field: "besttrack.ready-to-go.text", label: "Progress color", control: "color" as const, group: "Style" }
+    },
     render: { web: ReadyToGoProgressBlock, editor: ReadyToGoProgressEditor }
   },
   {
@@ -56,7 +60,13 @@ const readyToGoBlocks: BlockDefinition[] = withTemplatePolicy([
     defaultProps: { heading: "Shipping Details", contentsHeading: "Package Contents", carrierHeading: "Carrier" },
     defaultVariant: "default",
     variants: [{ id: "default", label: "Default" }, { id: "compact", label: "Compact", theme: { spacing: "12px" } }],
-    fields: { heading: text("Heading"), contentsHeading: text("Package contents heading"), carrierHeading: text("Carrier heading") },
+    fields: {
+      heading: text("Heading"),
+      contentsHeading: text("Package contents heading"),
+      carrierHeading: text("Carrier heading"),
+      adImageUrl: { field: "besttrack.ready-to-go.asset", label: "Advertisement image", control: "asset", persist: false, group: "Advertisement" },
+      adLinkUrl: { field: "besttrack.ready-to-go.url", label: "Advertisement link", control: "url", persist: false, group: "Advertisement", validation: { allowRelativeUrl: true, allowedUrlProtocols: ["https:", "http:"] } }
+    },
     render: { web: ReadyToGoDeliveryBlock, editor: ReadyToGoDeliveryEditor }
   },
   {
@@ -65,10 +75,13 @@ const readyToGoBlocks: BlockDefinition[] = withTemplatePolicy([
     label: "Recommended products",
     category: "BestTrack Ready-to-go",
     targets: ["web"],
-    defaultProps: { heading: "You may also like..." },
+    defaultProps: { heading: "You may also like...", products: [] },
     defaultVariant: "default",
     variants: [{ id: "default", label: "Default" }, { id: "grid", label: "Grid", theme: { "color.surface": "#ffffff" } }],
-    fields: { heading: text("Heading") },
+    fields: {
+      heading: text("Heading"),
+      products: { field: "besttrack.ready-to-go.products", label: "推荐商品 (Shopify)", control: "products", group: "Content" }
+    },
     render: { web: ReadyToGoRecommendationsBlock, editor: ReadyToGoRecommendationsEditor }
   }
 ], ["besttrack.ready-to-go.query"]);

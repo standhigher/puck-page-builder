@@ -29,6 +29,9 @@ export {
   formatTrackingPageMoney,
   isTrackingPageResourceReference,
   type TrackingPageOrderItem,
+  type TrackingPageAd,
+  type TrackingPageRecommendationsQuery,
+  type TrackingPageRecommendationsState,
   type TrackingPageCollectionReference,
   type TrackingPageMediaReference,
   type TrackingPageMoney,
@@ -66,3 +69,23 @@ export {
   type ShopifyResourceSearchInput,
   type ShopifyResourceSearchPage
 } from "./shopify-resources";
+export {
+  SHOPIFY_RECOMMEND_PATH,
+  SHOPIFY_TRACK_QUERY_PATH,
+  buildShopifyRecommendPayload,
+  buildShopifyTrackQueryPayload,
+  createShopifyRecommendationsQuery,
+  createShopifyTrackQuery,
+  mapShopifyRecommendationsResponse,
+  mapShopifyTrackQueryResponse,
+  readTrackingQueryFromLocation,
+  readTrackingQueryLocationState,
+  resolveInitialLocale,
+  resolveShopifyTrackQueryLocale,
+  shouldHidePoweredBy,
+  syncTrackingQueryToUrl,
+  withShopifyAppProxyPrefix,
+  withShopifyTrackCacheBust,
+  type Locale,
+  type ShopifyTrackPageTransport
+} from "./shopify-track-query";

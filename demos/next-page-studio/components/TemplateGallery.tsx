@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState, useSyncExternalStore } from "react";
-import { createCustomTemplate, customTemplateListSnapshot, subscribeToCustomTemplates } from "../lib/custom-template-repository";
+import { createCustomTemplate, customTemplateListServerSnapshot, customTemplateListSnapshot, subscribeToCustomTemplates } from "../lib/custom-template-repository";
 import { createPage, createPageFromDocument } from "../lib/local-page-repository";
 import { pageStudioRegistry } from "../lib/registry";
 import { templateProfile } from "../lib/template-profiles";
@@ -10,7 +10,7 @@ import { templateProfile } from "../lib/template-profiles";
 export function TemplateGallery() {
   const router = useRouter();
   const templates = pageStudioRegistry.templates.filter((template) => template.target === "web" && templateProfile(template.id));
-  const customTemplates = useSyncExternalStore(subscribeToCustomTemplates, customTemplateListSnapshot, () => []);
+  const customTemplates = useSyncExternalStore(subscribeToCustomTemplates, customTemplateListSnapshot, customTemplateListServerSnapshot);
   const [creatorOpen, setCreatorOpen] = useState(false);
   const [templateName, setTemplateName] = useState("");
   const [baseTemplateId, setBaseTemplateId] = useState(templates[0]?.id ?? "");

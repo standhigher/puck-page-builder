@@ -20,5 +20,16 @@ class ResizeObserverMock {
   disconnect() { return undefined; }
 }
 
+class IntersectionObserverMock {
+  readonly root = null;
+  readonly rootMargin = "";
+  readonly thresholds = [];
+  observe() { return undefined; }
+  unobserve() { return undefined; }
+  disconnect() { return undefined; }
+  takeRecords() { return []; }
+}
+
 Object.defineProperty(globalThis, "ResizeObserver", { writable: true, value: ResizeObserverMock });
+Object.defineProperty(globalThis, "IntersectionObserver", { writable: true, value: IntersectionObserverMock });
 Object.defineProperty(window, "scroll", { writable: true, value: () => undefined });

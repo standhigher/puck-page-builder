@@ -88,6 +88,35 @@ describe("Ready-to-go missing order", () => {
     });
   });
 
+  it("auto-queries the demo tracking number only when preview auto-query is enabled", async () => {
+    const query = vi.fn<TrackingPageQuery>().mockResolvedValue({
+      trackingNumber: "BT-PREVIEW-DEMO",
+      status: "In transit",
+      carrier: "BestTrack demo carrier",
+      estimatedDelivery: "Sep 22 - Sep 24",
+      orderItems: [{ id: "demo-item", title: "Demo shipment item", quantity: 1 }]
+    });
+    const { rerender } = render(<ReadyToGoRuntimeProvider query={query}>
+      <ReadyToGoQueryBlock submitLabel="Find" defaultTrackingNumber="BT-PREVIEW-DEMO" />
+      <ReadyToGoProgressBlock />
+      <ReadyToGoDeliveryBlock />
+    </ReadyToGoRuntimeProvider>);
+    expect(query).not.toHaveBeenCalled();
+    expect(screen.queryByLabelText("Shipment progress")).not.toBeInTheDocument();
+    rerender(<ReadyToGoRuntimeProvider query={query} autoQueryDemo>
+      <ReadyToGoQueryBlock submitLabel="Find" defaultTrackingNumber="BT-PREVIEW-DEMO" />
+      <ReadyToGoProgressBlock />
+      <ReadyToGoDeliveryBlock />
+    </ReadyToGoRuntimeProvider>);
+    await waitFor(() => expect(query).toHaveBeenCalledWith({ mode: "tracking", trackingNumber: "BT-PREVIEW-DEMO" }));
+    expect(await screen.findByRole("heading", { name: "In transit" })).toBeVisible();
+    expect(screen.getByLabelText("Shipment progress")).toBeVisible();
+    expect(screen.queryByLabelText("Est. Delivery")).not.toBeInTheDocument();
+    expect(screen.queryByText("Sep 22 - Sep 24")).not.toBeInTheDocument();
+    expect(screen.getByText("Demo shipment item")).toBeVisible();
+    expect(query).toHaveBeenCalledTimes(1);
+  });
+
   it("loads original /products/recommend on mount without a tracking query", async () => {
     const post = vi.fn(async (url: string) => {
       if (String(url).includes("/products/recommend")) {

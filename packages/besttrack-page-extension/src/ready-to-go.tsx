@@ -52,6 +52,8 @@ type ReadyToGoRuntime = ReadyToGoRuntimeState & {
   query(request: TrackingPageQueryRequest): Promise<void>;
   recommendations: TrackingPageRecommendationsState;
   autoQueryFromUrl: boolean;
+  /** Preview hosts only; live storefronts stay click-to-query. */
+  autoQueryDemo: boolean;
   watermark?: TrackingPageWatermark;
   /** Admin-only promotion preview; live storefronts continue to use result.ad. */
   adPreview?: TrackingPageAd | null;
@@ -61,6 +63,7 @@ const initialRuntime: ReadyToGoRuntime = {
   phase: "idle",
   recommendations: { phase: "idle", items: [] },
   autoQueryFromUrl: false,
+  autoQueryDemo: false,
   async query() { return undefined; }
 };
 const ReadyToGoRuntimeContext = createContext<ReadyToGoRuntime>(initialRuntime);
@@ -78,6 +81,11 @@ export type ReadyToGoRuntimeProviderProps = {
   transport?: ShopifyTrackPageTransport;
   /** When omitted, URL deep-link auto-query is on only for the Shopify Track Page `transport` path. */
   autoQueryFromUrl?: boolean;
+  /**
+   * Preview-only: query the form's demo tracking number on mount.
+   * Live storefronts must omit this so consumers still submit the form.
+   */
+  autoQueryDemo?: boolean;
   /** Host-decided display state. Omitted values follow the original powered-by hide rule. */
   watermark?: TrackingPageWatermark;
   /** Admin-only promotion preview; live storefronts continue to use result.ad. */
@@ -111,7 +119,7 @@ async function queryMockReadyToGoTracking(request: TrackingPageQueryRequest): Pr
   return previewReadyToGoTracking(request.mode === "tracking" ? request.trackingNumber : request.orderNumber);
 }
 
-export function ReadyToGoRuntimeProvider({ children, query: injectedQuery, queryRecommendations, transport, autoQueryFromUrl, watermark, adPreview }: ReadyToGoRuntimeProviderProps) {
+export function ReadyToGoRuntimeProvider({ children, query: injectedQuery, queryRecommendations, transport, autoQueryFromUrl, autoQueryDemo = false, watermark, adPreview }: ReadyToGoRuntimeProviderProps) {
   const [state, setState] = useState<ReadyToGoRuntimeState>({ phase: "idle" });
   const [recommendations, setRecommendations] = useState<TrackingPageRecommendationsState>(() => (
     queryRecommendations || transport
@@ -161,7 +169,7 @@ export function ReadyToGoRuntimeProvider({ children, query: injectedQuery, query
     () => watermark ?? { visible: !shouldHidePoweredBy() },
     [watermark]
   );
-  const value = useMemo<ReadyToGoRuntime>(() => ({ ...state, adPreview, query, recommendations, autoQueryFromUrl: resolveAutoQuery, watermark: resolvedWatermark }), [adPreview, query, recommendations, resolveAutoQuery, resolvedWatermark, state]);
+  const value = useMemo<ReadyToGoRuntime>(() => ({ ...state, adPreview, query, recommendations, autoQueryFromUrl: resolveAutoQuery, autoQueryDemo, watermark: resolvedWatermark }), [adPreview, autoQueryDemo, query, recommendations, resolveAutoQuery, resolvedWatermark, state]);
   return <ReadyToGoRuntimeContext.Provider value={value}>{children}</ReadyToGoRuntimeContext.Provider>;
 }
 
@@ -398,17 +406,25 @@ export function ReadyToGoQueryBlock(props: Record<string, unknown>) {
   const [email, setEmail] = useState(locationState?.email ?? "");
   const [localError, setLocalError] = useState("");
   const autoQueryStarted = useRef(false);
+  const previewDemoTrackingNumber = useRef(trackingNumber);
   const heading = text(props, "heading");
   const submitLabel = text(props, "submitLabel", "Track Your Order");
   const trackingTabLabel = text(props, "trackingTabLabel", "Tracking Number");
   const orderTabLabel = text(props, "orderTabLabel", "Order Number");
 
   useEffect(() => {
-    if (!locationState?.canAutoQuery || autoQueryStarted.current) return;
+    if (autoQueryStarted.current) return;
+    if (locationState?.canAutoQuery) {
+      autoQueryStarted.current = true;
+      void runtime.query(locationState.tab === "tracking"
+        ? { mode: "tracking", trackingNumber: locationState.trackingNumber }
+        : { mode: "order", orderNumber: locationState.orderNumber, email: locationState.email });
+      return;
+    }
+    const demoTrackingNumber = previewDemoTrackingNumber.current.trim();
+    if (!runtime.autoQueryDemo || !demoTrackingNumber) return;
     autoQueryStarted.current = true;
-    void runtime.query(locationState.tab === "tracking"
-      ? { mode: "tracking", trackingNumber: locationState.trackingNumber }
-      : { mode: "order", orderNumber: locationState.orderNumber, email: locationState.email });
+    void runtime.query({ mode: "tracking", trackingNumber: demoTrackingNumber });
   }, [locationState, runtime]);
 
   const submit = (event: FormEvent<HTMLFormElement>) => {
@@ -466,7 +482,7 @@ export function ReadyToGoProgressBlock(props: Record<string, unknown>) {
     <div style={{ ...contentWidth, textAlign: "center", width: "min(1248px, 100%)" }}>
       {runtime.phase === "loading" ? <div aria-label="Loading shipment progress"><IdleMessage>Loading shipment progress…</IdleMessage><SkeletonRow /></div> : null}
       {runtime.phase === "error" ? <p style={{ margin: 0, color: "#b42318" }}>Shipment progress is temporarily unavailable.</p> : null}
-      {runtime.phase === "success" && result ? <ProgressResult result={result} color={text(props, "progressColor")} /> : null}
+      {runtime.phase === "success" && result ? <ProgressResult result={result} showEstimatedDelivery={!runtime.autoQueryDemo} color={text(props, "progressColor")} /> : null}
     </div>
   </SectionShell>;
 }

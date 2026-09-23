@@ -307,10 +307,11 @@ function PageDocumentEditor({ iframe = false, registry, adminLocale, onSave, onP
             <div className="pb-header-actions"><InlineStack gap="150" blockAlign="center" wrap>
               <Button accessibilityLabel={i18n.t("undo")} icon={UndoIcon} variant="tertiary" disabled={!editor.actionState.canUndo} onClick={editor.undo} />
               <Button accessibilityLabel={i18n.t("redo")} icon={RedoIcon} variant="tertiary" disabled={!editor.actionState.canRedo} onClick={editor.redo} />
-              <Badge tone={saveBadgeTone}>{saveBadgeLabel}</Badge>
+              {resolvedSaveState === "saved" ? null : <Badge tone={saveBadgeTone}>{saveBadgeLabel}</Badge>}
               {onHistory ? <span data-editor-history=""><Button disabled={request !== "idle"} onClick={() => onHistory({ document: editor.document, draftRevision, session: editor.session })}>{i18n.t("history")}</Button></span> : null}
               {onPreview ? <Button disabled={request !== "idle" || !isOnline} onClick={() => void onPreview({ document: editor.document, draftRevision, session: editor.session })}>{i18n.t("preview")}</Button> : null}
               {onAddToStore ? <Button disabled={request !== "idle" || pageStatus?.publicationStatus === "unpublished"} onClick={() => void onAddToStore({ document: editor.document, session: editor.session })}>{i18n.t("addToStore")}</Button> : null}
+              {/* {canPersistDraft ? <Button disabled={request !== "idle" || validationIssues.length > 0 || !isOnline} onClick={() => void save()}>{request === "saving" ? i18n.t("saving") : i18n.t("save")}</Button> : null} */}
               <Button variant="primary" disabled={(!publishAction && !onPublish) || request !== "idle" || validationIssues.length > 0 || !isOnline} onClick={() => void publish()}>{request === "publishing" ? i18n.t("publishing") : i18n.t("publish")}</Button>
             </InlineStack></div>
           </div>

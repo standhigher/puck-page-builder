@@ -1,9 +1,9 @@
 "use client";
 
-import { AppProvider, Button, Modal, TextField } from "@shopify/polaris";
+import { AppProvider, TextField } from "@shopify/polaris";
 import { PageDocumentEditorShell, type PageDocument } from "@standhigher/puck-page-builder";
 import { useState, useSyncExternalStore } from "react";
-import { pageSnapshot, publishPage, restoreDraft, saveDraft, subscribeToPages, type PageRecord } from "../lib/local-page-repository";
+import { pageSnapshot, publishPage, saveDraft, subscribeToPages, type PageRecord } from "../lib/local-page-repository";
 import { pageStudioRegistry } from "../lib/registry";
 import { StudioAdPreview } from "../lib/studio-ad";
 import { studioProductPicker } from "../lib/studio-product-picker";
@@ -18,14 +18,11 @@ export function StudioEditor({ pageId }: { pageId: string }) {
 function LoadedStudioEditor({ record: initialRecord }: { record: PageRecord }) {
   const [record, setRecord] = useState(initialRecord);
   const [title, setTitle] = useState("");
-  const [historyOpen, setHistoryOpen] = useState(false);
-  const [editorKey, setEditorKey] = useState(0);
   const pageId = record.pageId;
   const profile = templateProfile(record.draftDocument.templateId);
   const save = async (document: PageDocument) => { setRecord(saveDraft(pageId, document, title)); };
   const publish = async (document: PageDocument) => { setRecord(publishPage(pageId, document, title)); };
   return <AppProvider i18n={{}}><main className="editor-page"><header className="studio-editor-bar"><a href="/pages">← 我的页面</a><TextField label="页面名称" labelHidden value={title || record.title} onChange={setTitle} autoComplete="off" /><span>{record.publishedDocument ? `已发布 v${record.publishedVersion}` : "草稿"}</span><div><a className="studio-link-button" href={`/pages/${pageId}/preview`} target="_blank">预览</a></div></header>
-    <StudioAdPreview><PageDocumentEditorShell key={editorKey} initialDocument={record.draftDocument} registry={pageStudioRegistry} policy={profile?.editorPolicy} availableBlockTypes={profile?.allowedBlockTypes} appearanceControls productPicker={studioProductPicker} onHistory={() => setHistoryOpen(true)} onSave={save} onPublish={publish} /></StudioAdPreview>
-    <Modal instant open={historyOpen} onClose={() => setHistoryOpen(false)} title="本地历史记录" primaryAction={{ content: "关闭", onAction: () => setHistoryOpen(false) }}><Modal.Section><div className="history-list">{record.history.map((entry) => <div key={entry.id}><div><strong>{entry.action === "published" ? "发布" : entry.action === "restored" ? "恢复" : entry.action === "created" ? "创建" : "保存"}</strong><small>{new Date(entry.createdAt).toLocaleString()}</small></div><Button onClick={() => { setRecord(restoreDraft(pageId, entry.id)); setEditorKey((key) => key + 1); setHistoryOpen(false); }}>恢复为草稿</Button></div>)}</div></Modal.Section></Modal>
+    <StudioAdPreview><PageDocumentEditorShell initialDocument={record.draftDocument} registry={pageStudioRegistry} policy={profile?.editorPolicy} availableBlockTypes={profile?.allowedBlockTypes} appearanceControls productPicker={studioProductPicker} onSave={save} onPublish={publish} /></StudioAdPreview>
   </main></AppProvider>;
 }

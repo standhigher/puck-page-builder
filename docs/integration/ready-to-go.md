@@ -24,6 +24,22 @@ const document = registry.getTemplate("besttrack.ready-to-go")!.create();
 
 不传 `query` 且不传 `transport` 时，Provider 使用显式 Mock，适用于本地编辑与 Mock Preview。对接原 Shopify Track Page 后端时注入 `transport.post`，不要再手写一套 camelCase 查询参数。鉴权、超时和 App Proxy 前缀仍由宿主补在 `post` 里。失败不会回退为 Mock，也不要把 Session Token、订单私密数据或查询结果写入 `PageDocument`。
 
+## 预览 Demo 与正式查单
+
+进度和配送区块只在查单成功后渲染。正式店铺页、已发布页和 `transport` 路径必须保持「用户点击查询才出订单内容」。
+
+仅 Mock / Studio 预览可以打开 `autoQueryDemo`：进入预览时用表单上的 demo 运单号自动查一笔订单，用来展示完整效果。预览 Demo 不显示 EDD（`Est. Delivery`），避免把占位日期当成真实预计送达。画布编辑器本身也不渲染 EDD。
+
+```tsx
+<ReadyToGoRuntimeProvider query={mockQuery} autoQueryDemo>
+  <WebRenderer document={document} registry={registry} />
+</ReadyToGoRuntimeProvider>
+```
+
+next-page-studio 只在模板预览、自定义模板预览和草稿预览传入该开关；`/p/:pageId` 已发布页不传。回溯说明、入口对照和测试见 [Ready-to-go 预览 Demo 自动查单](./ready-to-go-preview-demo.md)。线上 `transport` / 消费者页不要打开这个开关。
+
+对接原 Shopify Track Page 后端时注入 `transport.post`：
+
 ```tsx
 import {
   ReadyToGoRuntimeProvider,

@@ -20,8 +20,8 @@ const mockQuery: TrackingPageQuery = async (request) => ({
 });
 
 /** Explicit mock-only Runtime boundary for this local demo. */
-export function StudioDocument({ document }: { document: PageDocument }) {
-  return <ReadyToGoRuntimeProvider query={mockQuery} adPreview={studioAdExample}>
+export function StudioDocument({ document, previewAutoQuery = false }: { document: PageDocument; previewAutoQuery?: boolean }) {
+  return <ReadyToGoRuntimeProvider query={mockQuery} adPreview={studioAdExample} autoQueryDemo={previewAutoQuery}>
     <BrandedRuntimeProvider query={mockQuery}>
       <SalesRuntimeProvider query={mockQuery}>
         <WebRenderer document={document} registry={pageStudioRegistry} />

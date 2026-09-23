@@ -324,17 +324,17 @@ describe("PageDocumentEditorShell V0.4", () => {
     }
   });
 
-  it("places undo and redo before the session-save badge, then history before publish", () => {
+  it("places undo and redo before history, then publish", () => {
     const onHistory = vi.fn();
     renderEditor({ onSave: vi.fn(), onHistory, onPublish: vi.fn() });
-    expect(screen.queryByRole("button", { name: "保存草稿" })).not.toBeInTheDocument();
     const undo = screen.getByRole("button", { name: "撤销" });
     const redo = screen.getByRole("button", { name: "恢复" });
-    const saved = screen.getByText("所有更改已保留在当前会话中");
     const history = screen.getByRole("button", { name: "历史记录" });
     const publish = screen.getByRole("button", { name: "发布" });
+    expect(screen.queryByRole("button", { name: "保存草稿" })).not.toBeInTheDocument();
+    expect(screen.queryByText("所有更改已保留在当前会话中")).not.toBeInTheDocument();
     expect(undo.compareDocumentPosition(redo) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(redo.compareDocumentPosition(saved) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(redo.compareDocumentPosition(history) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(history.compareDocumentPosition(publish) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     fireEvent.click(history);
     expect(onHistory).toHaveBeenCalledWith(expect.objectContaining({ document: expect.objectContaining({ pageId: "v04-demo" }) }));
@@ -354,7 +354,7 @@ describe("PageDocumentEditorShell V0.4", () => {
     }
   });
 
-  it("retries a failed autosave without exposing a manual save action", async () => {
+  it("retries a failed autosave without requiring a separate retry action", async () => {
     vi.useFakeTimers();
     try {
       const save = vi.fn().mockRejectedValueOnce(new Error("offline")).mockResolvedValueOnce(undefined);

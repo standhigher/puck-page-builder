@@ -171,10 +171,10 @@ export function EditorShell({ initialState, iframe = true }: EditorShellProps) {
                 <div className={`pb-canvas-frame pb-canvas-frame--${state.device} pb-canvas-frame--zoom-${state.zoom}`} data-device={state.device} data-zoom={state.zoom}>
                   <Puck.Preview />
                 </div>
-                {selectedBlock ? <div className="pb-canvas-overlay" aria-label={`已选择 ${selectedBlock.label}`}>
+                {/* {selectedBlock ? <div className="pb-canvas-overlay" aria-label={`已选择 ${selectedBlock.label}`}>
                   <span>{selectedBlock.label}</span>
                   <span>Selected</span>
-                </div> : null}
+                </div> : null} */}
               </div>
               {!state.isLeftRailOpen || !state.isRightPanelOpen ? <div className="pb-collapsed-actions">
                 {!state.isLeftRailOpen ? <Button onClick={() => update({ isLeftRailOpen: true })}>打开区块面板</Button> : null}

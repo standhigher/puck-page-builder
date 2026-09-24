@@ -19,6 +19,15 @@ describe("BestTrack template PRD compatibility metadata", () => {
     expect(salesTemplatePolicy.blocks.find((block) => block.blockType === "besttrack.sales.query")).toMatchObject({ singleton: true, deletable: false });
     expect(salesTemplatePolicy.enforcement).toBe("core-block-policy");
     expect(bestTrackPageExtension.blocks?.find((block) => block.type === "besttrack.ready-to-go.query")?.policy).toMatchObject({ required: true, singleton: true, allowDelete: false });
+    expect(bestTrackPageExtension.blocks?.find((block) => block.type === "besttrack.ready-to-go.progress")?.policy).toMatchObject({ required: true, singleton: true, allowDelete: false });
+    expect(bestTrackPageExtension.blocks?.find((block) => block.type === "besttrack.ready-to-go.delivery")?.policy).toMatchObject({ required: true, singleton: true, allowDelete: false });
+    expect(bestTrackPageExtension.blocks?.find((block) => block.type === "besttrack.ready-to-go.delivery")?.fields).toMatchObject({
+      heading: { validation: { maxLength: 52 } },
+      contentsHeading: { validation: { maxLength: 52 } },
+      carrierHeading: { validation: { maxLength: 52 } }
+    });
+    expect(bestTrackPageExtension.blocks?.find((block) => block.type === "besttrack.ready-to-go.recommendations")?.policy).toMatchObject({ singleton: true });
+    expect(bestTrackPageExtension.blocks?.find((block) => block.type === "besttrack.ready-to-go.recommendations")?.policy).not.toMatchObject({ allowDelete: false });
     expect(bestTrackBrandedExtension.blocks?.find((block) => block.type === "besttrack.branded.tracking-experience")?.policy).toMatchObject({ required: true, singleton: true, allowDelete: false });
     expect(bestTrackSalesExtension.blocks?.find((block) => block.type === "besttrack.sales.query")?.policy).toMatchObject({ required: true, singleton: true, allowDelete: false });
   });

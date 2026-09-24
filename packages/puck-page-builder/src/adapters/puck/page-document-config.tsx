@@ -1,5 +1,6 @@
 import type { Config } from "@puckeditor/core";
 import { CanvasExtensionBlock } from "./canvas-extension-block";
+import { CanvasImageBlock, CanvasTextBlock } from "./canvas-core-blocks";
 import type { ExtensionRegistry } from "../../core/extensions";
 import type { JsonValue } from "../../core/schema/page-document";
 
@@ -46,7 +47,7 @@ export function createPageDocumentPuckConfig(onSelect: (id: string) => void, onP
         const id = typeof props.id === "string" ? props.id : `unknown-${block.type}`;
         const EditorRenderer = block.render.editor;
         const active = id === selectedBlockId;
-        return <CanvasExtensionBlock active={active} label={block.label} onSelect={() => onSelect(id)}>{EditorRenderer ? <EditorRenderer {...props} blockId={id} selected={active} onPropsChange={(next) => onPropsChange(id, next)} /> : <><BlockRenderer {...props} />{active ? canvasFieldFallback({ block, props, registry, onPropsChange: (next) => onPropsChange(id, next) }) : null}</>}</CanvasExtensionBlock>;
+        return <CanvasExtensionBlock active={active} blockId={id} label={block.label} onSelect={() => onSelect(id)}>{EditorRenderer ? <EditorRenderer {...props} blockId={id} selected={active} onPropsChange={(next) => onPropsChange(id, next)} /> : <><BlockRenderer {...props} />{active ? canvasFieldFallback({ block, props, registry, onPropsChange: (next) => onPropsChange(id, next) }) : null}</>}</CanvasExtensionBlock>;
       }
     }, block.type, resolveBlockPermissions)]];
   }));
@@ -57,9 +58,7 @@ export function createPageDocumentPuckConfig(onSelect: (id: string) => void, onP
           const id = typeof props.id === "string" ? props.id : "unknown-text";
           const content = typeof props.content === "string" ? props.content : "";
           const editable = id === selectedBlockId;
-          return <section className="pb-document-canvas__text" data-page-document-block-id={id} aria-label="Select Text in canvas" role="button" tabIndex={0} onClick={() => onSelect(id)} onKeyDown={(event) => {
-            if (event.key === "Enter" || event.key === " ") onSelect(id);
-          }}><p contentEditable={editable} suppressContentEditableWarning onInput={(event) => { if (editable) onPropsChange(id, { content: event.currentTarget.textContent ?? "" }, true); }}>{content}</p></section>;
+          return <CanvasTextBlock id={id} content={content} editable={editable} onSelect={onSelect} onPropsChange={onPropsChange} />;
         }
       }, "core.text", resolveBlockPermissions),
       Image: withBlockPermissions({
@@ -68,9 +67,7 @@ export function createPageDocumentPuckConfig(onSelect: (id: string) => void, onP
           const src = typeof props.src === "string" ? props.src : "";
           const alt = typeof props.alt === "string" ? props.alt : "";
           const editable = id === selectedBlockId;
-          return <figure className="pb-document-canvas__image" data-page-document-block-id={id} aria-label="Select Image in canvas" role="button" tabIndex={0} onClick={() => onSelect(id)} onKeyDown={(event) => {
-            if (event.key === "Enter" || event.key === " ") onSelect(id);
-          }}><img src={src} alt={alt} />{editable ? <input aria-label="画布图片 URL" value={src} onChange={(event) => onPropsChange(id, { src: event.currentTarget.value }, true)} onClick={(event) => event.stopPropagation()} /> : null}</figure>;
+          return <CanvasImageBlock id={id} src={src} alt={alt} editable={editable} onSelect={onSelect} onPropsChange={onPropsChange} />;
         }
       }, "core.image", resolveBlockPermissions),
       ...extensionComponents

@@ -21,6 +21,16 @@ function DuplicateProbe() {
   </>;
 }
 
+function CanvasMutationProbe({ next }: { next: ReturnType<typeof createPageDocument> }) {
+  const editor = useEditorContext();
+  return <>
+    <output data-testid="canvas-order">{editor.document.blocks.map((block) => block.id).join(",")}</output>
+    <output data-testid="canvas-selected">{editor.selectedBlockId ?? ""}</output>
+    <output data-testid="canvas-dirty">{String(editor.isDirty)}</output>
+    <button onClick={() => editor.updateFromCanvas(next)}>apply-canvas</button>
+  </>;
+}
+
 describe("EditorProvider deletion confirmation", () => {
   it("keeps deletion pending until it is explicitly confirmed", () => {
     const document = createPageDocument({ pageId: "confirm", blocks: [{ id: "text-1", type: "core.text", version: 1, props: { content: "Keep me" } }] });
@@ -63,5 +73,35 @@ describe("EditorProvider duplicate action", () => {
     fireEvent.click(screen.getByText("duplicate"));
     expect(screen.getByTestId("duplicate-count").textContent).toBe("1");
     expect(screen.getByTestId("duplicate-ids").textContent).toBe("text-1");
+  });
+});
+
+describe("EditorProvider canvas mutations", () => {
+  it("applies a valid canvas reorder while keeping the selected block", () => {
+    const first = createPageDocument({ pageId: "canvas-reorder", blocks: [
+      { id: "text-1", type: "core.text", version: 1, props: { content: "One" } },
+      { id: "text-2", type: "core.text", version: 1, props: { content: "Two" } }
+    ] });
+    const reordered = { ...first, blocks: [...first.blocks].reverse() };
+    render(<EditorProvider initialDocument={first}><CanvasMutationProbe next={reordered} /></EditorProvider>);
+
+    expect(screen.getByTestId("canvas-selected").textContent).toBe("text-1");
+    fireEvent.click(screen.getByText("apply-canvas"));
+    expect(screen.getByTestId("canvas-order").textContent).toBe("text-2,text-1");
+    expect(screen.getByTestId("canvas-selected").textContent).toBe("text-1");
+    expect(screen.getByTestId("canvas-dirty").textContent).toBe("true");
+  });
+
+  it("rejects a canvas reorder when the host policy disables dragging", () => {
+    const first = createPageDocument({ pageId: "canvas-reorder-policy", blocks: [
+      { id: "text-1", type: "core.text", version: 1, props: { content: "One" } },
+      { id: "text-2", type: "core.text", version: 1, props: { content: "Two" } }
+    ] });
+    const reordered = { ...first, blocks: [...first.blocks].reverse() };
+    render(<EditorProvider initialDocument={first} policy={{ operations: { allowDrag: false } }}><CanvasMutationProbe next={reordered} /></EditorProvider>);
+
+    fireEvent.click(screen.getByText("apply-canvas"));
+    expect(screen.getByTestId("canvas-order").textContent).toBe("text-1,text-2");
+    expect(screen.getByTestId("canvas-dirty").textContent).toBe("false");
   });
 });

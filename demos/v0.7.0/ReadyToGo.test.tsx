@@ -224,7 +224,9 @@ describe("V0.7.0 Ready-to-go", () => {
     expect(screen.getByText("Travel case")).toBeVisible();
     expect(screen.queryByText("Shipping protection")).not.toBeInTheDocument();
     expect(screen.getByText("Sep 22 - Sep 24")).toBeVisible();
-    expect(screen.getByLabelText("Est. Delivery")).toHaveStyle({ width: "100%", backgroundColor: "#eaf4ff" });
+    const estimatedDelivery = screen.getByLabelText("Est. Delivery");
+    expect(estimatedDelivery).toHaveStyle({ width: "auto", backgroundColor: "#eaf4ff" });
+    expect(estimatedDelivery.getAttribute("style")).toContain("max(0px, calc(50% / 5 - var(--bt-progress-icon, 44px) / 2))");
     expect(screen.getByText("Est. Delivery")).toBeVisible();
     expect(screen.getByText("Estimated time may update as tracking progresses.")).toBeVisible();
   });

@@ -154,8 +154,6 @@ export function SalesQueryBlock(props: Record<string, unknown>) {
         submitLabel={text(props, "submitLabel", "Track order")}
         initialTrackingNumber={text(props, "defaultTrackingNumber", "BT-2048-DEMO")}
         initialOrderNumber={text(props, "defaultOrderNumber", "")}
-        loadingLabel="Checking..."
-        loadingMessage="Checking your order…"
         emptyMessage="We couldn’t find an order for that number."
         errorMessage="We couldn’t retrieve this order right now. Please try again later."
         trackingInputLabel="Sales tracking number"

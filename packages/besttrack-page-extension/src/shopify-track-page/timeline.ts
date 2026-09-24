@@ -637,6 +637,100 @@ export function syncTrackingQueryToUrl(type: SearchTab, value: string, contactVa
   window.history.replaceState(window.history.state, '', url)
 }
 
+/** Result-region marker used by the original `scrollIntoView` after a query. */
+export const TRACKING_RESULT_SELECTOR = "[data-tracking-result]"
+
+/** Breathing room so the tracking number is not flush against a sticky bar. */
+const TRACKING_RESULT_SCROLL_GAP = 8
+
+function scrollingParent(node: HTMLElement): HTMLElement | null {
+  let parent = node.parentElement
+  while (parent && parent !== document.body && parent !== document.documentElement) {
+    const overflowY = getComputedStyle(parent).overflowY
+    if (overflowY === "auto" || overflowY === "scroll" || overflowY === "overlay") return parent
+    parent = parent.parentElement
+  }
+  return null
+}
+
+function isTopPinned(style: CSSStyleDeclaration) {
+  if (style.position !== "sticky" && style.position !== "fixed") return false
+  if (style.display === "none" || style.visibility === "hidden") return false
+  const top = Number.parseFloat(style.top)
+  return Number.isFinite(top) && top >= 0 && top <= 240
+}
+
+/**
+ * How far the result must sit below sticky or fixed bars.
+ * Overlapping bars (several `top: 0` headers) use the lower edge, not a sum.
+ */
+export function trackingResultScrollOffset(node: HTMLElement): number {
+  if (typeof window === "undefined" || typeof document === "undefined") return 0
+  const scrollPort = scrollingParent(node)
+  const portRect = scrollPort?.getBoundingClientRect()
+  const portTop = portRect?.top ?? 0
+  const portLeft = portRect?.left ?? 0
+  const portRight = portRect?.right ?? window.innerWidth
+  const targetRect = node.getBoundingClientRect()
+  let covered = 0
+  const seen = new Set<Element>()
+
+  const consider = (el: Element) => {
+    if (!(el instanceof HTMLElement) || seen.has(el) || el === node || node.contains(el)) return
+    seen.add(el)
+    const style = getComputedStyle(el)
+    if (!isTopPinned(style)) return
+    if (style.position !== "fixed" && scrollingParent(el) !== scrollPort) return
+    const rect = el.getBoundingClientRect()
+    if (rect.width <= 0 || rect.height <= 0) return
+    const overlapLeft = Math.max(rect.left, portLeft, targetRect.left)
+    const overlapRight = Math.min(rect.right, portRight, Math.max(targetRect.right, targetRect.left))
+    if (overlapRight - overlapLeft <= 8) return
+    const pinTop = Number.parseFloat(style.top) || 0
+    const precedes = (node.compareDocumentPosition(el) & Node.DOCUMENT_POSITION_PRECEDING) !== 0
+    const coversPortTop = rect.bottom > portTop && rect.top <= portTop + pinTop + 1
+    if (!precedes && !coversPortTop) return
+    covered = Math.max(covered, pinTop + rect.height)
+  }
+
+  if (typeof document.elementsFromPoint === "function") {
+    const x = targetRect.width > 0
+      ? Math.min(Math.max(targetRect.left + targetRect.width / 2, portLeft), portRight)
+      : portLeft + (portRight - portLeft) / 2
+    document.elementsFromPoint(x, portTop + 1).forEach(consider)
+  }
+  document.querySelectorAll("header, nav, [role='banner']").forEach(consider)
+  return covered > 0 ? Math.ceil(covered + TRACKING_RESULT_SCROLL_GAP) : 0
+}
+
+/**
+ * Smooth-scroll to the tracking result after a query, matching Home.tsx:
+ * wait a frame, then retry until the result region is mounted.
+ * `scroll-margin-top` keeps the tracking number below sticky or fixed bars.
+ */
+export function scrollToTrackingResult(
+  root: ParentNode | Document | null = typeof document === "undefined" ? null : document,
+  schedule: (callback: () => void) => void = typeof requestAnimationFrame === "function"
+    ? (callback) => { requestAnimationFrame(callback); }
+    : (callback) => { callback(); },
+) {
+  const tryScroll = (attempts = 0) => {
+    const node = root?.querySelector<HTMLElement>(TRACKING_RESULT_SELECTOR)
+    if (node) {
+      if (typeof node.scrollIntoView === "function") {
+        const offset = trackingResultScrollOffset(node)
+        node.style.scrollMarginTop = offset > 0 ? `${offset}px` : ""
+        node.scrollIntoView({ behavior: "smooth", block: "start" })
+      }
+      return
+    }
+    if (attempts < 10) {
+      schedule(() => tryScroll(attempts + 1))
+    }
+  }
+  schedule(() => tryScroll())
+}
+
 export type TrackingQueryLocationState = {
   tab: SearchTab
   trackingNumber: string

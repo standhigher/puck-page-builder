@@ -4,6 +4,7 @@ import {
   createShopifyRecommendationsQuery,
   createShopifyTrackQuery,
   readTrackingQueryLocationState,
+  scrollToTrackingResult,
   shouldHidePoweredBy,
   syncTrackingQueryToUrl,
   type ShopifyTrackPageTransport
@@ -11,19 +12,18 @@ import {
 import {
   contentWidth,
   defaultProgress,
-  IdleMessage,
   PackageContents,
   pageFont,
   EstimatedDeliveryCard,
   RecommendationCards,
   SectionShell,
   ShippingTimeline,
-  SkeletonRow,
   text,
   TrackingPageAdSlot,
   TrackingProgress
 } from "./track-page-display";
 import { TrackingNotFound } from "./tracking-not-found";
+import { TrackingLoading } from "./tracking-loading";
 import { isEmptyTrackingPageResult } from "./tracking-page-runtime";
 import type {
   TrackingPageAd,
@@ -124,7 +124,7 @@ export function ReadyToGoRuntimeProvider({ children, query: injectedQuery, query
   const [recommendations, setRecommendations] = useState<TrackingPageRecommendationsState>(() => (
     queryRecommendations || transport
       ? { phase: "loading", items: [] }
-      : { phase: "success", items: previewReadyToGoTracking().recommendations ?? [] }
+      : { phase: "idle", items: [] }
   ));
   const requestId = useRef(0);
   const resolvedQuery = useMemo(() => {
@@ -379,14 +379,18 @@ export function ReadyToGoDeliveryEditor(block: ReadyToGoEditorProps) {
   </section>;
 }
 
-export function ReadyToGoRecommendationsEditor(block: ReadyToGoEditorProps) {
-  const selected = parseProductReferences(block.products).map((product) => ({
+function configuredRecommendations(products: unknown): ReadyToGoRecommendation[] {
+  return parseProductReferences(products).map((product) => ({
     id: product.id,
     title: product.title || product.id,
     description: "",
     imageUrl: product.imageUrl,
     href: product.handle ? `/products/${product.handle}` : undefined
   }));
+}
+
+export function ReadyToGoRecommendationsEditor(block: ReadyToGoEditorProps) {
+  const selected = configuredRecommendations(block.products);
   const items = selected.length ? selected : previewReadyToGoTracking().recommendations ?? [];
   return <section aria-label="Ready-to-go recommendations editor" style={{ ...pageFont, background: "var(--pb-color-background, #fff)", color: "var(--pb-color-text, #0f172a)" }}>
     <div style={contentWidth}>
@@ -418,7 +422,8 @@ export function ReadyToGoQueryBlock(props: Record<string, unknown>) {
       autoQueryStarted.current = true;
       void runtime.query(locationState.tab === "tracking"
         ? { mode: "tracking", trackingNumber: locationState.trackingNumber }
-        : { mode: "order", orderNumber: locationState.orderNumber, email: locationState.email });
+        : { mode: "order", orderNumber: locationState.orderNumber, email: locationState.email })
+        .finally(() => scrollToTrackingResult());
       return;
     }
     const demoTrackingNumber = previewDemoTrackingNumber.current.trim();
@@ -429,6 +434,7 @@ export function ReadyToGoQueryBlock(props: Record<string, unknown>) {
 
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (runtime.phase === "loading") return;
     setLocalError("");
     if (mode === "order") {
       if (!orderNumber.trim() || !email.trim()) {
@@ -436,7 +442,8 @@ export function ReadyToGoQueryBlock(props: Record<string, unknown>) {
         return;
       }
       syncTrackingQueryToUrl("order", orderNumber.trim(), email.trim());
-      void runtime.query({ mode: "order", orderNumber: orderNumber.trim(), email: email.trim() });
+      void runtime.query({ mode: "order", orderNumber: orderNumber.trim(), email: email.trim() })
+        .finally(() => scrollToTrackingResult());
       return;
     }
     if (!trackingNumber.trim()) {
@@ -444,7 +451,8 @@ export function ReadyToGoQueryBlock(props: Record<string, unknown>) {
       return;
     }
     syncTrackingQueryToUrl("tracking", trackingNumber.trim());
-    void runtime.query({ mode: "tracking", trackingNumber: trackingNumber.trim() });
+    void runtime.query({ mode: "tracking", trackingNumber: trackingNumber.trim() })
+      .finally(() => scrollToTrackingResult());
   };
   const loading = runtime.phase === "loading";
   return <section style={heroStyle}>
@@ -465,10 +473,11 @@ export function ReadyToGoQueryBlock(props: Record<string, unknown>) {
           <input id="ready-to-go-tracking-number" aria-label="Tracking number" value={trackingNumber} onChange={(event) => setTrackingNumber(event.target.value)} placeholder="Tracking Number" style={inputStyle} />
         </>}
         {localError ? <p style={{ margin: 0, textAlign: "center", fontSize: 12, color: "#f43f5e" }}>{localError}</p> : null}
-        <button type="submit" disabled={loading} style={{ ...submitButtonStyle(props, loading), border: 0, font: "inherit", fontSize: 15, fontWeight: 600, cursor: loading ? "wait" : "pointer", opacity: loading ? 0.7 : 1 }}>{loading ? "Tracking..." : submitLabel}</button>
+        <button type="submit" disabled={loading} style={{ ...submitButtonStyle(props, loading), border: 0, font: "inherit", fontSize: 15, fontWeight: 600, cursor: loading ? "wait" : "pointer", opacity: loading ? 0.7 : 1 }}>{submitLabel}</button>
         {runtime.phase === "error" ? <p role="alert" style={{ margin: 0, textAlign: "center", fontSize: 12, color: "#f43f5e" }}>{runtime.error}</p> : null}
       </form>
       <RuntimeWatermark watermark={runtime.watermark} />
+      {loading ? <TrackingLoading /> : null}
     </div>
   </section>;
 }
@@ -476,11 +485,10 @@ export function ReadyToGoQueryBlock(props: Record<string, unknown>) {
 export function ReadyToGoProgressBlock(props: Record<string, unknown>) {
   const runtime = useReadyToGoRuntime();
   const result = runtime.result;
-  if (runtime.phase === "idle") return null;
-  if (runtime.phase === "empty") return <TrackingNotFound />;
-  return <SectionShell title="Shipment progress">
+  if (runtime.phase === "idle" || runtime.phase === "loading") return null;
+  if (runtime.phase === "empty") return <TrackingNotFound resultAnchor />;
+  return <SectionShell title="Shipment progress" resultAnchor>
     <div style={{ ...contentWidth, textAlign: "center", width: "min(1248px, 100%)" }}>
-      {runtime.phase === "loading" ? <div aria-label="Loading shipment progress"><IdleMessage>Loading shipment progress…</IdleMessage><SkeletonRow /></div> : null}
       {runtime.phase === "error" ? <p style={{ margin: 0, color: "#b42318" }}>Shipment progress is temporarily unavailable.</p> : null}
       {runtime.phase === "success" && result ? <ProgressResult result={result} showEstimatedDelivery={!runtime.autoQueryDemo} color={text(props, "progressColor")} /> : null}
     </div>
@@ -489,7 +497,7 @@ export function ReadyToGoProgressBlock(props: Record<string, unknown>) {
 
 export function ReadyToGoDeliveryBlock(props: Record<string, unknown>) {
   const runtime = useReadyToGoRuntime();
-  if (runtime.phase === "idle" || runtime.phase === "empty") return null;
+  if (runtime.phase === "idle" || runtime.phase === "loading" || runtime.phase === "empty") return null;
   const heading = text(props, "heading", "Shipping Details");
   const contentsHeading = text(props, "contentsHeading", "Package Contents");
   const carrierHeading = text(props, "carrierHeading", "Carrier");
@@ -498,7 +506,6 @@ export function ReadyToGoDeliveryBlock(props: Record<string, unknown>) {
     {runtime.phase === "success" && result ? <DeliveryResult heading={heading} contentsHeading={contentsHeading} carrierHeading={carrierHeading} result={result} /> : <div style={{ ...contentWidth, display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 280px), 500px))", gap: 40, justifyContent: "center", alignItems: "start" }}>
       <div>
         <h3 style={{ margin: 0, fontSize: 20, lineHeight: "20px", fontWeight: 700 }}>{heading}</h3>
-        {runtime.phase === "loading" ? <IdleMessage>Loading delivery details…</IdleMessage> : null}
         {runtime.phase === "error" ? <p style={{ margin: "16px 0 0", color: "#b42318" }}>Delivery details are temporarily unavailable.</p> : null}
       </div>
     </div>}
@@ -508,11 +515,13 @@ export function ReadyToGoDeliveryBlock(props: Record<string, unknown>) {
 export function ReadyToGoRecommendationsBlock(props: Record<string, unknown>) {
   const runtime = useReadyToGoRuntime();
   const heading = text(props, "heading", "You may also like...");
-  if (runtime.recommendations.phase !== "success" || runtime.recommendations.items.length === 0) return null;
+  const configured = configuredRecommendations(props.products);
+  const items = configured.length ? configured : runtime.recommendations.phase === "success" ? runtime.recommendations.items : [];
+  if (!items.length) return null;
   return <SectionShell title={heading} bordered={false}>
     <div style={contentWidth}>
       <h3 style={{ margin: 0, textAlign: "center", fontSize: 20, lineHeight: "20px", fontWeight: 700 }}>{heading}</h3>
-      <div style={{ marginTop: 24 }}><RecommendationCards items={runtime.recommendations.items} /></div>
+      <div style={{ marginTop: 24 }}><RecommendationCards items={items} /></div>
     </div>
   </SectionShell>;
 }

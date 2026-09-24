@@ -8,11 +8,13 @@ import {
   mapShopifyTrackQueryResponse,
   readTrackingQueryFromLocation,
   readTrackingQueryLocationState,
+  scrollToTrackingResult,
   shouldHidePoweredBy,
+  syncTrackingQueryToUrl,
   withShopifyAppProxyPrefix,
   withShopifyTrackCacheBust
 } from "./shopify-track-query";
-import { formatEstimatedDelivery, shouldShowEstimatedDelivery } from "./shopify-track-page/timeline";
+import { formatEstimatedDelivery, shouldShowEstimatedDelivery, trackingResultScrollOffset } from "./shopify-track-page/timeline";
 import type { TrackMilestone } from "./shopify-track-page/pages/home/types";
 
 const transitMilestone: TrackMilestone = {
@@ -212,6 +214,10 @@ describe("Shopify Track Page query helpers", () => {
       orderNumber: "1001",
       email: "buyer@example.test"
     });
+    expect(readTrackingQueryFromLocation("", "#tracking_number=AB%26C%3D1%232")).toEqual({
+      mode: "tracking",
+      trackingNumber: "AB&C=1#2"
+    });
     expect(readTrackingQueryLocationState("?order_number=1001", "")).toEqual({
       tab: "order",
       trackingNumber: "",
@@ -219,6 +225,68 @@ describe("Shopify Track Page query helpers", () => {
       email: "",
       canAutoQuery: false
     });
+  });
+
+  it("percent-encodes reserved query values into the hash the way the original page did", () => {
+    window.history.replaceState(null, "", "/apps/bestrack/track?shop=demo");
+    const replaceState = vi.spyOn(window.history, "replaceState");
+    syncTrackingQueryToUrl("order", "#2048", "buyer@example.test");
+    const written = String(replaceState.mock.calls.at(-1)?.[2]);
+    expect(written).toContain("#order_number=%232048&email=buyer%40example.test");
+    expect(written).not.toContain("order_number=#2048");
+    replaceState.mockClear();
+    syncTrackingQueryToUrl("tracking", "AB&C=1#2");
+    expect(String(replaceState.mock.calls.at(-1)?.[2])).toContain("#tracking_number=AB%26C%3D1%232");
+    replaceState.mockRestore();
+  });
+
+  it("scrolls to the tracking result after the result region mounts", () => {
+    const scrollIntoView = vi.fn();
+    const target = document.createElement("section");
+    target.setAttribute("data-tracking-result", "");
+    target.scrollIntoView = scrollIntoView;
+    let present = false;
+    const root = { querySelector: () => (present ? target : null) } as unknown as ParentNode;
+    let frames = 0;
+    scrollToTrackingResult(root, (callback) => {
+      frames += 1;
+      if (frames === 3) present = true;
+      callback();
+    });
+    expect(frames).toBe(3);
+    expect(scrollIntoView).toHaveBeenCalledWith({ behavior: "smooth", block: "start" });
+  });
+
+  it("leaves the tracking number below overlapping sticky bars", () => {
+    const box = (top: number, height: number, width = 800) => ({
+      x: 0, y: top, top, left: 0, right: width, bottom: top + height, width, height, toJSON() { return {}; }
+    }) as DOMRect;
+    const nav = document.createElement("nav");
+    nav.style.position = "sticky";
+    nav.style.top = "0px";
+    nav.getBoundingClientRect = () => box(0, 52);
+    const preview = document.createElement("header");
+    preview.style.position = "sticky";
+    preview.style.top = "0px";
+    preview.getBoundingClientRect = () => box(52, 56);
+    const target = document.createElement("section");
+    target.setAttribute("data-tracking-result", "");
+    target.getBoundingClientRect = () => box(400, 320);
+    const later = document.createElement("nav");
+    later.style.position = "sticky";
+    later.style.top = "0px";
+    later.getBoundingClientRect = () => box(900, 40);
+    document.body.append(nav, preview, target, later);
+    expect(trackingResultScrollOffset(target)).toBe(64);
+    const scrollIntoView = vi.fn();
+    target.scrollIntoView = scrollIntoView;
+    scrollToTrackingResult(document, (callback) => callback());
+    expect(target.style.scrollMarginTop).toBe("64px");
+    expect(scrollIntoView).toHaveBeenCalledWith({ behavior: "smooth", block: "start" });
+    nav.remove();
+    preview.remove();
+    target.remove();
+    later.remove();
   });
 
   it("hides powered-by for the original storefront allow-list and feature flag", () => {

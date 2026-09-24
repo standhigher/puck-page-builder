@@ -1,7 +1,7 @@
 import { Puck, usePuck } from "@puckeditor/core";
 import { Badge, Banner, Button, ButtonGroup, Frame, InlineStack, Select, Text, TextField, Toast } from "@shopify/polaris";
 import { DragHandleIcon, LayoutSectionIcon, MenuIcon, ProductIcon, RedoIcon, UndoIcon, XIcon } from "@shopify/polaris-icons";
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPageDocumentPuckConfig } from "../../adapters/puck/page-document-config";
 import { fromEngineData, toEngineData } from "../../adapters/puck/page-document";
 import { parseProductReferences, toProductReferenceJson, validateFieldValue, validatePageDocumentWithRegistry, type ExtensionRegistry, type FieldConfig, type ValidationIssue } from "../../core/extensions";
@@ -144,6 +144,8 @@ export function PageDocumentEditorShell(props: PageDocumentEditorShellProps) {
 
 function PageDocumentEditor({ iframe = false, registry, adminLocale, onSave, onPublish, draftPersistence, draftRevision: initialDraftRevision, autoSave = true, autoSaveDelayMs = 800, publishAction, assetPicker, inspectorSettings, productPicker, pageStatus, onBack, onHistory, onPreview, onAddToStore, deleteConfirmation, availableBlockTypes, appearanceControls = false }: PageDocumentEditorShellProps) {
   const editor = useEditorContext();
+  const editorRef = useRef(editor);
+  useLayoutEffect(() => { editorRef.current = editor; }, [editor]);
   const [blockView, setBlockView] = useState<"blocks" | "outline">("blocks");
   const [leftRailOpen, setLeftRailOpen] = useState(true);
   const [rightPanelOpen, setRightPanelOpen] = useState(true);
@@ -172,7 +174,16 @@ function PageDocumentEditor({ iframe = false, registry, adminLocale, onSave, onP
     if (preserveCanvasValue) setCanvasMutationVersion((version) => version + 1);
     updateBlockProps(id, props);
   }, [updateBlockProps]);
-  const config = useMemo(() => createPageDocumentPuckConfig(confirmCanvasSelection, updateFromCanvasInput, selectedBlockId, registry), [confirmCanvasSelection, registry, selectedBlockId, updateFromCanvasInput]);
+  const resolveBlockPermissions = useCallback(({ id, type }: { id: string; type: string }) => ({
+    duplicate: editorRef.current.canDuplicateBlock(id),
+    delete: editorRef.current.canDeleteBlock(id),
+    drag: editorRef.current.canDragBlock(id),
+    edit: editorRef.current.isEditable,
+    insert: editorRef.current.canAddBlock(type)
+  }), []);
+  // Keep the Puck config stable so active contenteditable nodes retain their caret.
+  // eslint-disable-next-line react-hooks/refs
+  const config = useMemo(() => createPageDocumentPuckConfig(confirmCanvasSelection, updateFromCanvasInput, selectedBlockId, registry, resolveBlockPermissions), [confirmCanvasSelection, registry, resolveBlockPermissions, selectedBlockId, updateFromCanvasInput]);
 
   useEffect(() => {
     const online = () => setIsOnline(true);
@@ -296,7 +307,7 @@ function PageDocumentEditor({ iframe = false, registry, adminLocale, onSave, onP
     if (!editor.updateFromCanvas(fromEngineData(data, editor.document, registry))) setCanvasResetVersion((version) => version + 1);
   }}>
     <Puck.Layout>
-      <CanvasSelectionBridge data={engineData} requestedBlockId={editor.canvasSelectionRequest} onCanvasSelected={confirmCanvasSelection} canvasMutationVersion={canvasMutationVersion} canvasResetVersion={canvasResetVersion} />
+      <CanvasSelectionBridge data={engineData} requestedBlockId={editor.canvasSelectionRequest} onCanvasSelected={confirmCanvasSelection} canvasMutationVersion={canvasMutationVersion} canvasResetVersion={canvasResetVersion} permissionsVersion={`${editor.isEditable}:${editor.document.blocks.map((block) => `${block.id}:${block.type}`).join("|")}`} />
       <div className="pb-shell pb-shell--v04" data-testid="page-document-editor" data-page-id={editor.document.pageId} data-dirty={editor.isDirty} data-editor-state={editor.loadState} data-editor-session-state={editor.sessionState} data-save-state={resolvedSaveState} data-left-panel={leftRailOpen ? "open" : "closed"} data-right-panel={rightPanelOpen ? "open" : "closed"}>
         <header className="pb-header">
           <div className="pb-header-content">
@@ -361,7 +372,7 @@ function PageDocumentEditor({ iframe = false, registry, adminLocale, onSave, onP
 }
 
 /** Bridges list-originated selection requests into Puck, then waits for Puck's selected item before updating the inspector. */
-function CanvasSelectionBridge({ data, requestedBlockId, onCanvasSelected, canvasMutationVersion, canvasResetVersion }: { data: ReturnType<typeof toEngineData>; requestedBlockId: string | null; onCanvasSelected: (id: string | null) => void; canvasMutationVersion: number; canvasResetVersion: number }) {
+function CanvasSelectionBridge({ data, requestedBlockId, onCanvasSelected, canvasMutationVersion, canvasResetVersion, permissionsVersion }: { data: ReturnType<typeof toEngineData>; requestedBlockId: string | null; onCanvasSelected: (id: string | null) => void; canvasMutationVersion: number; canvasResetVersion: number; permissionsVersion: string }) {
   const puck = usePuck();
   const lastSelectedId = useRef<string | null>(null);
   const lastSyncedData = useRef<string | null>(null);
@@ -369,6 +380,7 @@ function CanvasSelectionBridge({ data, requestedBlockId, onCanvasSelected, canva
   const lastCanvasResetVersion = useRef(0);
 
   const serializedData = JSON.stringify(data);
+  const refreshPermissions = puck.refreshPermissions;
   useEffect(() => {
     const forceReset = canvasResetVersion > lastCanvasResetVersion.current;
     if (lastSyncedData.current === serializedData && !forceReset) return;
@@ -380,6 +392,10 @@ function CanvasSelectionBridge({ data, requestedBlockId, onCanvasSelected, canva
     }
     puck.dispatch({ type: "setData", data });
   }, [canvasMutationVersion, canvasResetVersion, data, puck, serializedData]);
+
+  useEffect(() => {
+    refreshPermissions?.({}, true);
+  }, [permissionsVersion, refreshPermissions]);
 
   useEffect(() => {
     if (!requestedBlockId) return;
@@ -419,10 +435,13 @@ function InspectorSection({ title, children, defaultOpen = true }: { title: stri
   </details>;
 }
 
-function InspectorTextControl({ label, value, control, disabled, onChange }: { label: string; value: unknown; control: Exclude<NonNullable<FieldConfig["control"]>, "products" | "asset">; disabled: boolean; onChange: (value: string) => void }) {
+function InspectorTextControl({ label, value, control, maxLength, disabled, onChange }: { label: string; value: unknown; control: Exclude<NonNullable<FieldConfig["control"]>, "products" | "asset">; maxLength?: number; disabled: boolean; onChange: (value: string) => void }) {
   const stringValue = typeof value === "string" ? value : "";
   if (control === "color") return <input aria-label={label} type="color" value={/^#[\da-f]{6}$/i.test(stringValue) ? stringValue : "#000000"} disabled={disabled} onChange={(event) => onChange(event.currentTarget.value)} />;
-  return <TextField label={label} labelHidden value={stringValue} onChange={onChange} autoComplete="off" disabled={disabled} multiline={control === "textarea" ? 4 : false} type={control === "url" ? "url" : "text"} />;
+  const length = Array.from(stringValue).length;
+  const field = <TextField label={label} labelHidden value={stringValue} onChange={(next) => onChange(maxLength === undefined ? next : Array.from(next).slice(0, maxLength).join(""))} autoComplete="off" disabled={disabled} multiline={control === "textarea" ? 4 : false} type={control === "url" ? "url" : "text"} maxLength={maxLength} />;
+  if (maxLength === undefined) return field;
+  return <div className="pb-inspector-field__limited">{field}<span className="pb-inspector-field__limit" aria-label={`Limit ${maxLength}`}>{length}/{maxLength}</span></div>;
 }
 
 function InspectorAssetControl({ value, disabled, picker, pageId, blockId, i18n, onChange }: { value: unknown; disabled: boolean; picker?: AssetPickerAdapter; pageId: string; blockId: string; i18n: ReturnType<typeof createAdminI18n>; onChange: (value: JsonValue) => void }) {
@@ -487,13 +506,13 @@ function InspectorField({ name, field, value, registry, disabled, assetPicker, p
   const Field = registry?.getField(field.field)?.component;
   return <div className="pb-inspector-field" data-control={field.control ?? "custom"}>
     <div className="pb-inspector-field__heading"><Text as="p" variant="bodySm" fontWeight="semibold">{label}</Text>{field.description ? <Text as="p" variant="bodySm" tone="subdued">{field.description}</Text> : null}</div>
-    {field.control === "products" ? <InspectorProductsControl value={value} disabled={disabled} picker={productPicker} pageId={pageId} blockId={blockId} i18n={i18n} onChange={onChange} /> : field.control === "asset" ? <InspectorAssetControl value={value} disabled={disabled} picker={assetPicker} pageId={pageId} blockId={blockId} i18n={i18n} onChange={onChange} /> : field.control ? <InspectorTextControl label={label} value={value} control={field.control} disabled={disabled} onChange={(next) => onChange(next)} /> : Field ? <Field value={value} onChange={onChange} /> : null}
+    {field.control === "products" ? <InspectorProductsControl value={value} disabled={disabled} picker={productPicker} pageId={pageId} blockId={blockId} i18n={i18n} onChange={onChange} /> : field.control === "asset" ? <InspectorAssetControl value={value} disabled={disabled} picker={assetPicker} pageId={pageId} blockId={blockId} i18n={i18n} onChange={onChange} /> : field.control ? <InspectorTextControl label={label} value={value} control={field.control} maxLength={field.validation?.maxLength} disabled={disabled} onChange={(next) => onChange(next)} /> : Field ? <Field value={value} onChange={onChange} /> : null}
     {issues.map((issue) => <Text key={issue.message} as="p" variant="bodySm" tone="critical">{issue.message}</Text>)}
   </div>;
 }
 
 function InspectorActions({ block, canDuplicate, canDelete, canMove, canMoveUp, canMoveDown, i18n, onDuplicate, onDelete, onMove }: { block: BlockNode; canDuplicate: boolean; canDelete: boolean; canMove: boolean; canMoveUp: boolean; canMoveDown: boolean; i18n: ReturnType<typeof createAdminI18n>; onDuplicate: () => void; onDelete: () => void; onMove: (direction: -1 | 1) => void }) {
-  return <div className="pb-inspector-actions" aria-label={`Actions for ${block.id}`}><ButtonGroup><Button disabled={!canMove || !canMoveUp} onClick={() => onMove(-1)}>{i18n.t("moveUp")}</Button><Button disabled={!canMove || !canMoveDown} onClick={() => onMove(1)}>{i18n.t("moveDown")}</Button><Button disabled={!canDuplicate} onClick={onDuplicate}>{i18n.t("duplicate")}</Button><Button disabled={!canDelete} tone="critical" onClick={onDelete}>{i18n.t("remove")}</Button></ButtonGroup></div>;
+  return <div className="pb-inspector-actions" aria-label={`Actions for ${block.id}`}><ButtonGroup><Button disabled={!canMove || !canMoveUp} onClick={() => onMove(-1)}>{i18n.t("moveUp")}</Button><Button disabled={!canMove || !canMoveDown} onClick={() => onMove(1)}>{i18n.t("moveDown")}</Button><Button disabled={!canDuplicate} accessibilityLabel={canDuplicate ? i18n.t("duplicate") : i18n.t("duplicateUnavailable")} onClick={onDuplicate}>{i18n.t("duplicate")}</Button><Button disabled={!canDelete} tone="critical" onClick={onDelete}>{i18n.t("remove")}</Button></ButtonGroup>{!canDuplicate ? <Text as="p" variant="bodySm" tone="subdued">{i18n.t("duplicateUnavailable")}</Text> : null}</div>;
 }
 
 function DeleteConfirmation({ block, config, i18n, onCancel, onConfirm }: { block: BlockNode; config?: DeleteConfirmationConfig; i18n: ReturnType<typeof createAdminI18n>; onCancel: () => void; onConfirm: () => void }) {

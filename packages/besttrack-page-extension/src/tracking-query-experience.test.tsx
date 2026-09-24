@@ -35,6 +35,14 @@ describe("TrackingQueryCard", () => {
     expect(sharedProps.onQuery).not.toHaveBeenCalled();
   });
 
+  it("shows the parcel loading feedback while keeping the submit label stable", () => {
+    render(<TrackingQueryCard {...sharedProps} phase="loading" />);
+
+    expect(screen.getByRole("button", { name: "Track" })).toBeDisabled();
+    expect(screen.getByRole("status", { name: "查询中..." })).toHaveTextContent("查询中...");
+    expect(screen.queryByText("Checking your order...")).not.toBeInTheDocument();
+  });
+
   it("submits the final discriminated request and scrolls only the query card", () => {
     const onQuery = vi.fn(async () => undefined);
     const scrollTo = vi.fn();

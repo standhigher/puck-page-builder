@@ -61,6 +61,8 @@ export type EditorContextValue = {
   actionState: EditorActionState;
   canAddBlock(type: string): boolean;
   canDragBlock(id: string): boolean;
+  canDeleteBlock(id: string): boolean;
+  canDuplicateBlock(id: string): boolean;
   /** Request a canvas selection. The inspector changes only after Puck confirms it. */
   requestCanvasSelection(id: string): void;
   /** Called from the canvas/Puck selection event. */
@@ -191,6 +193,14 @@ export function EditorProvider({ initialDocument, registry, policy, loadState = 
       canDragBlock: (id) => {
         const block = history.document.blocks.find((item) => item.id === id);
         return editable && canDragBlock(block, registry?.getBlock(block?.type ?? ""), policy);
+      },
+      canDeleteBlock: (id) => {
+        const block = history.document.blocks.find((item) => item.id === id);
+        return editable && canDeleteBlock(block, history.document.blocks, registry?.getBlock(block?.type ?? ""), policy);
+      },
+      canDuplicateBlock: (id) => {
+        const block = history.document.blocks.find((item) => item.id === id);
+        return editable && canDuplicateBlock(block, history.document.blocks, registry?.getBlock(block?.type ?? ""), policy);
       },
       requestCanvasSelection,
       confirmCanvasSelection,

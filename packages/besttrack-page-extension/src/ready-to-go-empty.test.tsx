@@ -1,11 +1,45 @@
 import "@testing-library/jest-dom/vitest";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { ReadyToGoDeliveryBlock, ReadyToGoProgressBlock, ReadyToGoQueryBlock, ReadyToGoRecommendationsBlock, ReadyToGoRuntimeProvider } from "./ready-to-go";
 import type { ShopifyTrackPagePost } from "./shopify-track-query";
 import type { TrackingPageQuery } from "./tracking-page-runtime";
 
 describe("Ready-to-go missing order", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  it("keeps loading separate from an empty result and clears it when retrying", async () => {
+    let resolveQuery!: (result: Awaited<ReturnType<TrackingPageQuery>>) => void;
+    const query = vi.fn<TrackingPageQuery>(() => new Promise((resolve) => { resolveQuery = resolve; }));
+    render(<ReadyToGoRuntimeProvider query={query} watermark={{ visible: false }}>
+      <ReadyToGoQueryBlock submitLabel="Find" />
+      <ReadyToGoProgressBlock />
+      <ReadyToGoDeliveryBlock />
+    </ReadyToGoRuntimeProvider>);
+
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Find" }));
+    expect(screen.getByRole("status", { name: "查询中..." })).toBeVisible();
+    expect(screen.queryByLabelText("Order not found")).not.toBeInTheDocument();
+
+    await act(async () => resolveQuery({ trackingNumber: "", status: "", outcome: "empty" }));
+    expect(screen.queryByRole("status", { name: "查询中..." })).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Order not found")).toHaveTextContent("Can not find order");
+    expect(screen.getByRole("button", { name: "Find" })).toBeEnabled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Find" }));
+    expect(screen.getByRole("status", { name: "查询中..." })).toBeVisible();
+    expect(screen.queryByLabelText("Order not found")).not.toBeInTheDocument();
+
+    await act(async () => resolveQuery({ trackingNumber: "BT-2048", status: "Delivered" }));
+    expect(screen.queryByRole("status", { name: "查询中..." })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Order not found")).not.toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Delivered" })).toBeVisible();
+  });
+
   it("replaces previous delivery and ad with one Shopify empty state while retaining independent recommendations", async () => {
     const query = vi.fn<TrackingPageQuery>()
       .mockResolvedValueOnce({ trackingNumber: "BT-2048", status: "Delivered", ad: { imageUrl: "https://example.test/promo.png" } })
@@ -27,7 +61,7 @@ describe("Ready-to-go missing order", () => {
     fireEvent.click(screen.getByRole("button", { name: "Find" }));
     expect(await screen.findByAltText("Promotion")).toBeVisible();
     fireEvent.click(screen.getByRole("button", { name: "Find" }));
-    expect(await screen.findByRole("status")).toHaveTextContent("Can not find order");
+    expect(await screen.findByLabelText("Order not found")).toBeVisible();
     expect(screen.getAllByText("Can not find order")).toHaveLength(1);
     expect(screen.queryByLabelText("Shipping Details")).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Shipment progress")).not.toBeInTheDocument();
@@ -78,7 +112,7 @@ describe("Ready-to-go missing order", () => {
       <ReadyToGoDeliveryBlock />
     </ReadyToGoRuntimeProvider>);
     fireEvent.click(screen.getByRole("button", { name: "Find" }));
-    expect(await screen.findByRole("status")).toHaveTextContent("Can not find order");
+    expect(await screen.findByLabelText("Order not found")).toBeVisible();
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
     expect(post).toHaveBeenCalledWith(expect.stringMatching(/^\/track\/query\?_t=\d+$/), {
       order_number: "",
@@ -86,6 +120,42 @@ describe("Ready-to-go missing order", () => {
       tracking_number: "BT-2048-DEMO",
       lang: "EN"
     });
+  });
+
+  it("scrolls to the result region and encodes reserved characters into the hash after a query", async () => {
+    const scrollIntoView = vi.fn();
+    Object.defineProperty(HTMLElement.prototype, "scrollIntoView", { configurable: true, writable: true, value: scrollIntoView });
+    vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => {
+      callback(0);
+      return 1;
+    });
+    window.history.replaceState(null, "", "/track");
+    const replaceState = vi.spyOn(window.history, "replaceState");
+    const query = vi.fn<TrackingPageQuery>().mockResolvedValue({ trackingNumber: "AB&C=1#2", status: "Delivered" });
+    render(<ReadyToGoRuntimeProvider query={query} autoQueryFromUrl={false} watermark={{ visible: false }}>
+      <ReadyToGoQueryBlock submitLabel="Find" defaultTrackingNumber="" />
+      <ReadyToGoProgressBlock />
+    </ReadyToGoRuntimeProvider>);
+    fireEvent.change(screen.getByLabelText("Tracking number"), { target: { value: "AB&C=1#2" } });
+    fireEvent.click(screen.getByRole("button", { name: "Find" }));
+    expect(await screen.findByRole("heading", { name: "Delivered" })).toBeVisible();
+    expect(document.querySelector("[data-tracking-result]")).not.toBeNull();
+    await waitFor(() => expect(scrollIntoView).toHaveBeenCalledWith({ behavior: "smooth", block: "start" }));
+    expect(String(replaceState.mock.calls.at(-1)?.[2])).toContain("#tracking_number=AB%26C%3D1%232");
+  });
+
+  it("does not scroll when the query form is invalid", () => {
+    const scrollIntoView = vi.fn();
+    Object.defineProperty(HTMLElement.prototype, "scrollIntoView", { configurable: true, writable: true, value: scrollIntoView });
+    const query = vi.fn<TrackingPageQuery>();
+    render(<ReadyToGoRuntimeProvider query={query} watermark={{ visible: false }}>
+      <ReadyToGoQueryBlock submitLabel="Find" defaultTrackingNumber="" />
+      <ReadyToGoProgressBlock />
+    </ReadyToGoRuntimeProvider>);
+    fireEvent.click(screen.getByRole("button", { name: "Find" }));
+    expect(screen.getByText("Please enter your tracking number")).toBeVisible();
+    expect(query).not.toHaveBeenCalled();
+    expect(scrollIntoView).not.toHaveBeenCalled();
   });
 
   it("auto-queries the demo tracking number only when preview auto-query is enabled", async () => {

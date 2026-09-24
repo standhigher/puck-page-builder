@@ -31,6 +31,8 @@ describe("Ready-to-go dynamic promotion slot", () => {
     expect(ad?.style.width).toBe("100%");
     expect(ad?.style.maxWidth).toBe("500px");
     expect(image?.style.objectFit).toBe("fill");
+    expect(image?.style.position).toBe("absolute");
+    expect(image?.style.inset).toBe("0");
     expect(image?.style.width).toBe("100%");
     expect(image?.style.height).toBe("100%");
   });

@@ -33,3 +33,4 @@ class IntersectionObserverMock {
 Object.defineProperty(globalThis, "ResizeObserver", { writable: true, value: ResizeObserverMock });
 Object.defineProperty(globalThis, "IntersectionObserver", { writable: true, value: IntersectionObserverMock });
 Object.defineProperty(window, "scroll", { writable: true, value: () => undefined });
+Object.defineProperty(HTMLElement.prototype, "scrollIntoView", { configurable: true, writable: true, value: () => undefined });

@@ -27,13 +27,13 @@ const readyToGoBlocks: BlockDefinition[] = withTemplatePolicy([
     variants: [{ id: "default", label: "Default" }],
     fields: {
       heading: text("Heading"),
-      submitLabel: text("Button label"),
+      submitLabel: text("Button label", { validation: { maxLength: 52 } }),
       submitButtonColor: { field: "besttrack.ready-to-go.text", label: "Button color", control: "color" as const, group: "Style" },
-      defaultTrackingNumber: text("Default tracking number"),
+      defaultTrackingNumber: text("Default tracking number", { validation: { maxLength: 52 } }),
       defaultOrderNumber: text("Default order number"),
       defaultQueryMode: text("Default query mode"),
-      trackingTabLabel: text("Tracking tab label"),
-      orderTabLabel: text("Order tab label")
+      trackingTabLabel: text("Tracking tab label", { validation: { maxLength: 52 } }),
+      orderTabLabel: text("Order tab label", { validation: { maxLength: 52 } })
     },
     render: { web: ReadyToGoQueryBlock, editor: ReadyToGoQueryEditor }
   },
@@ -79,7 +79,7 @@ const readyToGoBlocks: BlockDefinition[] = withTemplatePolicy([
     defaultVariant: "default",
     variants: [{ id: "default", label: "Default" }, { id: "grid", label: "Grid", theme: { "color.surface": "#ffffff" } }],
     fields: {
-      heading: text("Heading"),
+      heading: text("Heading", { validation: { maxLength: 100 } }),
       products: { field: "besttrack.ready-to-go.products", label: "推荐商品 (Shopify)", control: "products", group: "Content" }
     },
     render: { web: ReadyToGoRecommendationsBlock, editor: ReadyToGoRecommendationsEditor }

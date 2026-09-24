@@ -48,6 +48,9 @@ button:focus-visible, [role="button"]:focus-visible { outline: 2px solid var(--b
 .pb-inspector-section:not([open]) > summary > span:last-child { transform: rotate(-90deg); }
 .pb-inspector-section__body { display: grid; gap: var(--builder-space-3); padding: 0 var(--builder-space-3) var(--builder-space-3); border-top: 1px solid #f1f5f9; }
 .pb-inspector-field { display: grid; gap: 6px; }
+.pb-inspector-field__limited { display: flex; align-items: center; gap: 8px; }
+.pb-inspector-field__limited > :first-child { flex: 1; min-width: 0; }
+.pb-inspector-field__limit { flex: 0 0 auto; color: #6d7175; font-size: 12px; font-variant-numeric: tabular-nums; }
 .pb-inspector-field__heading { display: grid; gap: 2px; }
 .pb-inspector-field__heading p { margin: 0; }
 .pb-inspector-field__heading p:first-child { color: #334155; font-size: 13px; }

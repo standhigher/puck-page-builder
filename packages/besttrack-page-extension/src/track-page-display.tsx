@@ -15,12 +15,15 @@ export const contentWidth = {
 } satisfies CSSProperties;
 
 const trackingProgressStyles = `
+.bt-progress-band { container-type: inline-size; }
+.bt-edd-card { --bt-progress-icon: 44px; }
 .bt-progress { container-type: inline-size; }
 .bt-progress__icon { width: 44px; height: 44px; }
 .bt-progress__line { top: 19px; }
 .bt-progress__copy { margin-top: 16px; }
 .bt-progress__label { font-size: 16px; line-height: 20px; }
 @container (max-width: 640px) {
+  .bt-edd-card { --bt-progress-icon: 32px; }
   .bt-progress__icon { width: 32px; height: 32px; }
   .bt-progress__line { top: 13px; }
   .bt-progress__copy { margin-top: 8px; }
@@ -292,9 +295,10 @@ export function TrackingPageAdSlot({ ad, disableLink = false }: { ad?: TrackingP
   return <a data-tracking-page-ad href={href} target="_blank" rel="noopener noreferrer" style={trackingPageAdSlotStyle}>{content}</a>;
 }
 
-/** Original Track Page `bst-edd-card`: full-width advisory dates, hidden when the mapper omits them. */
-export function EstimatedDeliveryCard({ dateText }: { dateText: string }) {
-  return <div aria-label="Est. Delivery" style={{ margin: "16px auto 0", width: "100%", boxSizing: "border-box", border: "1px solid transparent", borderRadius: 10, backgroundColor: "#eaf4ff", padding: "20px 22px 18px", textAlign: "left" }}>
+/** Original Track Page `bst-edd-card`. Width matches the progress icons, from the outer edge of the first step to the outer edge of the last. */
+export function EstimatedDeliveryCard({ dateText, steps = 5 }: { dateText: string; steps?: number }) {
+  const trackInset = `max(0px, calc(50% / ${Math.max(steps, 1)} - var(--bt-progress-icon, 44px) / 2))`;
+  return <div aria-label="Est. Delivery" className="bt-edd-card" style={{ margin: `16px ${trackInset} 0`, width: "auto", boxSizing: "border-box", border: "1px solid transparent", borderRadius: 10, backgroundColor: "#eaf4ff", padding: "20px 22px 18px", textAlign: "left" }}>
     <p style={{ margin: 0, color: "#202124", fontSize: 13, fontWeight: 700, lineHeight: 1.3 }}>Est. Delivery</p>
     <p style={{ margin: "6px 0 0", color: "#202124", fontSize: 22, fontWeight: 700, lineHeight: 1.15, letterSpacing: 0, overflowWrap: "anywhere", wordBreak: "break-word" }}>{dateText}</p>
     <p style={{ margin: "6px 0 0", color: "#5f6368", fontSize: 13, fontWeight: 400, lineHeight: 1.35 }}>Estimated time may update as tracking progresses.</p>

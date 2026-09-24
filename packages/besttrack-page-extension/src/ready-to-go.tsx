@@ -299,8 +299,10 @@ function ProgressResult({ result, showEstimatedDelivery = true, color }: { resul
   return <>
     <p style={{ margin: 0, fontSize: 20, lineHeight: 1.4, color: "#000", overflowWrap: "anywhere" }}>Tracking: {result.trackingNumber}</p>
     <h2 style={{ margin: "clamp(24px, 8%, 48px) 0 0", fontSize: 32, lineHeight: 1.25, fontWeight: 700, color: "#303030", overflowWrap: "anywhere" }}>{result.status}</h2>
-    {showEstimatedDelivery && result.estimatedDelivery ? <EstimatedDeliveryCard dateText={result.estimatedDelivery} /> : null}
-    <TrackingProgress steps={steps} color={color} />
+    <div className="bt-progress-band">
+      {showEstimatedDelivery && result.estimatedDelivery ? <EstimatedDeliveryCard dateText={result.estimatedDelivery} steps={steps.length} /> : null}
+      <TrackingProgress steps={steps} color={color} />
+    </div>
   </>;
 }
 
@@ -328,9 +330,6 @@ function DeliveryResult({ heading, contentsHeading, carrierHeading, result, edit
 export function ReadyToGoQueryEditor(block: ReadyToGoEditorProps) {
   return <section aria-label="Ready-to-go query editor" style={editorHeroStyle}>
     <div role="region" aria-label="Ready-to-go tracking query" style={editorFormCardStyle}>
-      <h1 style={{ margin: "0 0 24px", textAlign: "center", fontSize: 28, lineHeight: 1.15, overflowWrap: "anywhere" }}>
-        <InlineText block={block} name="heading" fallback="Track your order" />
-      </h1>
       <div style={{ display: "flex", width: "100%", borderBottom: "1px solid #cbd5e1" }}>
         <div style={{ ...tabStyle(true), display: "flex", alignItems: "center", justifyContent: "center", cursor: "default" }}>
           <InlineText block={block} name="trackingTabLabel" fallback="Tracking Number" />
@@ -411,7 +410,6 @@ export function ReadyToGoQueryBlock(props: Record<string, unknown>) {
   const [localError, setLocalError] = useState("");
   const autoQueryStarted = useRef(false);
   const previewDemoTrackingNumber = useRef(trackingNumber);
-  const heading = text(props, "heading");
   const submitLabel = text(props, "submitLabel", "Track Your Order");
   const trackingTabLabel = text(props, "trackingTabLabel", "Tracking Number");
   const orderTabLabel = text(props, "orderTabLabel", "Order Number");
@@ -457,7 +455,6 @@ export function ReadyToGoQueryBlock(props: Record<string, unknown>) {
   const loading = runtime.phase === "loading";
   return <section style={heroStyle}>
     <div role="region" aria-label="Ready-to-go tracking query" style={formCardStyle}>
-      {heading ? <h1 style={{ margin: "0 0 24px", textAlign: "center", fontSize: 28, lineHeight: 1.15, overflowWrap: "anywhere" }}>{heading}</h1> : null}
       <div role="tablist" aria-label="Tracking method" style={{ display: "flex", width: "100%", borderBottom: "1px solid #cbd5e1" }}>
         <button type="button" role="tab" aria-selected={mode === "tracking"} onClick={() => { setMode("tracking"); setLocalError(""); }} style={tabStyle(mode === "tracking")}>{trackingTabLabel}</button>
         <button type="button" role="tab" aria-selected={mode === "order"} onClick={() => { setMode("order"); setLocalError(""); }} style={tabStyle(mode === "order")}>{orderTabLabel}</button>

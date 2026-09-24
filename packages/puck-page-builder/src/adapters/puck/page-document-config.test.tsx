@@ -1,3 +1,5 @@
+import { render, screen } from "@testing-library/react";
+import type { ReactElement } from "react";
 import { describe, expect, it, vi } from "vitest";
 import { bestTrackPageExtension } from "../../../../besttrack-page-extension/src/ready-to-go-definition";
 import { createExtensionRegistry } from "../../core/extensions";
@@ -24,5 +26,15 @@ describe("PageDocument Puck permissions", () => {
     const config = createPageDocumentPuckConfig(() => undefined, () => undefined, null, registry, resolve);
     const component = config.components[recommendation.type] as { resolvePermissions?: (item: { props: Record<string, unknown> }) => unknown };
     expect(component.resolvePermissions?.({ props: { id: recommendation.id } })).toEqual({ duplicate: false });
+  });
+
+  it("marks the canvas block so a sidebar selection can scroll to that content", () => {
+    const registry = createExtensionRegistry([bestTrackPageExtension]);
+    const document = registry.getTemplate("besttrack.ready-to-go")!.create();
+    const progress = document.blocks.find((block) => block.type === "besttrack.ready-to-go.progress")!;
+    const config = createPageDocumentPuckConfig(() => undefined, () => undefined, progress.id, registry);
+    const Component = config.components[progress.type]!.render as (props: Record<string, unknown>) => ReactElement;
+    render(<Component {...progress.props} id={progress.id} />);
+    expect(screen.getByLabelText("Select Shipment progress in canvas").getAttribute("data-page-document-block-id")).toBe(progress.id);
   });
 });

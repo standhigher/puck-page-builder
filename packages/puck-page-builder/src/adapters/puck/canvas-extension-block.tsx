@@ -1,15 +1,17 @@
-import { registerOverlayPortal } from "@puckeditor/core";
-import { useEffect, useRef, type ReactNode } from "react";
+import type { ReactNode } from "react";
+import { useCanvasEditing } from "./use-canvas-editing";
 
 /**
- * Puck installs drag sensors around every canvas component. In edit mode this
- * portal shields real form controls from those sensors so they can receive
- * focus and keyboard input.
+ * Puck installs drag sensors around every canvas component. Registering the
+ * selected block as an overlay portal keeps fields interactive. Editing
+ * controls are protected from drag sensors while the background stays draggable.
  */
-export function CanvasExtensionBlock({ active, children, label, onSelect }: { active: boolean; children: ReactNode; label: string; onSelect: () => void }) {
-  const editorRef = useRef<HTMLDivElement>(null);
-  useEffect(() => active ? registerOverlayPortal(editorRef.current, { disableDrag: true }) : undefined, [active]);
-  return <div ref={editorRef} className="pb-document-canvas__extension" aria-label={"Select " + label + " in canvas"} role="group" tabIndex={0} onClick={onSelect} onKeyDown={(event) => {
-    if (event.key === "Enter" || event.key === " ") onSelect();
+export function CanvasExtensionBlock({ active, blockId, children, label, onSelect }: { active: boolean; blockId: string; children: ReactNode; label: string; onSelect: () => void }) {
+  const editorRef = useCanvasEditing<HTMLDivElement>(active);
+  return <div ref={editorRef} className="pb-document-canvas__extension" data-page-document-block-id={blockId} aria-label={"Select " + label + " in canvas"} role="group" tabIndex={0} onClick={onSelect} onKeyDown={(event) => {
+    if (event.target === event.currentTarget && (event.key === "Enter" || event.key === " ")) {
+      event.preventDefault();
+      onSelect();
+    }
   }}>{children}</div>;
 }

@@ -14,7 +14,7 @@ const readyToGoBlocks: BlockDefinition[] = withTemplatePolicy([
     category: "BestTrack Ready-to-go",
     targets: ["web"],
     defaultProps: {
-      heading: "Track your order",
+      heading: "",
       submitLabel: "Track Your Order",
       submitButtonColor: "#111111",
       defaultTrackingNumber: "BT-2048-DEMO",
@@ -26,7 +26,6 @@ const readyToGoBlocks: BlockDefinition[] = withTemplatePolicy([
     defaultVariant: "default",
     variants: [{ id: "default", label: "Default" }],
     fields: {
-      heading: text("Heading"),
       submitLabel: text("Button label", { validation: { maxLength: 52 } }),
       submitButtonColor: { field: "besttrack.ready-to-go.text", label: "Button color", control: "color" as const, group: "Style" },
       defaultTrackingNumber: text("Default tracking number", { validation: { maxLength: 52 } }),
@@ -61,9 +60,9 @@ const readyToGoBlocks: BlockDefinition[] = withTemplatePolicy([
     defaultVariant: "default",
     variants: [{ id: "default", label: "Default" }, { id: "compact", label: "Compact", theme: { spacing: "12px" } }],
     fields: {
-      heading: text("Heading"),
-      contentsHeading: text("Package contents heading"),
-      carrierHeading: text("Carrier heading"),
+      heading: text("Heading", { validation: { maxLength: 52 } }),
+      contentsHeading: text("Package contents heading", { validation: { maxLength: 52 } }),
+      carrierHeading: text("Carrier heading", { validation: { maxLength: 52 } }),
       adImageUrl: { field: "besttrack.ready-to-go.asset", label: "Advertisement image", control: "asset", persist: false, group: "Advertisement" },
       adLinkUrl: { field: "besttrack.ready-to-go.url", label: "Advertisement link", control: "url", persist: false, group: "Advertisement", validation: { allowRelativeUrl: true, allowedUrlProtocols: ["https:", "http:"] } }
     },
@@ -84,13 +83,13 @@ const readyToGoBlocks: BlockDefinition[] = withTemplatePolicy([
     },
     render: { web: ReadyToGoRecommendationsBlock, editor: ReadyToGoRecommendationsEditor }
   }
-], ["besttrack.ready-to-go.query"]);
+], ["besttrack.ready-to-go.query", "besttrack.ready-to-go.progress", "besttrack.ready-to-go.delivery"]);
 
 export const readyToGoTemplatePolicy = defineTemplatePolicy(
   "besttrack.ready-to-go",
   "Ready-to-go",
   readyToGoBlocks.map((block) => block.type),
-  ["besttrack.ready-to-go.query"]
+  ["besttrack.ready-to-go.query", "besttrack.ready-to-go.progress", "besttrack.ready-to-go.delivery"]
 );
 
 export function createReadyToGoTemplate(): TemplateDefinition {

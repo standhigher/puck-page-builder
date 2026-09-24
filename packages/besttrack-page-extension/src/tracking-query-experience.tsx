@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, useState, type CSSProperties, type FormEvent, type KeyboardEvent, type ReactNode } from "react";
 import { formatTrackingPageMoney, isValidOrderEmail, isValidOrderNumber, isValidTrackingNumber, type TrackingPageQueryRequest, type TrackingPageQueryResult, type TrackingPageRuntimePhase, type TrackingPageTrackingStep } from "./tracking-page-runtime";
 import { safeTrackingPageUrl } from "./tracking-page-url";
+import { TrackingLoading } from "./tracking-loading";
 
 type QueryMode = "tracking" | "order";
 type FieldName = "tracking" | "order" | "email";
@@ -18,8 +19,6 @@ export type TrackingQueryCardProps = {
   trackingPlaceholder?: string;
   orderPlaceholder?: string;
   emailPlaceholder?: string;
-  loadingLabel?: string;
-  loadingMessage?: string;
   emptyMessage?: string;
   errorMessage?: string;
   trackingInputLabel?: string;
@@ -111,8 +110,6 @@ export function TrackingQueryCard({
   trackingPlaceholder = "Enter your tracking number",
   orderPlaceholder = "Enter your order number",
   emailPlaceholder = "Enter your email",
-  loadingLabel = "Querying...",
-  loadingMessage = "Checking your order...",
   emptyMessage = "We couldn't find an order or shipment for that number.",
   errorMessage = "We couldn't retrieve this order right now. Please try again later.",
   trackingInputLabel = "Tracking number",
@@ -199,6 +196,7 @@ export function TrackingQueryCard({
 
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (loading) return;
     const nextErrors: Partial<Record<FieldName, string>> = {};
     const normalizedTrackingNumber = trackingNumber.trim();
     const normalizedOrderNumber = orderNumber.trim();
@@ -220,7 +218,7 @@ export function TrackingQueryCard({
 
   const errorFor = (field: FieldName) => errors[field];
   const inputWithError = (field: FieldName): CSSProperties => ({ ...inputStyle, borderColor: errorFor(field) ? "#b42318" : inputStyle.borderColor ?? "#cbd5e1" });
-  const message = phase === "loading" ? loadingMessage : phase === "empty" ? emptyMessage : phase === "error" ? errorMessage : undefined;
+  const message = phase === "empty" ? emptyMessage : phase === "error" ? errorMessage : undefined;
   const cardData = cardDataAttribute ? { [cardDataAttribute]: "true" } : {};
   const resultData = resultDataAttribute ? { [resultDataAttribute]: "true" } : {};
 
@@ -251,13 +249,14 @@ export function TrackingQueryCard({
           {errorFor("email") ? <p id={emailInputId + "-error"} role="alert" style={{ margin: "6px 0 0", color: "#b42318", fontSize: 13 }}>{errorFor("email")}</p> : null}
         </div>
       </>}
-      <button type="submit" disabled={loading} style={submitStyle(loading)}>{loading ? loadingLabel : submitLabel}</button>
+      <button type="submit" disabled={loading} style={submitStyle(loading)}>{submitLabel}</button>
     </form>
     </div>
     {message ? <p id={queryStatusId} role={phase === "error" ? "alert" : "status"} aria-live={phase === "error" ? "assertive" : "polite"} style={{ margin: "16px 0 0", color: phase === "error" ? "#b42318" : "#64748b", ...messageStyle }}>{message}</p> : null}
     {phase === "success" ? <p id={queryStatusId} role="status" aria-live="polite" style={srOnly}>Tracking details loaded.</p> : null}
     {terminalPhase ? <div ref={resultRef} role="region" aria-label={resultLabel} aria-describedby={queryStatusId} data-tracking-query-result {...resultData} data-testid={resultTestId} tabIndex={-1} style={{ minWidth: 0, overflowWrap: "anywhere", marginTop: phase === "success" ? 20 : 0, ...resultStyle }}>{phase === "success" ? result : null}</div> : null}
     {watermark}
+    {loading ? <TrackingLoading /> : null}
   </div>;
 }
 

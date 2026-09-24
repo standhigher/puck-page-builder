@@ -3,6 +3,29 @@ import { CanvasExtensionBlock } from "./canvas-extension-block";
 import type { ExtensionRegistry } from "../../core/extensions";
 import type { JsonValue } from "../../core/schema/page-document";
 
+export type PageDocumentBlockPermissions = Partial<Record<"drag" | "duplicate" | "delete" | "edit" | "insert", boolean>>;
+
+export type ResolvePageDocumentBlockPermissions = (input: { id: string; type: string }) => PageDocumentBlockPermissions;
+
+function withBlockPermissions<T extends Record<string, unknown>>(
+  component: T,
+  type: string,
+  resolvePermissions?: ResolvePageDocumentBlockPermissions
+): T & { resolvePermissions?: (item: { props?: Record<string, unknown> } | null) => PageDocumentBlockPermissions } {
+  if (!resolvePermissions) return component as T & { resolvePermissions?: (item: { props?: Record<string, unknown> } | null) => PageDocumentBlockPermissions };
+  return {
+    ...component,
+    // Keep actions hidden until the policy resolver has produced the current
+    // per-block result. This prevents a one-frame clickable action that may be
+    // rejected by the PageDocument policy after Puck emits onChange.
+    permissions: { drag: false, duplicate: false, delete: false, edit: false, insert: false },
+    resolvePermissions: (item) => {
+      const id = typeof item?.props?.id === "string" ? item.props.id : "";
+      return resolvePermissions({ id, type });
+    }
+  };
+}
+
 function canvasFieldFallback({ block, props, registry, onPropsChange }: { block: NonNullable<ExtensionRegistry["blocks"]>[number]; props: Record<string, unknown>; registry?: ExtensionRegistry; onPropsChange: (props: Record<string, JsonValue>) => void }) {
   const fields = Object.entries(block.fields);
   if (!fields.length) return null;
@@ -14,22 +37,22 @@ function canvasFieldFallback({ block, props, registry, onPropsChange }: { block:
   </div>;
 }
 
-export function createPageDocumentPuckConfig(onSelect: (id: string) => void, onPropsChange: (id: string, props: Record<string, JsonValue>, preserveCanvasValue?: boolean) => void, selectedBlockId?: string | null, registry?: ExtensionRegistry): Config {
+export function createPageDocumentPuckConfig(onSelect: (id: string) => void, onPropsChange: (id: string, props: Record<string, JsonValue>, preserveCanvasValue?: boolean) => void, selectedBlockId?: string | null, registry?: ExtensionRegistry, resolveBlockPermissions?: ResolvePageDocumentBlockPermissions): Config {
   const extensionComponents = Object.fromEntries((registry?.blocks ?? []).flatMap((block) => {
     const BlockRenderer = block.render.web;
     if (!BlockRenderer) return [];
-    return [[block.type, {
+    return [[block.type, withBlockPermissions({
       render: (props: Record<string, unknown>) => {
         const id = typeof props.id === "string" ? props.id : `unknown-${block.type}`;
         const EditorRenderer = block.render.editor;
         const active = id === selectedBlockId;
         return <CanvasExtensionBlock active={active} label={block.label} onSelect={() => onSelect(id)}>{EditorRenderer ? <EditorRenderer {...props} blockId={id} selected={active} onPropsChange={(next) => onPropsChange(id, next)} /> : <><BlockRenderer {...props} />{active ? canvasFieldFallback({ block, props, registry, onPropsChange: (next) => onPropsChange(id, next) }) : null}</>}</CanvasExtensionBlock>;
       }
-    }]];
+    }, block.type, resolveBlockPermissions)]];
   }));
   return {
     components: {
-      Text: {
+      Text: withBlockPermissions({
         render: (props: { id?: unknown; content?: unknown }) => {
           const id = typeof props.id === "string" ? props.id : "unknown-text";
           const content = typeof props.content === "string" ? props.content : "";
@@ -38,8 +61,8 @@ export function createPageDocumentPuckConfig(onSelect: (id: string) => void, onP
             if (event.key === "Enter" || event.key === " ") onSelect(id);
           }}><p contentEditable={editable} suppressContentEditableWarning onInput={(event) => { if (editable) onPropsChange(id, { content: event.currentTarget.textContent ?? "" }, true); }}>{content}</p></section>;
         }
-      },
-      Image: {
+      }, "core.text", resolveBlockPermissions),
+      Image: withBlockPermissions({
         render: (props: { id?: unknown; src?: unknown; alt?: unknown }) => {
           const id = typeof props.id === "string" ? props.id : "unknown-image";
           const src = typeof props.src === "string" ? props.src : "";
@@ -49,7 +72,7 @@ export function createPageDocumentPuckConfig(onSelect: (id: string) => void, onP
             if (event.key === "Enter" || event.key === " ") onSelect(id);
           }}><img src={src} alt={alt} />{editable ? <input aria-label="画布图片 URL" value={src} onChange={(event) => onPropsChange(id, { src: event.currentTarget.value }, true)} onClick={(event) => event.stopPropagation()} /> : null}</figure>;
         }
-      },
+      }, "core.image", resolveBlockPermissions),
       ...extensionComponents
     }
   } as Config;

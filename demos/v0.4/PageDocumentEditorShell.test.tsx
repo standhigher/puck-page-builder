@@ -186,6 +186,15 @@ describe("PageDocumentEditorShell V0.4", () => {
     await waitFor(() => expect(screen.getAllByText("Changed in inspector").some((element) => element.tagName === "P")).toBe(true));
   });
 
+  it("duplicates an allowed block through the inspector and selects its copy", async () => {
+    const changed: PageDocument[] = [];
+    renderEditor({ onDocumentChange: (next) => changed.push(next) });
+
+    fireEvent.click(screen.getByRole("button", { name: "复制" }));
+    await waitFor(() => expect(changed.at(-1)?.blocks.map((block) => block.id)).toEqual(["text-1", "core-text-3", "text-2"]));
+    expect(screen.getByLabelText("文本内容")).toHaveValue("First block");
+  });
+
   it("uses grouped, semantic controls for product-facing extension fields", async () => {
     const registry = createExtensionRegistry([bestTrackBrandedExtension]);
     const brandedDocument = registry.getTemplate("besttrack.branded")!.create();
@@ -455,6 +464,16 @@ describe("PageDocumentEditorShell V0.4", () => {
       { id: "gid://shopify/Product/2", title: "Cloud Buds Pro", imageUrl: "https://cdn.example/buds.jpg" }
     ]);
     expect(screen.getByText("Studio Wireless Headphones")).toBeVisible();
+  });
+
+  it("explains when a singleton block cannot be duplicated", async () => {
+    const registry = createExtensionRegistry([bestTrackPageExtension]);
+    renderEditor({ initialDocument: registry.getTemplate("besttrack.ready-to-go")!.create(), registry });
+    fireEvent.click(screen.getByRole("group", { name: "Select Recommended products in canvas" }));
+
+    const message = "此区块已达到允许数量上限，或复制操作已被禁用。";
+    expect(await screen.findByText(message)).toBeVisible();
+    expect(screen.getByRole("button", { name: message })).toHaveAttribute("aria-disabled", "true");
   });
 
   it("renders the reusable page lifecycle summary in the editor header", () => {

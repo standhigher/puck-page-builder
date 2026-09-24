@@ -310,7 +310,9 @@ export function createShopifyRecommendationsQuery(post: ShopifyTrackPagePost): T
 export {
   readTrackingQueryFromLocation,
   readTrackingQueryLocationState,
+  scrollToTrackingResult,
   syncTrackingQueryToUrl,
+  TRACKING_RESULT_SELECTOR,
   withCacheBustParam
 } from "./shopify-track-page/timeline";
 export { shouldHidePoweredBy } from "./shopify-track-page/poweredBy";

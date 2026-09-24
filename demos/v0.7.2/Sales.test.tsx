@@ -137,7 +137,7 @@ describe("V0.8 Sales", () => {
     render(<SalesRuntimeProvider query={query}><WebRenderer document={document} registry={registry} /></SalesRuntimeProvider>);
 
     fireEvent.click(screen.getByRole("button", { name: "Track order" }));
-    expect(await screen.findByText("Checking your order…")).toBeVisible();
+    expect(await screen.findByRole("status", { name: "查询中..." })).toBeVisible();
     expect(screen.getByRole("region", { name: "Items in your order" })).toHaveAttribute("aria-busy", "true");
     expect(screen.getByText("Collection reference is invalid.")).toBeVisible();
 

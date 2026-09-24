@@ -254,11 +254,12 @@ export function RecommendationCards({ items }: { items: ReadyToGoRecommendation[
 
 /**
  * Legacy Track Page `bst-ad-placeholder`: the slot is always 20:9 and at most
- * 500px wide. The image fills that box (`object-fit: fill`) instead of keeping
- * its intrinsic size. The slot stays collapsed when `ad` is absent, including
- * in the editor.
+ * 500px wide. The image is taken out of flow and stretched to that box
+ * (`object-fit: fill`), matching `.bst-ad-placeholder__img`. An in-flow image
+ * would keep its own ratio and leave side gaps inside the column.
  */
 const trackingPageAdSlotStyle: CSSProperties = {
+  position: "relative",
   display: "block",
   width: "100%",
   maxWidth: 500,
@@ -268,6 +269,8 @@ const trackingPageAdSlotStyle: CSSProperties = {
   textDecoration: "none"
 };
 const trackingPageAdImageStyle: CSSProperties = {
+  position: "absolute",
+  inset: 0,
   display: "block",
   width: "100%",
   height: "100%",
@@ -298,8 +301,8 @@ export function EstimatedDeliveryCard({ dateText }: { dateText: string }) {
   </div>;
 }
 
-export function SectionShell({ title, children, bordered = true }: { title: string; children: ReactNode; bordered?: boolean }) {
-  return <section aria-label={title} style={{ ...pageFont, background: "var(--pb-color-background, #fff)", color: "var(--pb-color-text, #0f172a)", borderBottom: bordered ? "1px solid #f1f5f9" : "0" }}>{children}</section>;
+export function SectionShell({ title, children, bordered = true, resultAnchor = false }: { title: string; children: ReactNode; bordered?: boolean; resultAnchor?: boolean }) {
+  return <section aria-label={title} data-tracking-result={resultAnchor ? "" : undefined} style={{ ...pageFont, background: "var(--pb-color-background, #fff)", color: "var(--pb-color-text, #0f172a)", borderBottom: bordered ? "1px solid #f1f5f9" : "0" }}>{children}</section>;
 }
 
 export function IdleMessage({ children }: { children: ReactNode }) {

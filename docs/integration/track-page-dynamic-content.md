@@ -30,7 +30,7 @@ type TrackingPageAd = {
 
 ### 3. 推荐商品独立于查单
 
-推荐商品对齐原 Track Page 首页 `RecommendationsCarousel`：页面挂载即请求，不要求先点查询。有 `transport` 时默认 `POST /products/recommend`；也可以传入 `queryRecommendations`。没有 live loader 时（编辑器 / Mock 预览）直接显示静态预览商品。推荐为空或失败时线上区块隐藏，查单失败也不收起已显示的推荐。
+推荐商品对齐原 Track Page 首页 `RecommendationsCarousel`：页面挂载即请求，不要求先点查询。有 `transport` 时默认 `POST /products/recommend`；也可以传入 `queryRecommendations`。没有 live loader 时，编辑器画布仍显示静态预览商品，方便摆放区块；Mock 预览不展示这组占位，只有区块里配置了推荐商品才渲染。推荐为空或失败时线上区块隐藏，查单失败也不收起已显示的推荐。
 
 ```tsx
 <ReadyToGoRuntimeProvider query={query} queryRecommendations={queryRecommendations}>
@@ -57,7 +57,7 @@ type TrackingPageRecommendationsQuery = () => Promise<TrackingPageRecommendation
 }
 ```
 
-编辑器继续使用包内 preview fixture；线上页面只渲染 host 注入的动态结果。
+编辑器画布继续使用包内 preview fixture。Mock 预览只渲染区块 `products` 里配置的商品。线上页面在未配置商品时只渲染 host 注入的动态结果。
 
 ## 宿主接入要求
 

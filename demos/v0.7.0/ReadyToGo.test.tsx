@@ -124,6 +124,29 @@ describe("V0.7.0 Ready-to-go", () => {
     expect(onPropsChange).toHaveBeenCalledWith({ heading: "Also consider" });
   });
 
+  it("shows configured recommendation products in preview and hides the placeholder when none are selected", () => {
+    const registry = createExtensionRegistry([bestTrackPageExtension]);
+    const document = registry.getTemplate("besttrack.ready-to-go")!.create();
+    const recommendations = document.blocks.find((block) => block.type === "besttrack.ready-to-go.recommendations");
+    if (recommendations) recommendations.props.products = [{ id: "gid://shopify/Product/9", title: "Preview Headphones" }];
+    const { rerender } = render(
+      <ReadyToGoRuntimeProvider>
+        <WebRenderer document={document} registry={registry} />
+      </ReadyToGoRuntimeProvider>
+    );
+    expect(screen.getByText("Preview Headphones")).toBeVisible();
+    expect(screen.queryByText("Shipping protection")).not.toBeInTheDocument();
+
+    if (recommendations) recommendations.props.products = [];
+    rerender(
+      <ReadyToGoRuntimeProvider>
+        <WebRenderer document={document} registry={registry} />
+      </ReadyToGoRuntimeProvider>
+    );
+    expect(screen.queryByText("Preview Headphones")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Recommended products carousel")).not.toBeInTheDocument();
+  });
+
   it("previews merchant-selected recommendation products on the canvas", () => {
     render(
       <ReadyToGoRecommendationsEditor
@@ -186,7 +209,7 @@ describe("V0.7.0 Ready-to-go", () => {
     });
 
     renderReadyToGo(query);
-    expect(screen.getByText("Shipping protection")).toBeVisible();
+    expect(screen.queryByText("Shipping protection")).not.toBeInTheDocument();
     fireEvent.change(screen.getByLabelText("Tracking number"), { target: { value: "BT-7777" } });
     fireEvent.click(screen.getByRole("button", { name: "Track Your Order" }));
 
@@ -199,7 +222,7 @@ describe("V0.7.0 Ready-to-go", () => {
     expect(screen.getByText("BestTrack")).toBeVisible();
     expect(screen.getByText("Shanghai")).toBeVisible();
     expect(screen.getByText("Travel case")).toBeVisible();
-    expect(screen.getByText("Shipping protection")).toBeVisible();
+    expect(screen.queryByText("Shipping protection")).not.toBeInTheDocument();
     expect(screen.getByText("Sep 22 - Sep 24")).toBeVisible();
     expect(screen.getByLabelText("Est. Delivery")).toHaveStyle({ width: "100%", backgroundColor: "#eaf4ff" });
     expect(screen.getByText("Est. Delivery")).toBeVisible();
@@ -212,8 +235,8 @@ describe("V0.7.0 Ready-to-go", () => {
     expect(screen.getByLabelText("Ready-to-go tracking query").parentElement).toHaveStyle({ backgroundColor: "#fff" });
     expect(screen.getByRole("tab", { name: "Tracking Number" })).toHaveAttribute("aria-selected", "true");
     expect(screen.getByRole("main")).toHaveStyle({ "--pb-color-primary": "#111111" });
-    expect(screen.getByLabelText("Recommended products carousel")).toBeVisible();
-    expect(screen.getByText("Shipping protection")).toBeVisible();
+    expect(screen.queryByLabelText("Recommended products carousel")).not.toBeInTheDocument();
+    expect(screen.queryByText("Shipping protection")).not.toBeInTheDocument();
   });
 
   it("disables submit while loading and shows a controlled query error", async () => {
@@ -222,14 +245,18 @@ describe("V0.7.0 Ready-to-go", () => {
     renderReadyToGo(query);
 
     fireEvent.click(screen.getByRole("button", { name: "Track Your Order" }));
-    expect(screen.getByRole("button", { name: "Tracking..." })).toBeDisabled();
-    expect(screen.getByLabelText("Loading shipment progress")).toBeVisible();
+    expect(screen.getByRole("button", { name: "Track Your Order" })).toBeDisabled();
+    expect(screen.getByRole("status", { name: "查询中..." })).toHaveTextContent("查询中...");
+    expect(screen.queryByLabelText("Shipment progress")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Shipping Details")).not.toBeInTheDocument();
 
     pending.reject(new Error("carrier-timeout"));
     expect(await screen.findByRole("alert")).toHaveTextContent("We couldn’t retrieve this order right now. Please try again later.");
+    expect(screen.queryByText("查询中...")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Track Your Order" })).toBeEnabled();
     expect(screen.getByText("Shipment progress is temporarily unavailable.")).toBeVisible();
     expect(screen.getByText("Delivery details are temporarily unavailable.")).toBeVisible();
-    expect(screen.getByText("Shipping protection")).toBeVisible();
+    expect(screen.queryByText("Shipping protection")).not.toBeInTheDocument();
   });
 
   it("keeps delivery fields visible when some result values are missing", async () => {

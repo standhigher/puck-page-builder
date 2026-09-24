@@ -131,8 +131,6 @@ function QueryHero(props: Record<string, unknown>) {
         initialMode={text(props, "defaultQueryMode", "tracking") === "order" ? "order" : "tracking"}
         trackingTabLabel={text(props, "trackingTabLabel", "Tracking Number")}
         orderTabLabel={text(props, "orderTabLabel", "Order Number")}
-        loadingLabel="Tracking..."
-        loadingMessage="Checking your order…"
         emptyMessage="We couldn’t find an order for that number."
         errorMessage="We couldn’t retrieve this order right now. Please try again later."
         cardDataAttribute="data-branded-query-card"

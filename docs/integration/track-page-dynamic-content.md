@@ -85,7 +85,7 @@ type TrackingPageRecommendationsQuery = () => Promise<TrackingPageRecommendation
 
 推荐商品仍由 host 的 `transport.post` 或 `queryRecommendations` 发请求。Ready-to-go 在传入 `transport` 时按原页面调用 `POST /products/recommend`，请求体 `{ page: 1, page_size: 20 }`，与查单并行，失败时隐藏推荐区块。也可以自行传入 `queryRecommendations`。
 
-旧推荐请求不要并入物流查询的 loading/error 状态。没有 `onlineStoreUrl` 时回退到 `/products/:handle`。价格仍转成包的 `TrackingPageMoney` 以便现有卡片渲染；图片和跳转地址应是公开 HTTPS 地址，相对商品路径会在浏览器中解析为当前 origin。
+旧推荐请求不要并入物流查询的 loading/error 状态。没有 `onlineStoreUrl` 时回退到 `/products/:handle`。价格仍取商品价，没有则取第一个变体价，并转成包的 `TrackingPageMoney`；卡片按原 Track Page 展示为 `$ 12.00` 这种形式。图片和跳转地址应是公开 HTTPS 地址，相对商品路径会在浏览器中解析为当前 origin。
 
 ## 版本与主项目接入状态
 

@@ -105,3 +105,45 @@ describe("EditorProvider canvas mutations", () => {
     expect(screen.getByTestId("canvas-dirty").textContent).toBe("false");
   });
 });
+
+function ReorderProbe() {
+  const editor = useEditorContext();
+  return <>
+    <output data-testid="reorder-order">{editor.document.blocks.map((block) => block.id).join(",")}</output>
+    <output data-testid="reorder-selected">{editor.selectedBlockId ?? ""}</output>
+    <button onClick={() => editor.reorderBlock("text-2", "text-1")}>before-first</button>
+    <button onClick={() => editor.reorderBlock("text-1")}>to-end</button>
+    <button onClick={() => editor.reorderBlock("text-2", "text-1")}>already-before</button>
+  </>;
+}
+
+describe("EditorProvider list reorder", () => {
+  it("moves a block before another block or to the end without writing a no-op history entry", () => {
+    const document = createPageDocument({ pageId: "list-reorder", blocks: [
+      { id: "text-1", type: "core.text", version: 1, props: { content: "One" } },
+      { id: "text-2", type: "core.text", version: 1, props: { content: "Two" } },
+      { id: "text-3", type: "core.text", version: 1, props: { content: "Three" } }
+    ] });
+    render(<EditorProvider initialDocument={document}><ReorderProbe /></EditorProvider>);
+
+    fireEvent.click(screen.getByText("before-first"));
+    expect(screen.getByTestId("reorder-order").textContent).toBe("text-2,text-1,text-3");
+    expect(screen.getByTestId("reorder-selected").textContent).toBe("text-2");
+
+    fireEvent.click(screen.getByText("already-before"));
+    expect(screen.getByTestId("reorder-order").textContent).toBe("text-2,text-1,text-3");
+
+    fireEvent.click(screen.getByText("to-end"));
+    expect(screen.getByTestId("reorder-order").textContent).toBe("text-2,text-3,text-1");
+  });
+
+  it("rejects list reorder when dragging is disabled", () => {
+    const document = createPageDocument({ pageId: "list-reorder-policy", blocks: [
+      { id: "text-1", type: "core.text", version: 1, props: { content: "One" } },
+      { id: "text-2", type: "core.text", version: 1, props: { content: "Two" } }
+    ] });
+    render(<EditorProvider initialDocument={document} policy={{ operations: { allowDrag: false } }}><ReorderProbe /></EditorProvider>);
+    fireEvent.click(screen.getByText("before-first"));
+    expect(screen.getByTestId("reorder-order").textContent).toBe("text-1,text-2");
+  });
+});

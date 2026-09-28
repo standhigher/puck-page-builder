@@ -273,6 +273,17 @@ describe("V0.7.0 Ready-to-go", () => {
     expect(screen.getByText("Shipping events will appear when the carrier publishes them.")).toBeVisible();
   });
 
+  it("shows recommended prices with a dollar sign and the catalog amount", async () => {
+    const queryRecommendations = vi.fn(async () => [{
+      id: "tote",
+      title: "Travel tote",
+      description: "",
+      price: { amount: 1200, currencyCode: "USD" }
+    }]);
+    renderReadyToGo(undefined, queryRecommendations);
+    expect(await screen.findByText("$ 12.00")).toBeVisible();
+  });
+
   it("uses a placeholder when a recommendation image fails", async () => {
     const queryRecommendations = vi.fn(async () => [{
       id: "cover",

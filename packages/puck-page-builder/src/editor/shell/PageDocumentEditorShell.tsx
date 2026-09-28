@@ -14,6 +14,7 @@ import { createAdminI18n } from "../i18n/admin";
 import type { PageDocumentEditorPolicy } from "../policy";
 import type { Device } from "../state/types";
 import { CanvasLibraryDropTarget } from "./CanvasLibraryDropTarget";
+import { beforeIdAfterPlacement, dropPlacement, libraryTypesInDocumentOrder } from "./drop-position";
 
 function scrollCanvasBlockIntoView(blockId: string, frame?: HTMLElement | null) {
   const selector = `[data-page-document-block-id="${CSS.escape(blockId)}"]`;
@@ -161,6 +162,9 @@ function PageDocumentEditor({ iframe = false, registry, adminLocale, onSave, onP
   const [leftRailOpen, setLeftRailOpen] = useState(true);
   const [rightPanelOpen, setRightPanelOpen] = useState(true);
   const [draggingLibraryType, setDraggingLibraryType] = useState<string | null>(null);
+  const [draggingBlockId, setDraggingBlockId] = useState<string | null>(null);
+  const draggingBlockIdRef = useRef<string | null>(null);
+  const [dropTarget, setDropTarget] = useState<{ id: string; edge: "before" | "after" } | null>(null);
   const canvasFrameRef = useRef<HTMLDivElement>(null);
   const [canvasMutationVersion, setCanvasMutationVersion] = useState(0);
   const [canvasResetVersion, setCanvasResetVersion] = useState(0);
@@ -267,14 +271,27 @@ function PageDocumentEditor({ iframe = false, registry, adminLocale, onSave, onP
 
   const allBlockTypes = ["core.text", "core.image", ...(registry?.blocks.map((block) => block.type) ?? [])];
   const blockTypes = availableBlockTypes ? allBlockTypes.filter((type) => availableBlockTypes.includes(type)) : allBlockTypes;
+  const orderedBlockTypes = libraryTypesInDocumentOrder(blockTypes, editor.document.blocks);
   const addFromLibrary = (type: string, beforeId?: string) => {
     const id = editor.addBlock(type, beforeId);
     if (id) editor.requestCanvasSelection(id);
   };
+  const clearLibraryDrag = () => {
+    draggingBlockIdRef.current = null;
+    setDraggingLibraryType(null);
+    setDraggingBlockId(null);
+    setDropTarget(null);
+  };
   const cancelLibraryDrop = (event: React.DragEvent<HTMLElement>) => {
     event.preventDefault();
     event.stopPropagation();
-    setDraggingLibraryType(null);
+    clearLibraryDrag();
+  };
+  const applyListReorder = (sourceId: string, targetId: string, edge: "before" | "after") => {
+    const beforeId = beforeIdAfterPlacement(editorRef.current.document.blocks.map((block) => block.id), targetId, edge);
+    editorRef.current.reorderBlock(sourceId, beforeId);
+    editorRef.current.requestCanvasSelection(sourceId);
+    scrollCanvasBlockIntoView(sourceId, canvasFrameRef.current);
   };
   const saveBadgeTone = resolvedSaveState === "failed" ? "critical" : resolvedSaveState === "offline" || resolvedSaveState === "dirty" ? "attention" : "success";
   const saveBadgeLabel = resolvedSaveState === "saving" ? i18n.t("saving") : resolvedSaveState === "failed" ? i18n.t("saveFailed") : resolvedSaveState === "offline" ? i18n.t("offline") : resolvedSaveState === "dirty" ? i18n.t("unsaved") : i18n.t("saved");
@@ -320,10 +337,19 @@ function PageDocumentEditor({ iframe = false, registry, adminLocale, onSave, onP
           <aside className={`pb-left-panel${leftRailOpen ? "" : " pb-panel--closed"}`} aria-label="PageDocument 区块">
             <InlineStack align="space-between" blockAlign="center"><Text as="h2" variant="headingSm">{blockView === "blocks" ? i18n.t("blocks") : i18n.t("outline")}</Text><Button accessibilityLabel={i18n.t("collapseLeft")} icon={XIcon} variant="tertiary" onClick={() => setLeftRailOpen(false)} /></InlineStack>
             {blockView === "blocks" ? <div className="pb-block-list" data-testid="blocks-view" aria-label="区块类型库" role="list" onDrop={cancelLibraryDrop}>
-              {blockTypes.map((type) => <div key={type} className={`pb-document-block-row pb-document-block-row--library ${editor.selectedBlock?.type === type ? "pb-document-block-row--selected" : ""}`} data-block-type={type} data-selected={editor.selectedBlock?.type === type} role="listitem" draggable={editor.canAddBlock(type)} aria-disabled={!editor.canAddBlock(type)} aria-label={`${blockTypeLabel(type, registry)}，拖拽至画布以添加${editor.selectedBlock?.type === type ? "，当前选中类型" : ""}`} onClick={() => { const block = editor.document.blocks.find((item) => item.type === type); if (!block) return; editor.requestCanvasSelection(block.id); scrollCanvasBlockIntoView(block.id, canvasFrameRef.current); }} onDragStart={(event) => { if (!editor.canAddBlock(type)) { event.preventDefault(); return; } event.dataTransfer.setData("application/x-page-document-block", type); event.dataTransfer.effectAllowed = "copy"; setDraggingLibraryType(type); }} onDragEnd={() => setDraggingLibraryType(null)}>
+              {orderedBlockTypes.map((type) => {
+                const instance = editor.document.blocks.find((item) => item.type === type);
+                const canAdd = editor.canAddBlock(type);
+                const canReorder = Boolean(instance && editor.canDragBlock(instance.id));
+                const draggable = canAdd || canReorder;
+                const selected = editor.selectedBlock?.type === type;
+                const dropEdge = draggingBlockId && instance && dropTarget?.id === instance.id ? dropTarget.edge : undefined;
+                const actionHint = canReorder && canAdd ? "，拖拽排序，或拖拽至画布以添加" : canReorder ? "，拖拽排序" : canAdd ? "，拖拽至画布以添加" : "";
+                return <div key={type} className={`pb-document-block-row pb-document-block-row--library${selected ? " pb-document-block-row--selected" : ""}${draggingBlockId === instance?.id ? " pb-document-block-row--dragging" : ""}${dropEdge === "before" ? " pb-document-block-row--drop-before" : ""}${dropEdge === "after" ? " pb-document-block-row--drop-after" : ""}`} data-block-type={type} data-selected={selected} data-drop-edge={dropEdge} role="listitem" draggable={draggable} aria-disabled={!draggable} aria-label={`${blockTypeLabel(type, registry)}${actionHint}${selected ? "，当前选中类型" : ""}`} onClick={() => { if (!instance) return; editor.requestCanvasSelection(instance.id); scrollCanvasBlockIntoView(instance.id, canvasFrameRef.current); }} onDragStart={(event) => { if (!draggable) { event.preventDefault(); return; } event.dataTransfer.setData("application/x-page-document-block", type); if (instance && canReorder) { event.dataTransfer.setData("application/x-page-document-block-id", instance.id); event.dataTransfer.effectAllowed = canAdd ? "copyMove" : "move"; draggingBlockIdRef.current = instance.id; setDraggingBlockId(instance.id); } else event.dataTransfer.effectAllowed = "copy"; if (canAdd) setDraggingLibraryType(type); }} onDragOver={(event) => { const sourceId = draggingBlockIdRef.current; if (!sourceId || !instance || sourceId === instance.id) return; event.preventDefault(); event.stopPropagation(); event.dataTransfer.dropEffect = "move"; const rect = event.currentTarget.getBoundingClientRect(); setDropTarget({ id: instance.id, edge: dropPlacement(event.clientY, rect.top, rect.height) }); }} onDragLeave={(event) => { if (instance && !event.currentTarget.contains(event.relatedTarget as Node | null)) setDropTarget((current) => current?.id === instance.id ? null : current); }} onDrop={(event) => { const sourceId = draggingBlockIdRef.current; if (!sourceId || !instance || sourceId === instance.id) return; event.preventDefault(); event.stopPropagation(); const rect = event.currentTarget.getBoundingClientRect(); applyListReorder(sourceId, instance.id, dropPlacement(event.clientY, rect.top, rect.height)); clearLibraryDrag(); }} onDragEnd={clearLibraryDrag}>
                 <span className="pb-library-block-title"><Text as="span" variant="bodySm" fontWeight="semibold">{blockTypeLabel(type, registry)}</Text><span className="pb-library-block-drag-hint" aria-hidden="true"><DragHandleIcon /></span></span>
                 <Text as="span" variant="bodySm" tone="subdued">{type}</Text>
-              </div>)}
+              </div>;
+              })}
             </div> : editor.document.blocks.length === 0 ? <Text as="p" tone="subdued">{i18n.t("empty")}</Text> : <div className="pb-block-list" data-testid="outline-view">
               {editor.document.blocks.map((block) => <button key={block.id} type="button" className={`pb-document-block-row pb-document-block-row--library ${block.id === editor.selectedBlockId ? "pb-document-block-row--selected" : ""}`} aria-pressed={block.id === editor.selectedBlockId} onClick={() => { editor.requestCanvasSelection(block.id); scrollCanvasBlockIntoView(block.id, canvasFrameRef.current); }}>
                 <Text as="span" variant="bodySm" fontWeight="semibold">{blockLabel(block, registry)}</Text>

@@ -67,6 +67,8 @@ Query results and watermark state are transient.
 
 Document props and bindings must remain JSON-only and must not contain a token,
 secret, customer order data, email address, or live query result. Merchant
-resources use stable Shopify IDs; product prices and availability are Runtime
-data. Production URLs must be public HTTPS URLs. Missing display data and
+resources use stable Shopify IDs. Catalog display prices may be stored on
+product snapshots as `{ amount, currencyCode }` minor units; formatted price
+strings, live availability, tokens, and secrets stay out of PageDocument.
+Production URLs must be public HTTPS URLs. Missing display data and
 unsafe resource URLs render controlled fallbacks.

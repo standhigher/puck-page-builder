@@ -57,7 +57,7 @@ type TrackingPageRecommendationsQuery = () => Promise<TrackingPageRecommendation
 }
 ```
 
-编辑器画布继续使用包内 preview fixture。Mock 预览只渲染区块 `products` 里配置的商品。线上页面在未配置商品时只渲染 host 注入的动态结果。
+编辑器画布继续使用包内 preview fixture。商家选品快照可带 `{ amount, currencyCode }` 展示价，编辑器、预览和已配置的线上页面都读这份快照。线上页面在未配置商品时只渲染 host 注入的动态结果。
 
 ## 宿主接入要求
 

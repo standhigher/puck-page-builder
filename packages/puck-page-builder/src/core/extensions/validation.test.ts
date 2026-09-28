@@ -12,6 +12,8 @@ describe("generic extension validation", () => {
     expect(validateFieldValue({ field: "", control: "color" }, "#005BD3")).toEqual([])
     expect(validateFieldValue({ field: "", control: "color" }, "blue")).toHaveLength(1)
     expect(validateFieldValue({ field: "", control: "products" }, [{ id: "gid://shopify/Product/1", title: "Tote" }])).toEqual([])
+    expect(validateFieldValue({ field: "", control: "products" }, [{ id: "gid://shopify/Product/1", price: { amount: 1200, currencyCode: "USD" } }])).toEqual([])
+    expect(validateFieldValue({ field: "", control: "products" }, [{ id: "gid://shopify/Product/1", price: "$12.00" }])).toEqual([{ path: "0", message: "必须包含稳定的商品 ID。" }])
     expect(validateFieldValue({ field: "", control: "products" }, [{ title: "Missing id" }])).toEqual([{ path: "0", message: "必须包含稳定的商品 ID。" }])
     expect(validateFieldValue({ field: "", control: "products" }, "gid://shopify/Product/1")).toEqual([{ path: "", message: "必须是商品列表。" }])
   });

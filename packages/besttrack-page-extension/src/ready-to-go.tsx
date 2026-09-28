@@ -384,7 +384,8 @@ function configuredRecommendations(products: unknown): ReadyToGoRecommendation[]
     title: product.title || product.id,
     description: "",
     imageUrl: product.imageUrl,
-    href: product.handle ? `/products/${product.handle}` : undefined
+    href: product.handle ? `/products/${product.handle}` : undefined,
+    ...(product.price ? { price: product.price } : {})
   }));
 }
 

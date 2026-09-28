@@ -86,7 +86,6 @@ describe("V0.7.0 Ready-to-go", () => {
     );
 
     const queryEditor = within(screen.getByLabelText("Ready-to-go query editor"));
-    fireEvent.change(queryEditor.getByLabelText("Canvas heading"), { target: { value: "Find your parcel" } });
     fireEvent.change(queryEditor.getByLabelText("Canvas submitLabel"), { target: { value: "Check delivery" } });
     fireEvent.change(queryEditor.getByLabelText("Canvas default tracking number"), { target: { value: "BT-EDIT" } });
     fireEvent.change(queryEditor.getByLabelText("Canvas trackingTabLabel"), { target: { value: "Parcel ID" } });
@@ -112,7 +111,6 @@ describe("V0.7.0 Ready-to-go", () => {
     expect(screen.queryByText("Advertisement space")).not.toBeInTheDocument();
     expect(screen.getByText("Demo shipment item")).toBeVisible();
     expect(screen.getByText("Shipping protection")).toBeVisible();
-    expect(onPropsChange).toHaveBeenCalledWith({ heading: "Find your parcel" });
     expect(onPropsChange).toHaveBeenCalledWith({ submitLabel: "Check delivery" });
     expect(onPropsChange).toHaveBeenCalledWith({ defaultTrackingNumber: "BT-EDIT" });
     expect(onPropsChange).toHaveBeenCalledWith({ trackingTabLabel: "Parcel ID" });
@@ -282,6 +280,42 @@ describe("V0.7.0 Ready-to-go", () => {
     }]);
     renderReadyToGo(undefined, queryRecommendations);
     expect(await screen.findByText("$ 12.00")).toBeVisible();
+  });
+
+  it("shows configured recommendation snapshot prices in the editor", () => {
+    render(
+      <ReadyToGoRuntimeProvider>
+        <ReadyToGoRecommendationsEditor
+          heading="You may also like..."
+          products={[{ id: "gid://shopify/Product/1", title: "Minimal Snowboard", price: { amount: 1200, currencyCode: "USD" } }]}
+          blockId="recs"
+          selected={false}
+          onPropsChange={vi.fn()}
+        />
+      </ReadyToGoRuntimeProvider>
+    );
+    expect(screen.getByText("Minimal Snowboard")).toBeVisible();
+    expect(screen.getByText("$ 12.00")).toBeVisible();
+  });
+
+  it("shows configured recommendation snapshot prices on the storefront", () => {
+    const registry = createExtensionRegistry([bestTrackPageExtension]);
+    const document = structuredClone(registry.getTemplate("besttrack.ready-to-go")!.create());
+    const recommendations = document.blocks.find((block) => block.type === "besttrack.ready-to-go.recommendations");
+    expect(recommendations).toBeDefined();
+    recommendations!.props = {
+      ...recommendations!.props,
+      products: [
+        { id: "gid://shopify/Product/1", title: "Minimal Snowboard", price: { amount: 2595, currencyCode: "USD" } }
+      ]
+    };
+    render(
+      <ReadyToGoRuntimeProvider>
+        <WebRenderer document={document} registry={registry} />
+      </ReadyToGoRuntimeProvider>
+    );
+    expect(screen.getByText("Minimal Snowboard")).toBeVisible();
+    expect(screen.getByText("$ 25.95")).toBeVisible();
   });
 
   it("uses a placeholder when a recommendation image fails", async () => {

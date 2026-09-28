@@ -79,3 +79,5 @@ Shopify Demo 的 `/page-builder` 已包含该模板的编辑器和 Consumer WebR
 ## 响应式与样式隔离
 
 区块使用受控 `--pb-*` Theme Token，并仅在 WebRenderer 的页面范围内生效。查询表单在窄视口会自动换行，结果卡片不使用固定最小宽度，因此同一 WebRenderer 可用于 375、768、1280 与 1440 宽度的容器。生产店铺仍需在实际 Shopify Theme 中进行人工视觉验收。
+
+查询完成后页面会平滑滚动到结果区。结果区默认预留 64px 给店铺吸顶导航；如果宿主导航更高，可在页面根元素或 `body` 上设置 `--bt-tracking-scroll-offset`（单位为 CSS 像素）覆盖该值，避免 Tracking 文案被主题导航覆盖。

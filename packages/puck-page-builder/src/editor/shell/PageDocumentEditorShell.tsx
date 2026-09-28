@@ -1,7 +1,7 @@
 import { Puck, usePuck } from "@puckeditor/core";
 import { Badge, Banner, Button, ButtonGroup, Frame, InlineStack, Select, Text, TextField, Toast } from "@shopify/polaris";
-import { DragHandleIcon, LayoutSectionIcon, MenuIcon, ProductIcon, RedoIcon, UndoIcon, XIcon } from "@shopify/polaris-icons";
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { DeleteIcon, DragHandleIcon, LayoutSectionIcon, MenuIcon, ProductIcon, RedoIcon, UndoIcon, XIcon } from "@shopify/polaris-icons";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
 import { createPageDocumentPuckConfig } from "../../adapters/puck/page-document-config";
 import { fromEngineData, toEngineData } from "../../adapters/puck/page-document";
 import { parseProductReferences, toProductReferenceJson, validateFieldValue, validatePageDocumentWithRegistry, type ExtensionRegistry, type FieldConfig, type ValidationIssue } from "../../core/extensions";
@@ -14,6 +14,7 @@ import { createAdminI18n } from "../i18n/admin";
 import type { PageDocumentEditorPolicy } from "../policy";
 import type { Device } from "../state/types";
 import { CanvasLibraryDropTarget } from "./CanvasLibraryDropTarget";
+import { AdaptiveIframe } from "./AdaptiveIframe";
 import { beforeIdAfterPlacement, dropPlacement, libraryTypesInDocumentOrder } from "./drop-position";
 
 function scrollCanvasBlockIntoView(blockId: string, frame?: HTMLElement | null) {
@@ -101,6 +102,18 @@ function validateDocumentBlocks(document: PageDocument, registry?: ExtensionRegi
 
 type ManagedSession = { state: EditorSessionState; session?: EditorSession; message?: string };
 
+type CanvasZoom = "auto" | "50" | "70" | "100";
+
+function canvasZoomValue(zoom: CanvasZoom, autoZoom: number) {
+  return zoom === "auto" ? autoZoom : Number(zoom) / 100;
+}
+
+/** Apply the same transform-based zoom model used by Puck's canvas root. */
+function CanvasNativeZoom({ zoom, frameRef, className, dataDevice, canvasThemeStyle, children }: { zoom: CanvasZoom; frameRef: RefObject<HTMLDivElement>; className: string; dataDevice: Device; canvasThemeStyle: React.CSSProperties; children: ReactNode }) {
+  const scale = canvasZoomValue(zoom, 1);
+  return <div ref={frameRef} className={className} data-device={dataDevice} data-zoom={zoom} data-puck-zoom={scale} style={{ ...canvasThemeStyle, transform: `scale(${scale})`, transformOrigin: "top center" }}>{children}</div>;
+}
+
 function useEditorSession(adapter: EditorSessionAdapter | undefined, pageId: string): ManagedSession {
   const [managed, setManaged] = useState<ManagedSession>(() => adapter ? { state: "acquiring" } : { state: "active" });
 
@@ -154,7 +167,7 @@ export function PageDocumentEditorShell(props: PageDocumentEditorShellProps) {
   </EditorProvider>;
 }
 
-function PageDocumentEditor({ iframe = false, registry, adminLocale, onSave, onPublish, draftPersistence, draftRevision: initialDraftRevision, autoSave = true, autoSaveDelayMs = 800, publishAction, assetPicker, inspectorSettings, productPicker, pageStatus, onBack, onHistory, onPreview, onAddToStore, deleteConfirmation, availableBlockTypes, appearanceControls = false }: PageDocumentEditorShellProps) {
+function PageDocumentEditor({ iframe = true, registry, adminLocale, onSave, onPublish, draftPersistence, draftRevision: initialDraftRevision, autoSave = true, autoSaveDelayMs = 800, publishAction, assetPicker, inspectorSettings, productPicker, pageStatus, onBack, onHistory, onPreview, onAddToStore, deleteConfirmation, availableBlockTypes, appearanceControls = false }: PageDocumentEditorShellProps) {
   const editor = useEditorContext();
   const editorRef = useRef(editor);
   useLayoutEffect(() => { editorRef.current = editor; }, [editor]);
@@ -173,7 +186,7 @@ function PageDocumentEditor({ iframe = false, registry, adminLocale, onSave, onP
   const [draftRevision, setDraftRevision] = useState(initialDraftRevision);
   const [isOnline, setIsOnline] = useState(() => typeof navigator === "undefined" || navigator.onLine);
   const [saveState, setSaveState] = useState<"dirty" | "saving" | "saved" | "failed" | "offline">("saved");
-  const [zoom, setZoom] = useState<"auto" | "50" | "70" | "100">("auto");
+  const [zoom, setZoom] = useState<CanvasZoom>("auto");
   const [confirmBack, setConfirmBack] = useState(false);
   const i18n = createAdminI18n(adminLocale);
   const engineData = useMemo(() => toEngineData(editor.document, registry), [editor.document, registry]);
@@ -302,7 +315,7 @@ function PageDocumentEditor({ iframe = false, registry, adminLocale, onSave, onP
   };
   const dismissPublishedNotice = () => setNotice((current) => current === "published" ? null : current);
   return <>
-  <Puck config={config} data={engineData} iframe={{ enabled: iframe }} dnd={{ behavior: "static" }} overrides={{ actionBar: CanvasSelectionActionBar }} onChange={(data) => {
+  <Puck config={config} data={engineData} iframe={{ enabled: iframe }} dnd={{ behavior: "static" }} overrides={{ iframe: AdaptiveIframe, actionBar: CanvasSelectionActionBar }} onChange={(data) => {
     if (!editor.updateFromCanvas(fromEngineData(data, editor.document, registry))) setCanvasResetVersion((version) => version + 1);
   }}>
     <Puck.Layout>
@@ -335,7 +348,7 @@ function PageDocumentEditor({ iframe = false, registry, adminLocale, onSave, onP
             <Button accessibilityLabel={i18n.t("outline")} icon={MenuIcon} pressed={blockView === "outline" && leftRailOpen} variant="tertiary" onClick={() => { setBlockView("outline"); setLeftRailOpen(true); }} />
           </nav>
           <aside className={`pb-left-panel${leftRailOpen ? "" : " pb-panel--closed"}`} aria-label="PageDocument 区块">
-            <InlineStack align="space-between" blockAlign="center"><Text as="h2" variant="headingSm">{blockView === "blocks" ? i18n.t("blocks") : i18n.t("outline")}</Text><Button accessibilityLabel={i18n.t("collapseLeft")} icon={XIcon} variant="tertiary" onClick={() => setLeftRailOpen(false)} /></InlineStack>
+            <div className="pb-panel-header"><InlineStack align="space-between" blockAlign="center" wrap={false}><Text as="h2" variant="headingSm">{blockView === "blocks" ? i18n.t("blocks") : i18n.t("outline")}</Text><Button accessibilityLabel={i18n.t("collapseLeft")} icon={XIcon} variant="tertiary" onClick={() => setLeftRailOpen(false)} /></InlineStack></div>
             {blockView === "blocks" ? <div className="pb-block-list" data-testid="blocks-view" aria-label="区块类型库" role="list" onDrop={cancelLibraryDrop}>
               {orderedBlockTypes.map((type) => {
                 const instance = editor.document.blocks.find((item) => item.type === type);
@@ -345,8 +358,18 @@ function PageDocumentEditor({ iframe = false, registry, adminLocale, onSave, onP
                 const selected = editor.selectedBlock?.type === type;
                 const dropEdge = draggingBlockId && instance && dropTarget?.id === instance.id ? dropTarget.edge : undefined;
                 const actionHint = canReorder && canAdd ? "，拖拽排序，或拖拽至画布以添加" : canReorder ? "，拖拽排序" : canAdd ? "，拖拽至画布以添加" : "";
-                return <div key={type} className={`pb-document-block-row pb-document-block-row--library${selected ? " pb-document-block-row--selected" : ""}${draggingBlockId === instance?.id ? " pb-document-block-row--dragging" : ""}${dropEdge === "before" ? " pb-document-block-row--drop-before" : ""}${dropEdge === "after" ? " pb-document-block-row--drop-after" : ""}`} data-block-type={type} data-selected={selected} data-drop-edge={dropEdge} role="listitem" draggable={draggable} aria-disabled={!draggable} aria-label={`${blockTypeLabel(type, registry)}${actionHint}${selected ? "，当前选中类型" : ""}`} onClick={() => { if (!instance) return; editor.requestCanvasSelection(instance.id); scrollCanvasBlockIntoView(instance.id, canvasFrameRef.current); }} onDragStart={(event) => { if (!draggable) { event.preventDefault(); return; } event.dataTransfer.setData("application/x-page-document-block", type); if (instance && canReorder) { event.dataTransfer.setData("application/x-page-document-block-id", instance.id); event.dataTransfer.effectAllowed = canAdd ? "copyMove" : "move"; draggingBlockIdRef.current = instance.id; setDraggingBlockId(instance.id); } else event.dataTransfer.effectAllowed = "copy"; if (canAdd) setDraggingLibraryType(type); }} onDragOver={(event) => { const sourceId = draggingBlockIdRef.current; if (!sourceId || !instance || sourceId === instance.id) return; event.preventDefault(); event.stopPropagation(); event.dataTransfer.dropEffect = "move"; const rect = event.currentTarget.getBoundingClientRect(); setDropTarget({ id: instance.id, edge: dropPlacement(event.clientY, rect.top, rect.height) }); }} onDragLeave={(event) => { if (instance && !event.currentTarget.contains(event.relatedTarget as Node | null)) setDropTarget((current) => current?.id === instance.id ? null : current); }} onDrop={(event) => { const sourceId = draggingBlockIdRef.current; if (!sourceId || !instance || sourceId === instance.id) return; event.preventDefault(); event.stopPropagation(); const rect = event.currentTarget.getBoundingClientRect(); applyListReorder(sourceId, instance.id, dropPlacement(event.clientY, rect.top, rect.height)); clearLibraryDrag(); }} onDragEnd={clearLibraryDrag}>
-                <span className="pb-library-block-title"><Text as="span" variant="bodySm" fontWeight="semibold">{blockTypeLabel(type, registry)}</Text><span className="pb-library-block-drag-hint" aria-hidden="true"><DragHandleIcon /></span></span>
+                const canDelete = Boolean(instance && editor.canDeleteBlock(instance.id));
+                const label = blockTypeLabel(type, registry);
+                return <div key={type} className={`pb-document-block-row pb-document-block-row--library${selected ? " pb-document-block-row--selected" : ""}${draggingBlockId === instance?.id ? " pb-document-block-row--dragging" : ""}${dropEdge === "before" ? " pb-document-block-row--drop-before" : ""}${dropEdge === "after" ? " pb-document-block-row--drop-after" : ""}`} data-block-type={type} data-selected={selected} data-drop-edge={dropEdge} role="listitem" draggable={draggable} aria-disabled={!draggable} aria-label={`${label}${actionHint}${selected ? "，当前选中类型" : ""}`} onClick={() => { if (!instance) return; editor.requestCanvasSelection(instance.id); scrollCanvasBlockIntoView(instance.id, canvasFrameRef.current); }} onDragStart={(event) => { if ((event.target as HTMLElement).closest("button")) { event.preventDefault(); return; } if (!draggable) { event.preventDefault(); return; } event.dataTransfer.setData("application/x-page-document-block", type); if (instance && canReorder) { event.dataTransfer.setData("application/x-page-document-block-id", instance.id); event.dataTransfer.effectAllowed = canAdd ? "copyMove" : "move"; draggingBlockIdRef.current = instance.id; setDraggingBlockId(instance.id); } else event.dataTransfer.effectAllowed = "copy"; if (canAdd) setDraggingLibraryType(type); }} onDragOver={(event) => { const sourceId = draggingBlockIdRef.current; if (!sourceId || !instance || sourceId === instance.id) return; event.preventDefault(); event.stopPropagation(); event.dataTransfer.dropEffect = "move"; const rect = event.currentTarget.getBoundingClientRect(); setDropTarget({ id: instance.id, edge: dropPlacement(event.clientY, rect.top, rect.height) }); }} onDragLeave={(event) => { if (instance && !event.currentTarget.contains(event.relatedTarget as Node | null)) setDropTarget((current) => current?.id === instance.id ? null : current); }} onDrop={(event) => { const sourceId = draggingBlockIdRef.current; if (!sourceId || !instance || sourceId === instance.id) return; event.preventDefault(); event.stopPropagation(); const rect = event.currentTarget.getBoundingClientRect(); applyListReorder(sourceId, instance.id, dropPlacement(event.clientY, rect.top, rect.height)); clearLibraryDrag(); }} onDragEnd={clearLibraryDrag}>
+                <span className="pb-library-block-title">
+                  <Text as="span" variant="bodySm" fontWeight="semibold">{label}</Text>
+                  <span className="pb-library-block-controls">
+                    <span className="pb-library-block-drag-hint" aria-hidden="true"><DragHandleIcon /></span>
+                    <span draggable={false} onClick={(event) => event.stopPropagation()} onPointerDown={(event) => event.stopPropagation()} onDragStart={(event) => { event.preventDefault(); event.stopPropagation(); }}>
+                      <Button icon={DeleteIcon} variant="tertiary" tone={canDelete ? "critical" : undefined} disabled={!canDelete} accessibilityLabel={`${i18n.t("remove")} ${label}`} onClick={() => { if (instance) editor.requestDeleteBlock(instance.id); }} />
+                    </span>
+                  </span>
+                </span>
                 <Text as="span" variant="bodySm" tone="subdued">{type}</Text>
               </div>;
               })}
@@ -359,8 +382,10 @@ function PageDocumentEditor({ iframe = false, registry, adminLocale, onSave, onP
           </aside>
           <main className="pb-canvas-area">
             <div className="pb-canvas-stage">
-              <div ref={canvasFrameRef} className={`pb-canvas-frame pb-canvas-frame--${editor.device}${zoom === "auto" ? "" : ` pb-canvas-frame--zoom-${zoom}`}`} data-device={editor.device} data-zoom={zoom} style={canvasThemeStyle}><Puck.Preview /></div>
-              {draggingLibraryType ? <CanvasLibraryDropTarget frameRef={canvasFrameRef} blocks={editor.document.blocks.map((block) => ({ id: block.id, label: blockLabel(block, registry) }))} label={blockTypeLabel(draggingLibraryType, registry)} adminLocale={adminLocale} onDrop={(beforeId) => { addFromLibrary(draggingLibraryType, beforeId); setDraggingLibraryType(null); }} onCancel={() => setDraggingLibraryType(null)} /> : null}
+              <CanvasNativeZoom frameRef={canvasFrameRef} className={`pb-canvas-frame pb-canvas-frame--${editor.device}${zoom === "auto" ? "" : ` pb-canvas-frame--zoom-${zoom}`}`} dataDevice={editor.device} canvasThemeStyle={canvasThemeStyle} zoom={zoom}>
+                <Puck.Preview />
+                {draggingLibraryType ? <CanvasLibraryDropTarget frameRef={canvasFrameRef} blocks={editor.document.blocks.map((block) => ({ id: block.id, label: blockLabel(block, registry) }))} label={blockTypeLabel(draggingLibraryType, registry)} adminLocale={adminLocale} onDrop={(beforeId) => { addFromLibrary(draggingLibraryType, beforeId); setDraggingLibraryType(null); }} onCancel={() => setDraggingLibraryType(null)} /> : null}
+              </CanvasNativeZoom>
             </div>
             {!leftRailOpen || !rightPanelOpen ? <div className="pb-collapsed-actions">{!leftRailOpen ? <Button onClick={() => setLeftRailOpen(true)}>{i18n.t("expandLeft")}</Button> : null}{!rightPanelOpen ? <Button onClick={() => setRightPanelOpen(true)}>{i18n.t("expandRight")}</Button> : null}</div> : null}
           </main>

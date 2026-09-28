@@ -642,6 +642,12 @@ export const TRACKING_RESULT_SELECTOR = "[data-tracking-result]"
 
 /** Breathing room so the tracking number is not flush against a sticky bar. */
 const TRACKING_RESULT_SCROLL_GAP = 8
+/**
+ * Keep the result below a storefront header even when the theme promotes its
+ * header to sticky/fixed during the smooth scroll. Hosts with a taller header
+ * can override this through `--bt-tracking-scroll-offset`.
+ */
+const TRACKING_RESULT_DEFAULT_SCROLL_OFFSET = 64
 
 function scrollingParent(node: HTMLElement): HTMLElement | null {
   let parent = node.parentElement
@@ -653,11 +659,16 @@ function scrollingParent(node: HTMLElement): HTMLElement | null {
   return null
 }
 
-function isTopPinned(style: CSSStyleDeclaration) {
-  if (style.position !== "sticky" && style.position !== "fixed") return false
+function isTopPinned(style: CSSStyleDeclaration, rect: DOMRect, portTop: number, themeHeader = false) {
   if (style.display === "none" || style.visibility === "hidden") return false
+  if (themeHeader) return rect.bottom > portTop && rect.top <= portTop + 1
+  if (style.position !== "sticky" && style.position !== "fixed") return false
   const top = Number.parseFloat(style.top)
-  return Number.isFinite(top) && top >= 0 && top <= 240
+  if (Number.isFinite(top)) return top >= 0 && top <= 240
+  // Some themes use `inset`/`inset-block-start`, which can leave `top` as
+  // `auto`. The element is still a top bar when its rendered box is near the
+  // scroll port's top edge.
+  return rect.bottom > portTop && rect.top <= portTop + 1
 }
 
 /**
@@ -675,18 +686,19 @@ export function trackingResultScrollOffset(node: HTMLElement): number {
   let covered = 0
   const seen = new Set<Element>()
 
-  const consider = (el: Element) => {
+  const consider = (el: Element, themeHeader = false) => {
     if (!(el instanceof HTMLElement) || seen.has(el) || el === node || node.contains(el)) return
-    seen.add(el)
     const style = getComputedStyle(el)
-    if (!isTopPinned(style)) return
-    if (style.position !== "fixed" && scrollingParent(el) !== scrollPort) return
     const rect = el.getBoundingClientRect()
+    if (!isTopPinned(style, rect, portTop, themeHeader)) return
+    seen.add(el)
+    if (!themeHeader && style.position !== "fixed" && scrollingParent(el) !== scrollPort) return
     if (rect.width <= 0 || rect.height <= 0) return
     const overlapLeft = Math.max(rect.left, portLeft, targetRect.left)
     const overlapRight = Math.min(rect.right, portRight, Math.max(targetRect.right, targetRect.left))
     if (overlapRight - overlapLeft <= 8) return
-    const pinTop = Number.parseFloat(style.top) || 0
+    const parsedTop = Number.parseFloat(style.top)
+    const pinTop = Number.isFinite(parsedTop) ? Math.max(0, parsedTop) : Math.max(0, rect.top - portTop)
     const precedes = (node.compareDocumentPosition(el) & Node.DOCUMENT_POSITION_PRECEDING) !== 0
     const coversPortTop = rect.bottom > portTop && rect.top <= portTop + pinTop + 1
     if (!precedes && !coversPortTop) return
@@ -697,10 +709,23 @@ export function trackingResultScrollOffset(node: HTMLElement): number {
     const x = targetRect.width > 0
       ? Math.min(Math.max(targetRect.left + targetRect.width / 2, portLeft), portRight)
       : portLeft + (portRight - portLeft) / 2
-    document.elementsFromPoint(x, portTop + 1).forEach(consider)
+    document.elementsFromPoint(x, portTop + 1).forEach((el) => consider(el))
   }
-  document.querySelectorAll("header, nav, [role='banner']").forEach(consider)
-  return covered > 0 ? Math.ceil(covered + TRACKING_RESULT_SCROLL_GAP) : 0
+  // Shopify themes commonly put the sticky behavior on a custom element or a
+  // wrapper around the semantic header. Check common theme markers first, then
+  // fall back to all elements when no bar was found.
+  document.querySelectorAll("header, nav, [role='banner'], [role='navigation']").forEach((el) => consider(el))
+  document.querySelectorAll("sticky-header, .shopify-section-header-sticky, [data-sticky-header], [class*='header-sticky'], [class*='sticky-header']").forEach((el) => consider(el, true))
+  if (covered === 0) document.querySelectorAll("*").forEach((el) => consider(el))
+
+  const rootStyle = getComputedStyle(document.documentElement)
+  const bodyStyle = getComputedStyle(document.body)
+  const nodeStyle = getComputedStyle(node)
+  const configured = Number.parseFloat(
+    rootStyle.getPropertyValue("--bt-tracking-scroll-offset") || bodyStyle.getPropertyValue("--bt-tracking-scroll-offset") || nodeStyle.getPropertyValue("--bt-tracking-scroll-offset")
+  )
+  const minimum = Number.isFinite(configured) ? Math.max(0, configured) : TRACKING_RESULT_DEFAULT_SCROLL_OFFSET
+  return Math.max(minimum, covered > 0 ? Math.ceil(covered + TRACKING_RESULT_SCROLL_GAP) : 0)
 }
 
 /**

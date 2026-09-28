@@ -4,6 +4,7 @@ import {
   createShopifyRecommendationsQuery,
   createShopifyTrackQuery,
   readTrackingQueryLocationState,
+  resolveShopifyRecommendHref,
   scrollToTrackingResult,
   shouldHidePoweredBy,
   syncTrackingQueryToUrl,
@@ -384,7 +385,9 @@ function configuredRecommendations(products: unknown): ReadyToGoRecommendation[]
     title: product.title || product.id,
     description: "",
     imageUrl: product.imageUrl,
-    href: product.handle ? `/products/${product.handle}` : undefined,
+    // Product snapshots only persist the Shopify handle. Resolve the generated
+    // storefront path before RecommendationCards applies its URL safety check.
+    href: resolveShopifyRecommendHref(undefined, product.handle),
     ...(product.price ? { price: product.price } : {})
   }));
 }

@@ -289,6 +289,26 @@ describe("Shopify Track Page query helpers", () => {
     later.remove();
   });
 
+  it("protects the result from a custom sticky header wrapper", () => {
+    const box = (top: number, height: number, width = 800) => ({
+      x: 0, y: top, top, left: 0, right: width, bottom: top + height, width, height, toJSON() { return {}; }
+    }) as DOMRect;
+    const header = document.createElement("sticky-header");
+    // Themes may promote this wrapper to sticky only while the page is
+    // scrolling; the marker still lets us reserve its visible header height.
+    header.style.position = "static";
+    header.getBoundingClientRect = () => box(0, 96);
+    const target = document.createElement("section");
+    target.setAttribute("data-tracking-result", "");
+    target.getBoundingClientRect = () => box(400, 320);
+    document.body.append(header, target);
+
+    expect(trackingResultScrollOffset(target)).toBe(104);
+
+    header.remove();
+    target.remove();
+  });
+
   it("hides powered-by for the original storefront allow-list and feature flag", () => {
     const hidden = {
       location: { hostname: "shop.example", search: "?shop=wavvveglobal.com", hash: "" },

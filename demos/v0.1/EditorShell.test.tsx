@@ -57,6 +57,7 @@ describe("EditorShell V0.1.1", () => {
     const canvas = screen.getByTestId("editor-shell").querySelector(".pb-canvas-frame");
     expect(canvas).toHaveAttribute("data-device", "mobile");
     expect(canvas).toHaveAttribute("data-zoom", "70");
+    expect(canvas).toHaveClass("pb-canvas-frame--zoom-70");
   });
 
   it("keeps editor language and page locale independent", () => {

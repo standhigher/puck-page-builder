@@ -27,6 +27,7 @@ import {
 } from "@shopify/polaris-icons";
 import { useRef, useState } from "react";
 import { createDemoPuckConfig, toDemoPuckData } from "../../adapters/puck/demo-preview";
+import { AdaptiveIframe } from "./AdaptiveIframe";
 import {
   initialEditorState,
   type DemoBlock,
@@ -124,7 +125,7 @@ export function EditorShell({ initialState, iframe = true }: EditorShellProps) {
   };
 
   return (
-    <Puck config={puckConfig} data={puckData} iframe={{ enabled: iframe }}>
+    <Puck config={puckConfig} data={puckData} iframe={{ enabled: iframe }} overrides={{ iframe: AdaptiveIframe }}>
       <Puck.Layout>
         <div className="pb-shell" data-testid="editor-shell" data-preview-mode={state.previewMode}>
           <header className="pb-header">

@@ -217,6 +217,7 @@ describe("PageDocumentEditorShell V0.4", () => {
   it("collapses and restores the blocks and properties sidebars from the package shell", () => {
     renderEditor();
     const editor = screen.getByTestId("page-document-editor");
+    expect(screen.getByLabelText("PageDocument 区块").querySelector(".pb-panel-header")).not.toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "收起左侧面板" }));
     expect(editor).toHaveAttribute("data-left-panel", "closed");
     expect(screen.getByLabelText("PageDocument 区块")).toHaveClass("pb-panel--closed");
@@ -352,6 +353,10 @@ describe("PageDocumentEditorShell V0.4", () => {
     expect(screen.getByTestId("page-document-editor").querySelector(".pb-canvas-toolbar")).toBeNull();
     fireEvent.click(mobileButton);
     expect(screen.getByTestId("page-document-editor").querySelector(".pb-canvas-frame")).toHaveAttribute("data-device", "mobile");
+    fireEvent.change(screen.getByLabelText("Zoom"), { target: { value: "70" } });
+    const canvas = screen.getByTestId("page-document-editor").querySelector(".pb-canvas-frame");
+    expect(canvas).toHaveAttribute("data-zoom", "70");
+    expect(canvas).toHaveClass("pb-canvas-frame--zoom-70");
     expect(screen.getByTestId("blocks-view").querySelector('[data-block-type="core.text"]')).toBeVisible();
     expect(screen.getByRole("button", { name: "Undo" })).toHaveAttribute("aria-disabled", "true");
     expect(screen.queryByTestId("sidebar-toggles")).not.toBeInTheDocument();

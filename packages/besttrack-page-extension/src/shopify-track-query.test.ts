@@ -325,4 +325,25 @@ describe("Shopify Track Page query helpers", () => {
     } as unknown as Window;
     expect(shouldHidePoweredBy(visible)).toBe(false);
   });
+
+  it("hides powered-by when #besttrack-page-bootstrap enables watermark removal", () => {
+    const windowWithBootstrap = (raw: string | null) =>
+      ({
+        location: { hostname: "shop.example", search: "", hash: "" },
+        document: {
+          getElementById: (id: string) =>
+            id === "besttrack-page-bootstrap" && raw != null ? { textContent: raw } : null
+        }
+      }) as unknown as Window;
+
+    expect(shouldHidePoweredBy(windowWithBootstrap(JSON.stringify({
+      queryPath: "/apps/bestrack-test/track/query",
+      enableTrackingPageWatermarkRemoval: true
+    })))).toBe(true);
+    expect(shouldHidePoweredBy(windowWithBootstrap(JSON.stringify({
+      queryPath: "/apps/bestrack-test/track/query",
+      enableTrackingPageWatermarkRemoval: "true"
+    })))).toBe(false);
+    expect(shouldHidePoweredBy(windowWithBootstrap(null))).toBe(false);
+  });
 });

@@ -3,6 +3,9 @@ const POWERED_BY_HIDDEN_STORE_DOMAINS = new Set([
   'wavvveglobal.com',
 ])
 
+/** HTML 壳注入接口地址和去水印授权的 script 节点。 */
+const TRACKING_PAGE_BOOTSTRAP_SCRIPT_ID = 'besttrack-page-bootstrap'
+
 type ShopifyWindow = Window & {
   Shopify?: {
     domain?: string
@@ -32,6 +35,17 @@ const normalizeStoreDomain = (value: string) => {
   return host.replace(/^www\./, '')
 }
 
+function readBootstrapWatermarkRemoval(runtimeWindow: Window) {
+  const raw = runtimeWindow.document?.getElementById?.(TRACKING_PAGE_BOOTSTRAP_SCRIPT_ID)?.textContent?.trim() ?? ''
+  if (!raw) return false
+  try {
+    const parsed = JSON.parse(raw) as { enableTrackingPageWatermarkRemoval?: unknown }
+    return parsed.enableTrackingPageWatermarkRemoval === true
+  } catch {
+    return false
+  }
+}
+
 /** Same hide rule as the original Shopify Track Page Home screen. */
 export function shouldHidePoweredBy(targetWindow?: Window) {
   const runtimeWindow = targetWindow ?? (typeof window === 'undefined' ? undefined : window)
@@ -40,6 +54,7 @@ export function shouldHidePoweredBy(targetWindow?: Window) {
   const shopifyWindow = runtimeWindow as ShopifyWindow
   if (
     shopifyWindow.__BESTRACK__?.featureFlags?.enableTrackingPageWatermarkRemoval === true
+    || readBootstrapWatermarkRemoval(runtimeWindow)
   ) {
     return true
   }

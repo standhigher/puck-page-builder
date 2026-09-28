@@ -15,4 +15,25 @@ describe("product snapshots", () => {
     ]);
     expect(toProductReferenceJson({ id: "gid://shopify/Product/1", title: "Tote" })).toEqual({ id: "gid://shopify/Product/1", title: "Tote" });
   });
+
+  it("keeps catalog display money and drops invalid prices", () => {
+    const price = { amount: 1200, currencyCode: "USD" };
+    expect(isProductReference({ id: "gid://shopify/Product/1", price })).toBe(true);
+    expect(isProductReference({ id: "gid://shopify/Product/1", price: "$12.00" })).toBe(false);
+    expect(isProductReference({ id: "gid://shopify/Product/1", price: { amount: -1, currencyCode: "USD" } })).toBe(false);
+    expect(parseProductReferences([
+      { id: "gid://shopify/Product/1", title: "Tote", price },
+      { id: "gid://shopify/Product/2", price: "$12.00" },
+      { id: "gid://shopify/Product/3", price: { amount: -1, currencyCode: "USD" } }
+    ])).toEqual([
+      { id: "gid://shopify/Product/1", title: "Tote", price },
+      { id: "gid://shopify/Product/2" },
+      { id: "gid://shopify/Product/3" }
+    ]);
+    expect(toProductReferenceJson({ id: "gid://shopify/Product/1", title: "Tote", price })).toEqual({
+      id: "gid://shopify/Product/1",
+      title: "Tote",
+      price
+    });
+  });
 });

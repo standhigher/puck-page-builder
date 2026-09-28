@@ -77,7 +77,7 @@ export type EditorContextValue = {
   confirmDeleteBlock(): void;
   deleteBlock(id: string): void;
   moveBlock(id: string, direction: -1 | 1): void;
-  reorderBlock(id: string, beforeId: string): void;
+  reorderBlock(id: string, beforeId?: string): void;
   updateBlockProps(id: string, props: Record<string, JsonValue>): void;
   updateBlockPresentation(id: string, presentation: Pick<BlockNode, "variant" | "style">): void;
   undo(): void;
@@ -246,11 +246,17 @@ export function EditorProvider({ initialDocument, registry, policy, loadState = 
       reorderBlock: (id, beforeId) => {
         if (!editable || id === beforeId) return;
         const source = history.document.blocks.find((block) => block.id === id);
+        if (!source || !canDragBlock(source, registry?.getBlock(source.type), policy)) return;
         const withoutSource = history.document.blocks.filter((block) => block.id !== id);
-        const targetIndex = withoutSource.findIndex((block) => block.id === beforeId);
-        if (!source || targetIndex < 0 || !canDragBlock(source, registry?.getBlock(source.type), policy)) return;
         const blocks = [...withoutSource];
-        blocks.splice(targetIndex, 0, source);
+        if (beforeId) {
+          const targetIndex = withoutSource.findIndex((block) => block.id === beforeId);
+          if (targetIndex < 0) return;
+          blocks.splice(targetIndex, 0, source);
+        } else {
+          blocks.push(source);
+        }
+        if (blocks.every((block, index) => block.id === history.document.blocks[index]?.id)) return;
         replace({ ...history.document, blocks }, id);
       },
       updateBlockProps,

@@ -138,6 +138,64 @@ describe("PageDocumentEditorShell V0.4", () => {
     expect(Array.from(library.querySelectorAll<HTMLElement>("[data-block-type]")).map((item) => item.dataset.blockType)).toEqual(typeOrder);
   });
 
+  it("reorders the canvas when an on-page Blocks row is dropped onto another row", async () => {
+    const registry = createExtensionRegistry([bestTrackPageExtension]);
+    const availableBlockTypes = [
+      "besttrack.ready-to-go.query",
+      "besttrack.ready-to-go.progress",
+      "besttrack.ready-to-go.delivery",
+      "besttrack.ready-to-go.recommendations"
+    ] as const;
+    const changed: PageDocument[] = [];
+    renderEditor({
+      initialDocument: registry.getTemplate("besttrack.ready-to-go")!.create(),
+      registry,
+      availableBlockTypes,
+      onDocumentChange: (next) => changed.push(next)
+    });
+    const library = screen.getByTestId("blocks-view");
+    const typeOrder = () => Array.from(library.querySelectorAll<HTMLElement>("[data-block-type]")).map((item) => item.dataset.blockType);
+    expect(typeOrder()).toEqual([...availableBlockTypes]);
+    const recs = library.querySelector('[data-block-type="besttrack.ready-to-go.recommendations"]')!;
+    const query = library.querySelector('[data-block-type="besttrack.ready-to-go.query"]')!;
+    expect(recs).toHaveAttribute("draggable", "true");
+    const transfer = { setData: () => undefined, getData: () => "besttrack.ready-to-go.recommendations", effectAllowed: "" };
+    fireEvent.dragStart(recs, { dataTransfer: transfer });
+    fireEvent.dragOver(query, { dataTransfer: transfer });
+    fireEvent.drop(query, { dataTransfer: transfer });
+    fireEvent.dragEnd(recs);
+    const expected = [
+      "besttrack.ready-to-go.recommendations",
+      "besttrack.ready-to-go.query",
+      "besttrack.ready-to-go.progress",
+      "besttrack.ready-to-go.delivery"
+    ];
+    await waitFor(() => expect(changed.at(-1)?.blocks.map((block) => block.type)).toEqual(expected));
+    expect(typeOrder()).toEqual(expected);
+    await waitFor(() => {
+      const canvas = screen.getByTestId("page-document-editor").querySelector(".pb-canvas-frame")!;
+      expect(Array.from(canvas.querySelectorAll("[data-page-document-block-id]")).map((element) => element.getAttribute("aria-label"))).toEqual([
+        "Select Recommended products in canvas",
+        "Select Order query in canvas",
+        "Select Shipment progress in canvas",
+        "Select Delivery information in canvas"
+      ]);
+    });
+  });
+
+  it("does not make required Ready-to-go rows draggable when dragging is disabled", () => {
+    const registry = createExtensionRegistry([bestTrackPageExtension]);
+    renderEditor({
+      initialDocument: registry.getTemplate("besttrack.ready-to-go")!.create(),
+      registry,
+      availableBlockTypes: ["besttrack.ready-to-go.query", "besttrack.ready-to-go.progress", "besttrack.ready-to-go.delivery", "besttrack.ready-to-go.recommendations"],
+      policy: { operations: { allowDrag: false } }
+    });
+    const query = screen.getByTestId("blocks-view").querySelector('[data-block-type="besttrack.ready-to-go.query"]')!;
+    expect(query).toHaveAttribute("aria-disabled", "true");
+    expect(query).not.toHaveAttribute("draggable", "true");
+  });
+
   it("highlights the selected canvas block type without using canvas order", async () => {
     renderEditor({ initialDocument: { ...document, blocks: [...document.blocks, { id: "image-1", type: "core.image", version: 1, props: { src: "https://example.com/image.jpg", alt: "Example" } }] } });
     fireEvent.click(screen.getByRole("button", { name: "Select Image in canvas" }));

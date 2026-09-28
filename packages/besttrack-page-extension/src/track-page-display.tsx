@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useState, type CSSProperties, type Rea
 import Autoplay from "embla-carousel-autoplay";
 import useEmblaCarousel from "embla-carousel-react";
 import type { ReadyToGoOrderItem, ReadyToGoRecommendation, ReadyToGoTrackingEvent, ReadyToGoTrackingStep } from "./ready-to-go";
-import { formatTrackingPageMoney, type TrackingPageAd } from "./tracking-page-runtime";
+import type { TrackingPageAd, TrackingPageMoney } from "./tracking-page-runtime";
 import { safeTrackingPageUrl } from "./tracking-page-url";
 
 export const pageFont = { fontFamily: "var(--pb-font-family, Inter, system-ui, sans-serif)" } satisfies CSSProperties;
@@ -170,6 +170,12 @@ export function PackageContents({ items }: { items: ReadyToGoOrderItem[] }) {
   </div>;
 }
 
+/** Track Page carousel shows `$` plus the catalog amount, with a space after the symbol. */
+function formatTrackPageRecommendPrice(price?: TrackingPageMoney) {
+  if (!price || !Number.isInteger(price.amount)) return "";
+  return `$ ${(price.amount / 100).toFixed(2)}`;
+}
+
 export function RecommendationCards({ items }: { items: ReadyToGoRecommendation[] }) {
   const autoplay = useMemo(() => Autoplay({ delay: 3000, stopOnInteraction: false, stopOnMouseEnter: true }), []);
   const [emblaRef, emblaApi] = useEmblaCarousel({ loop: true, align: "start", slidesToScroll: 1 }, [autoplay]);
@@ -235,13 +241,14 @@ export function RecommendationCards({ items }: { items: ReadyToGoRecommendation[
       <div style={{ display: "flex" }}>
         {items.map((item) => {
           const href = safeHref(item.href);
+          const displayPrice = formatTrackPageRecommendPrice(item.price);
           const card = <>
             <div style={{ width: 262, height: 262, maxWidth: "100%", borderRadius: 8, border: "1px solid #E3E3E3", overflow: "hidden", background: "#f1f5f9" }}>
               <ProductImage src={item.imageUrl} alt={item.title} size={262} />
             </div>
             <div style={{ padding: "12px 8px", textAlign: "center", fontSize: 14 }}>
               <p style={{ margin: 0, color: "#334155" }}>{item.title}</p>
-              {item.price && formatTrackingPageMoney(item.price)?.amount ? <p style={{ margin: "4px 0 0", fontWeight: 600, color: "#0f172a" }}>{formatTrackingPageMoney(item.price)!.amount}</p> : null}
+              {displayPrice ? <p style={{ margin: "4px 0 0", fontWeight: 600, color: "#0f172a" }}>{displayPrice}</p> : null}
               {item.description ? <p style={{ margin: "4px 0 0", color: "#64748b", fontSize: 13 }}>{item.description}</p> : null}
             </div>
           </>;

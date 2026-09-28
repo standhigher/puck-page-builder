@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { blockIdAtRelativeY, nearestBlockIdAtY } from "./drop-position";
+import { beforeIdAfterPlacement, blockIdAtRelativeY, dropPlacement, libraryTypesInDocumentOrder, nearestBlockIdAtY } from "./drop-position";
 
 describe("canvas insertion position", () => {
   const blocks = [
@@ -41,5 +41,26 @@ describe("canvas insertion position", () => {
     expect(blockIdAtRelativeY(ids, 0.65)).toBe("footer");
     expect(blockIdAtRelativeY(ids, 1)).toBeUndefined();
     expect(blockIdAtRelativeY(ids, 1.2)).toBeUndefined();
+  });
+});
+
+describe("library list reorder helpers", () => {
+  it("keeps on-page types in document order and unused types at the end", () => {
+    expect(libraryTypesInDocumentOrder(
+      ["core.text", "core.image", "besttrack.ready-to-go.query", "besttrack.ready-to-go.progress"],
+      [{ type: "besttrack.ready-to-go.progress" }, { type: "besttrack.ready-to-go.query" }, { type: "besttrack.ready-to-go.query" }]
+    )).toEqual(["besttrack.ready-to-go.progress", "besttrack.ready-to-go.query", "core.text", "core.image"]);
+  });
+
+  it("treats the top half as before and collapsed rows as before", () => {
+    expect(dropPlacement(10, 0, 40)).toBe("before");
+    expect(dropPlacement(30, 0, 40)).toBe("after");
+    expect(dropPlacement(0, 0, 0)).toBe("before");
+  });
+
+  it("maps after the last item to an append slot", () => {
+    expect(beforeIdAfterPlacement(["a", "b", "c"], "b", "before")).toBe("b");
+    expect(beforeIdAfterPlacement(["a", "b", "c"], "b", "after")).toBe("c");
+    expect(beforeIdAfterPlacement(["a", "b", "c"], "c", "after")).toBeUndefined();
   });
 });

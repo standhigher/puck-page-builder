@@ -12,6 +12,7 @@ import {
   buildTrackingStepsFromMilestone,
   formatEstimatedDelivery,
   normalizeExternalUrl,
+  sanitizeMilestones,
   shouldShowEstimatedDelivery
 } from "./shopify-track-page/timeline";
 import type {
@@ -184,7 +185,7 @@ export function mapShopifyTrackQueryResponse(
   }
 
   const data = response.data;
-  const milestones = data?.mileStoneList ?? [];
+  const milestones = sanitizeMilestones(data?.mileStoneList);
   const shipments = milestones.map((milestone, index) => mapMilestone(milestone, locale, index));
   const primary = shipments[0] ?? mapMilestone(undefined, locale, 0);
   const trackingNumber = request.mode === "tracking"

@@ -33,8 +33,8 @@ const transitMilestone: TrackMilestone = {
     carrier: "BestTrack"
   }],
   estimated_delivery: {
-    from: "2026-09-22",
-    to: "2026-09-24",
+    from: "2027-09-22",
+    to: "2027-09-24",
     source: "carrier",
     display_state: "in_transit"
   }
@@ -90,6 +90,74 @@ describe("Shopify Track Page query helpers", () => {
     expect(result.progress?.map((step) => step.state)).toEqual(["complete", "complete", "current", "upcoming", "upcoming"]);
     expect(result.events?.[0]?.title).toContain("Accepted at the hub");
     expect(result.estimatedDelivery).toBe(formatEstimatedDelivery(transitMilestone.estimated_delivery, "EN")?.dateText);
+  });
+
+  it("keeps events and steps when carrier timestamps are null or omitted", () => {
+    const result = mapShopifyTrackQueryResponse({
+      code: 0,
+      data: {
+        order_number: "1001",
+        mileStoneList: [{
+          tracking_number: "HA252201148441",
+          carrier: "HYE",
+          package_items: [],
+          nodeList: [{
+            node: "InfoReceived",
+            description: "Submit Forecast",
+            time: null as unknown as string,
+            location: "",
+            country: "",
+            state: "",
+            city: "",
+            street: "",
+            carrier: ""
+          }],
+          rawEventList: [
+            {
+              stage: "Order Confirmed",
+              sub_status: "",
+              description: "The order has been placed and confirmed.",
+              time: "2026-09-11T00:33:10Z",
+              location: "",
+              country: "",
+              state: "",
+              city: "",
+              street: ""
+            },
+            {
+              stage: "InfoReceived",
+              sub_status: "InfoReceived",
+              description: "Submit Forecast",
+              time: null as unknown as string,
+              location: "",
+              country: "",
+              state: "",
+              city: "",
+              street: ""
+            },
+            {
+              stage: "",
+              sub_status: "InfoReceived",
+              description: "Create Order",
+              time: null as unknown as string,
+              location: "",
+              country: "",
+              state: "",
+              city: "",
+              street: ""
+            }
+          ]
+        }],
+        ad_config: { image_url: "", link_url: "" },
+        trace_id: "trace-missing-time"
+      }
+    }, { mode: "tracking", trackingNumber: "HA252201148441" });
+
+    expect(result.outcome).toBe("found");
+    expect(result.progress?.[0]).toMatchObject({ id: "ordered", state: "current" });
+    expect(result.events?.some((event) => event.title === "Submit Forecast")).toBe(true);
+    expect(result.events?.some((event) => event.title === "Create Order")).toBe(true);
+    expect(result.events?.find((event) => event.title === "Submit Forecast")?.at).toBeUndefined();
   });
 
   it("keeps the original default Ordered steps when the lookup succeeds with no milestones", () => {

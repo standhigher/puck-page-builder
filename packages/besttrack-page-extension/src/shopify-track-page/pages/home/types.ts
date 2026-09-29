@@ -3,20 +3,20 @@ export type SearchTab = 'order' | 'tracking'
 export type TrackingNode = {
   node: string
   description: string
-  time: string
+  time?: string | null
   location: string
   country: string
   state: string
   city: string
   street: string
-  carrier: string
+  carrier?: string
 }
 
 export type RawEvent = {
   stage: string
   sub_status: string
   description: string
-  time: string
+  time?: string | null
   location: string
   country: string
   state: string
@@ -106,7 +106,7 @@ export type ParsedNodeTime = {
 export type TrackingStatusRecord = {
   status: string
   fallbackStatus?: string
-  time: string
+  time?: string | null
 }
 
 export type TrackingStatusMapping = {

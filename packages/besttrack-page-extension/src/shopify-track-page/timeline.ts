@@ -1,8 +1,10 @@
 import { formatTrackingDateLabel, formatTrackingDateTime } from "./i18n/dateTime";
 import type { Locale } from "./i18n/locales";
+import { asText } from "./pages/home/asText";
 import type {
   EstimatedDelivery,
   EstimatedDeliveryDisplay,
+  PackageItem,
   ParsedNodeTime,
   RawEvent,
   SearchTab,
@@ -120,7 +122,7 @@ const legacyNodeStepMap = new Map<string, TrackingStepKey>([
 ])
 
 const getStepKeyForStatus = (status?: string | null): TrackingStepKey | null => {
-  const normalized = status?.trim() ?? ''
+  const normalized = asText(status).trim()
   if (!normalized) return null
 
   const exactMatch = subStatusStepMap.get(normalized) ?? legacyNodeStepMap.get(normalized)
@@ -163,9 +165,9 @@ const buildStepsFromStatusRecords = (records: TrackingStatusRecord[], locale: Lo
 const buildStepsFromRawEvents = (events: RawEvent[], locale: Locale) =>
   buildStepsFromStatusRecords(
     events.map((event) => ({
-      status: event.sub_status || event.stage || '',
-      fallbackStatus: event.stage,
-      time: event.time,
+      status: asText(event.sub_status) || asText(event.stage),
+      fallbackStatus: asText(event.stage) || undefined,
+      time: asText(event.time),
     })),
     locale,
   )
@@ -173,8 +175,8 @@ const buildStepsFromRawEvents = (events: RawEvent[], locale: Locale) =>
 const buildStepsFromNodes = (nodeList: TrackingNode[], locale: Locale) =>
   buildStepsFromStatusRecords(
     nodeList.map((node) => ({
-      status: node.node,
-      time: node.time,
+      status: asText(node.node),
+      time: asText(node.time),
     })),
     locale,
   )
@@ -206,7 +208,7 @@ const monthIndexMap = new Map<string, number>([
   ['december', 11],
 ])
 
-const normalizeNodeTime = (time: string) => time.replace(/\s+/g, ' ').trim()
+const normalizeNodeTime = (time: unknown) => asText(time).replace(/\s+/g, ' ').trim()
 
 const toParsedNodeTime = ({
   year,
@@ -315,7 +317,7 @@ const parseNativeDateTime = (time: string) => {
   }
 }
 
-const getNodeTimeMeta = (time: string): ParsedNodeTime | null => {
+const getNodeTimeMeta = (time: unknown): ParsedNodeTime | null => {
   const normalized = normalizeNodeTime(time)
   if (!normalized) return null
 
@@ -327,10 +329,10 @@ const getNodeTimeMeta = (time: string): ParsedNodeTime | null => {
   )
 }
 
-const formatNodeTime = (time: string, locale: Locale) =>
+const formatNodeTime = (time: unknown, locale: Locale) =>
   formatTrackingDateTime(normalizeNodeTime(time), locale)
 
-const formatNodeDateLabel = (time: string, locale: Locale) =>
+const formatNodeDateLabel = (time: unknown, locale: Locale) =>
   formatTrackingDateLabel(normalizeNodeTime(time), locale)
 
 export function formatEstimatedDelivery(
@@ -339,8 +341,8 @@ export function formatEstimatedDelivery(
 ): EstimatedDeliveryDisplay | null {
   if (!estimatedDelivery || !locale) return null
 
-  const from = estimatedDelivery.from.trim()
-  const to = estimatedDelivery.to.trim()
+  const from = asText(estimatedDelivery.from).trim()
+  const to = asText(estimatedDelivery.to).trim()
   if (!from || !to) return null
 
   const dateText =
@@ -361,7 +363,7 @@ export function formatEstimatedDelivery(
  * today or the latest tracking event.  A delivered milestone always wins;
  * both carrier and valid custom estimates follow the same expiry rule.
  */
-const getComparisonDateTimestamp = (value: string, now = new Date()) => {
+const getComparisonDateTimestamp = (value: unknown, now = new Date()) => {
   const normalized = normalizeNodeTime(value)
   if (!normalized) return null
 
@@ -399,7 +401,7 @@ const hasActualDelivery = (milestone: TrackMilestone) => {
     ? milestone.rawEventList.flatMap((event) => [event.sub_status, event.stage])
     : milestone.nodeList.map((node) => node.node)
 
-  return statuses.some((status) => /^delivered(?:_|$)/i.test(status.trim()))
+  return statuses.some((status) => /^delivered(?:_|$)/i.test(asText(status).trim()))
 }
 
 export function shouldShowEstimatedDelivery(
@@ -489,11 +491,11 @@ const sortShippingDetailsByTime = (details: ShippingDetailDraft[], syntheticPref
 }
 
 const buildShippingDetailsFromRecords = (
-  records: Array<{ description: string; location: string; time: string }>,
+  records: Array<{ description?: string; location?: string; time?: string | null }>,
   locale: Locale,
 ): ShippingDetailItem[] => {
   const filtered = records.filter(
-    (record) => record.location.trim() || record.description.trim() || record.time.trim(),
+    (record) => asText(record.location).trim() || asText(record.description).trim() || asText(record.time).trim(),
   )
   if (filtered.length === 0) return []
 
@@ -501,7 +503,7 @@ const buildShippingDetailsFromRecords = (
     const timeMeta = getNodeTimeMeta(record.time)
     return {
       index,
-      description: [record.location.trim(), record.description.trim()].filter(Boolean).join(', '),
+      description: [asText(record.location).trim(), asText(record.description).trim()].filter(Boolean).join(', '),
       time: formatNodeTime(record.time, locale),
       timestamp: timeMeta?.timestamp ?? null,
       hasYear: timeMeta?.hasYear ?? false,
@@ -521,17 +523,17 @@ const buildShippingDetails = (nodeList: TrackingNode[], locale: Locale): Shippin
 
 const hasRawTrackingSignal = (event: RawEvent) =>
   Boolean(
-    event.sub_status.trim() ||
-    event.location.trim() ||
-    event.country.trim() ||
-    event.state.trim() ||
-    event.city.trim() ||
-    event.street.trim() ||
+    asText(event.sub_status).trim() ||
+    asText(event.location).trim() ||
+    asText(event.country).trim() ||
+    asText(event.state).trim() ||
+    asText(event.city).trim() ||
+    asText(event.street).trim() ||
     getStepKeyForStatus(event.stage),
   )
 
 const getSyntheticRawEventPrefixLength = (events: RawEvent[]) => {
-  const firstEventStage = events[0]?.stage.trim().toLowerCase()
+  const firstEventStage = asText(events[0]?.stage).trim().toLowerCase()
   if (firstEventStage !== 'order confirmed' && firstEventStage !== 'package picked up') {
     return 0
   }
@@ -565,7 +567,7 @@ export function buildShippingDetailsFromMilestone(milestone: TrackMilestone | un
 
 const buildShippingDetailsFromRawEvents = (events: RawEvent[], locale: Locale): ShippingDetailItem[] => {
   const filtered = events.filter(
-    (event) => event.location.trim() || event.description.trim() || event.time.trim(),
+    (event) => asText(event.location).trim() || asText(event.description).trim() || asText(event.time).trim(),
   )
   if (filtered.length === 0) return []
 
@@ -574,7 +576,7 @@ const buildShippingDetailsFromRawEvents = (events: RawEvent[], locale: Locale): 
     const timeMeta = getNodeTimeMeta(event.time)
     return {
       index,
-      description: [event.location.trim(), event.description.trim()].filter(Boolean).join(', '),
+      description: [asText(event.location).trim(), asText(event.description).trim()].filter(Boolean).join(', '),
       time: formatNodeTime(event.time, locale),
       timestamp: timeMeta?.timestamp ?? null,
       hasYear: timeMeta?.hasYear ?? false,
@@ -588,6 +590,66 @@ const buildShippingDetailsFromRawEvents = (events: RawEvent[], locale: Locale): 
     isLatest: index === 0,
   }))
 }
+
+const sanitizeTrackingNode = (node: TrackingNode | null | undefined): TrackingNode => ({
+  node: asText(node?.node),
+  description: asText(node?.description),
+  time: asText(node?.time),
+  location: asText(node?.location),
+  country: asText(node?.country),
+  state: asText(node?.state),
+  city: asText(node?.city),
+  street: asText(node?.street),
+  carrier: asText(node?.carrier),
+})
+
+const sanitizeRawEvent = (event: RawEvent | null | undefined): RawEvent => ({
+  stage: asText(event?.stage),
+  sub_status: asText(event?.sub_status),
+  description: asText(event?.description),
+  time: asText(event?.time),
+  location: asText(event?.location),
+  country: asText(event?.country),
+  state: asText(event?.state),
+  city: asText(event?.city),
+  street: asText(event?.street),
+})
+
+const sanitizePackageItem = (item: PackageItem | null | undefined): PackageItem => ({
+  product_id: asText(item?.product_id),
+  variant_id: asText(item?.variant_id),
+  title: asText(item?.title),
+  variant_title: asText(item?.variant_title),
+  image_url: asText(item?.image_url),
+  quantity: typeof item?.quantity === 'number' && Number.isFinite(item.quantity) ? item.quantity : 0,
+})
+
+const sanitizeEstimatedDelivery = (
+  estimatedDelivery: EstimatedDelivery | null | undefined,
+): EstimatedDelivery | undefined => {
+  if (!estimatedDelivery) return undefined
+  return {
+    ...estimatedDelivery,
+    from: asText(estimatedDelivery.from),
+    to: asText(estimatedDelivery.to),
+  }
+}
+
+export const sanitizeMilestone = (milestone: TrackMilestone | null | undefined): TrackMilestone => ({
+  tracking_number: asText(milestone?.tracking_number),
+  nodeList: Array.isArray(milestone?.nodeList) ? milestone.nodeList.map(sanitizeTrackingNode) : [],
+  rawEventList: Array.isArray(milestone?.rawEventList)
+    ? milestone.rawEventList.map(sanitizeRawEvent)
+    : undefined,
+  carrier: asText(milestone?.carrier),
+  package_items: Array.isArray(milestone?.package_items)
+    ? milestone.package_items.map(sanitizePackageItem)
+    : [],
+  estimated_delivery: sanitizeEstimatedDelivery(milestone?.estimated_delivery),
+})
+
+export const sanitizeMilestones = (milestones: TrackMilestone[] | null | undefined) =>
+  Array.isArray(milestones) ? milestones.map(sanitizeMilestone) : []
 
 export function mergeDisplayValues(previous: string[], next: string[]) {
   const normalizedNext = next.filter(Boolean)

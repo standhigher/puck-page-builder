@@ -1,18 +1,15 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent, type ReactNode } from "react";
-import { parseProductReferences, type BlockEditorProps, type FieldProps } from "@standhigher/puck-page-builder/runtime";
-import {
-  createShopifyRecommendationsQuery,
-  createShopifyTrackQuery,
-  readTrackingQueryLocationState,
-  resolveShopifyRecommendHref,
-  scrollToTrackingResult,
-  shouldHidePoweredBy,
-  syncTrackingQueryToUrl,
-  type ShopifyTrackPageTransport
-} from "./shopify-track-query";
+import { type CSSProperties, type ReactNode } from "react";
+import { type BlockEditorProps, type FieldProps } from "@standhigher/puck-page-builder/runtime";
+import { scrollToTrackingResult } from "./shopify-track-query";
+import { useTrackingRuntime as useReadyToGoRuntime, type TrackingRecentQuery as ReadyToGoRecentQuery } from "./tracking-runtime";
+import { useTrackingQueryForm } from "./tracking-query-form";
+import { configuredRecommendations, recommendationItems, previewTrackingPageResult as previewReadyToGoTracking, trackingEvents as eventsFrom, trackingSteps, trackingSelection, trackingBlockState } from "./tracking-block-model";
+// 保留原来的公开名称，实际与 Branded、Sales 指向同一个 Provider 和 Context。
+// 宿主只需在页面外包一份 Provider，查询、进度、配送和推荐区块即可订阅同一组状态。
+export { TrackingRuntimeProvider as ReadyToGoRuntimeProvider } from "./tracking-runtime";
+export type { TrackingRuntimeProviderProps as ReadyToGoRuntimeProviderProps, TrackingRuntimeState as ReadyToGoRuntimeState, TrackingRecentQuery as ReadyToGoRecentQuery } from "./tracking-runtime";
 import {
   contentWidth,
-  defaultProgress,
   PackageContents,
   pageFont,
   EstimatedDeliveryCard,
@@ -20,161 +17,30 @@ import {
   SectionShell,
   ShippingTimeline,
   text,
+  TrackPageOrderBadges,
+  TrackPageQueryNumber,
   TrackingPageAdSlot,
   TrackingProgress
 } from "./track-page-display";
 import { TrackingNotFound } from "./tracking-not-found";
 import { TrackingLoading } from "./tracking-loading";
-import { isEmptyTrackingPageResult } from "./tracking-page-runtime";
 import type {
-  TrackingPageAd,
   TrackingPageOrderItem,
-  TrackingPageQuery,
-  TrackingPageQueryRequest,
   TrackingPageQueryResult,
   TrackingPageRecommendation,
-  TrackingPageRecommendationsQuery,
-  TrackingPageRecommendationsState,
   TrackingPageShipment,
   TrackingPageTrackingEvent,
   TrackingPageTrackingStep,
   TrackingPageWatermark
 } from "./tracking-page-runtime";
 
-/** Ready-to-go names for the shared Consumer Runtime contract. */
+/** 保留 Ready-to-go 的类型别名，避免业务逻辑抽到共用层后破坏已有宿主的导入。 */
 export type ReadyToGoOrderItem = TrackingPageOrderItem;
 export type ReadyToGoRecommendation = TrackingPageRecommendation;
 export type ReadyToGoTrackingStep = TrackingPageTrackingStep;
 export type ReadyToGoTrackingEvent = TrackingPageTrackingEvent;
 export type ReadyToGoShipment = TrackingPageShipment;
 export type ReadyToGoTrackingResult = TrackingPageQueryResult;
-export type ReadyToGoRuntimeState = { phase: "idle" | "loading" | "success" | "empty" | "error"; result?: ReadyToGoTrackingResult; error?: string };
-type ReadyToGoRuntime = ReadyToGoRuntimeState & {
-  query(request: TrackingPageQueryRequest): Promise<void>;
-  recommendations: TrackingPageRecommendationsState;
-  autoQueryFromUrl: boolean;
-  /** Preview hosts only; live storefronts stay click-to-query. */
-  autoQueryDemo: boolean;
-  watermark?: TrackingPageWatermark;
-  /** Admin-only promotion preview; live storefronts continue to use result.ad. */
-  adPreview?: TrackingPageAd | null;
-};
-
-const initialRuntime: ReadyToGoRuntime = {
-  phase: "idle",
-  recommendations: { phase: "idle", items: [] },
-  autoQueryFromUrl: false,
-  autoQueryDemo: false,
-  async query() { return undefined; }
-};
-const ReadyToGoRuntimeContext = createContext<ReadyToGoRuntime>(initialRuntime);
-export type ReadyToGoRuntimeProviderProps = {
-  children: ReactNode;
-  /** The discriminated, host-authorized query boundary. */
-  query?: TrackingPageQuery;
-  /** Independent recommended-product loader; does not share tracking loading/error. */
-  queryRecommendations?: TrackingPageRecommendationsQuery;
-  /**
-   * Shopify Track Page live transport. When `query` is omitted, lookups use the
-   * original `/track/query` body, `_t` cache-bust, retry, and mapping rules.
-   * Recommendations still POST `/products/recommend` on mount, even if `query` is set.
-   */
-  transport?: ShopifyTrackPageTransport;
-  /** When omitted, URL deep-link auto-query is on only for the Shopify Track Page `transport` path. */
-  autoQueryFromUrl?: boolean;
-  /**
-   * Preview-only: query the form's demo tracking number on mount.
-   * Live storefronts must omit this so consumers still submit the form.
-   */
-  autoQueryDemo?: boolean;
-  /** Host-decided display state. Omitted values follow the original powered-by hide rule. */
-  watermark?: TrackingPageWatermark;
-  /** Admin-only promotion preview; live storefronts continue to use result.ad. */
-  adPreview?: TrackingPageAd | null;
-};
-
-/** Mock is an explicit preview default, never a fallback for an injected live query. */
-function previewReadyToGoTracking(trackingNumber = "BT-2048-DEMO"): ReadyToGoTrackingResult {
-  return {
-    trackingNumber,
-    status: "In transit",
-    carrier: "BestTrack demo carrier",
-    latestEvent: "Shipment accepted at the regional hub",
-    updatedAt: "Sep 17, 10:00 AM",
-    destination: "Shanghai",
-    estimatedDelivery: "Sep 22 - Sep 24",
-    progress: defaultProgress("In transit"),
-    events: [
-      { id: "hub", title: "Shipment accepted at the regional hub", at: "Sep 17, 10:00 AM", state: "current" },
-      { id: "info", title: "The order has been placed and confirmed.", at: "Sep 16, 3:31 PM", state: "complete" }
-    ],
-    orderItems: [{ id: "demo-order-item", title: "Demo shipment item", quantity: 1, description: "Product details are available in your order." }],
-    recommendations: [
-      { id: "shipping-protection", title: "Shipping protection", description: "Extra assurance for your next delivery.", price: { amount: 900, currencyCode: "USD" } },
-      { id: "delivery-alerts", title: "Delivery alerts", description: "Receive an update at every milestone.", price: { amount: 400, currencyCode: "USD" } }
-    ]
-  };
-}
-
-async function queryMockReadyToGoTracking(request: TrackingPageQueryRequest): Promise<ReadyToGoTrackingResult> {
-  return previewReadyToGoTracking(request.mode === "tracking" ? request.trackingNumber : request.orderNumber);
-}
-
-export function ReadyToGoRuntimeProvider({ children, query: injectedQuery, queryRecommendations, transport, autoQueryFromUrl, autoQueryDemo = false, watermark, adPreview }: ReadyToGoRuntimeProviderProps) {
-  const [state, setState] = useState<ReadyToGoRuntimeState>({ phase: "idle" });
-  const [recommendations, setRecommendations] = useState<TrackingPageRecommendationsState>(() => (
-    queryRecommendations || transport
-      ? { phase: "loading", items: [] }
-      : { phase: "idle", items: [] }
-  ));
-  const requestId = useRef(0);
-  const resolvedQuery = useMemo(() => {
-    if (injectedQuery) return injectedQuery;
-    if (transport) return createShopifyTrackQuery(transport);
-    return undefined;
-  }, [injectedQuery, transport]);
-  const resolvedRecommendations = useMemo(() => {
-    if (queryRecommendations) return queryRecommendations;
-    if (transport) return createShopifyRecommendationsQuery(transport.post);
-    return undefined;
-  }, [queryRecommendations, transport]);
-  const live = Boolean(resolvedQuery);
-
-  useEffect(() => {
-    if (!resolvedRecommendations) return;
-    let active = true;
-    void resolvedRecommendations().then((items) => {
-      if (!active) return;
-      setRecommendations({ phase: items.length ? "success" : "empty", items });
-    }).catch(() => {
-      if (!active) return;
-      setRecommendations({ phase: "error", items: [] });
-    });
-    return () => { active = false; };
-  }, [resolvedRecommendations]);
-
-  const query = useCallback(async (request: TrackingPageQueryRequest) => {
-    const currentRequestId = ++requestId.current;
-    setState({ phase: "loading" });
-    try {
-      const result = live ? await resolvedQuery!(request) : await queryMockReadyToGoTracking(request);
-      if (currentRequestId !== requestId.current) return;
-      setState({ phase: isEmptyTrackingPageResult(result) ? "empty" : "success", result });
-    } catch {
-      if (currentRequestId !== requestId.current) return;
-      setState({ phase: "error", error: "We couldn’t retrieve this order right now. Please try again later." });
-    }
-  }, [live, resolvedQuery]);
-  const resolveAutoQuery = autoQueryFromUrl ?? Boolean(transport && !injectedQuery);
-  const resolvedWatermark = useMemo(
-    () => watermark ?? { visible: !shouldHidePoweredBy() },
-    [watermark]
-  );
-  const value = useMemo<ReadyToGoRuntime>(() => ({ ...state, adPreview, query, recommendations, autoQueryFromUrl: resolveAutoQuery, autoQueryDemo, watermark: resolvedWatermark }), [adPreview, autoQueryDemo, query, recommendations, resolveAutoQuery, resolvedWatermark, state]);
-  return <ReadyToGoRuntimeContext.Provider value={value}>{children}</ReadyToGoRuntimeContext.Provider>;
-}
-
-function useReadyToGoRuntime() { return useContext(ReadyToGoRuntimeContext); }
 function RuntimeWatermark({ watermark }: { watermark?: TrackingPageWatermark }) { return watermark?.visible ? <small style={{ display: "block", marginTop: "auto", paddingTop: 28, textAlign: "center", fontSize: 12, lineHeight: "17px", fontStyle: "italic", color: "#b8b8b8" }}>{watermark.label || "Powered by BestTrack"}</small> : null; }
 
 const heroStyle: CSSProperties = {
@@ -289,16 +155,43 @@ function InlineText({ block, name, fallback }: { block: ReadyToGoEditorProps; na
   />;
 }
 
-function eventsFrom(result: ReadyToGoTrackingResult | undefined): ReadyToGoTrackingEvent[] {
-  if (result?.events?.length) return result.events;
-  if (result?.latestEvent) return [{ id: "latest", title: result.latestEvent, at: result.updatedAt, state: "current" }];
-  return [];
-}
-
-function ProgressResult({ result, showEstimatedDelivery = true, color }: { result: ReadyToGoTrackingResult; showEstimatedDelivery?: boolean; color?: string }) {
-  const steps = result.progress?.length ? result.progress : defaultProgress(result.status);
+/**
+ * 结果区有两个独立的选择层级：第一层是最近最多三条成功查询，点击恢复缓存；
+ * 第二层是当前查询结果中的包裹，点击只切换该结果内的包裹，不占用历史查询名额。
+ * 第二层仅按 shipments 数量判断，订单号和运单号查询只要返回多个包裹都可以切换。
+ * 此组件只渲染入口；缓存恢复、选中索引及配送字段联动均由传入的 Runtime 回调完成。
+ */
+function ProgressResult({
+  result,
+  showEstimatedDelivery = true,
+  color,
+  recentQueries = [],
+  selectedRecentIndex = 0,
+  onSelectRecent,
+  selectedShipmentIndex = 0,
+  onSelectShipment
+}: {
+  result: ReadyToGoTrackingResult;
+  showEstimatedDelivery?: boolean;
+  color?: string;
+  recentQueries?: ReadyToGoRecentQuery[];
+  selectedRecentIndex?: number;
+  onSelectRecent?: (index: number) => void;
+  selectedShipmentIndex?: number;
+  onSelectShipment?: (index: number) => void;
+}) {
+  // 接口有进度节点就完整使用，只有缺失/空数组才由共用模型按状态生成默认节点。
+  const steps = trackingSteps(result);
+  const { identity, shipmentValues } = trackingSelection(result, recentQueries);
   return <>
-    <p style={{ margin: 0, fontSize: 20, lineHeight: 1.4, color: "#000", overflowWrap: "anywhere" }}>Tracking: {result.trackingNumber}</p>
+    {identity.values.length > 1 && onSelectRecent
+      ? <TrackPageOrderBadges values={identity.values.slice(0, 3)} selectedIndex={selectedRecentIndex} onSelect={onSelectRecent} />
+      : identity.values[0]
+        ? <TrackPageQueryNumber mode={identity.mode} value={identity.values[0]} />
+        : null}
+    {shipmentValues.length > 1 && onSelectShipment
+      ? <TrackPageOrderBadges values={shipmentValues} selectedIndex={selectedShipmentIndex} onSelect={onSelectShipment} style={{ marginTop: 8 }} />
+      : null}
     <h2 style={{ margin: "clamp(24px, 8%, 48px) 0 0", fontSize: 32, lineHeight: 1.25, fontWeight: 700, color: "#303030", overflowWrap: "anywhere" }}>{result.status}</h2>
     <div className="bt-progress-band">
       {showEstimatedDelivery && result.estimatedDelivery ? <EstimatedDeliveryCard dateText={result.estimatedDelivery} steps={steps.length} /> : null}
@@ -307,6 +200,8 @@ function ProgressResult({ result, showEstimatedDelivery = true, color }: { resul
   </>;
 }
 
+// eventsFrom 是公共 trackingEvents 的本地别名：优先完整事件列表，其次取 latestEvent 摘要。
+// 本组件只保留左右栏外观；不自行截断事件，也不按模板生成另一份物流数据。
 function DeliveryResult({ heading, contentsHeading, carrierHeading, result, editing }: { heading: ReactNode; contentsHeading: ReactNode; carrierHeading: ReactNode; result: ReadyToGoTrackingResult; editing?: boolean }) {
   return <div style={{ ...contentWidth, display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 280px), 500px))", gap: 40, justifyContent: "center", alignItems: "start" }}>
     <div>
@@ -359,6 +254,7 @@ export function ReadyToGoQueryEditor(block: ReadyToGoEditorProps) {
 }
 
 export function ReadyToGoProgressEditor(block: ReadyToGoEditorProps) {
+  // 画布使用公共演示结果预览进度外观，但明确隐藏演示送达日期，避免把占位日期当商家配置。
   return <section aria-label="Ready-to-go progress editor" style={{ ...pageFont, background: "var(--pb-color-background, #fff)", color: "var(--pb-color-text, #0f172a)", borderBottom: "1px solid #f1f5f9" }}>
     <div style={{ ...contentWidth, textAlign: "center", width: "min(1248px, 100%)" }}>
       <ProgressResult result={previewReadyToGoTracking()} showEstimatedDelivery={false} color={text(block, "progressColor")} />
@@ -367,6 +263,7 @@ export function ReadyToGoProgressEditor(block: ReadyToGoEditorProps) {
 }
 
 export function ReadyToGoDeliveryEditor(block: ReadyToGoEditorProps) {
+  // 管理端广告预览只在画布覆盖演示结果，editing 禁止预览跳转；Web 继续使用查询结果的广告。
   const { adPreview } = useReadyToGoRuntime();
   return <section aria-label="Ready-to-go delivery editor" style={{ ...pageFont, background: "var(--pb-color-background, #fff)", color: "var(--pb-color-text, #0f172a)", borderBottom: "1px solid #f1f5f9" }}>
     <DeliveryResult
@@ -379,20 +276,8 @@ export function ReadyToGoDeliveryEditor(block: ReadyToGoEditorProps) {
   </section>;
 }
 
-function configuredRecommendations(products: unknown): ReadyToGoRecommendation[] {
-  return parseProductReferences(products).map((product) => ({
-    id: product.id,
-    title: product.title || product.id,
-    description: "",
-    imageUrl: product.imageUrl,
-    // Product snapshots only persist the Shopify handle. Resolve the generated
-    // storefront path before RecommendationCards applies its URL safety check.
-    href: resolveShopifyRecommendHref(undefined, product.handle),
-    ...(product.price ? { price: product.price } : {})
-  }));
-}
-
 export function ReadyToGoRecommendationsEditor(block: ReadyToGoEditorProps) {
+  // 画布用演示商品展示未配置时的轮播外观；这不是 Web 查询失败时的推荐兜底。
   const selected = configuredRecommendations(block.products);
   const items = selected.length ? selected : previewReadyToGoTracking().recommendations ?? [];
   return <section aria-label="Ready-to-go recommendations editor" style={{ ...pageFont, background: "var(--pb-color-background, #fff)", color: "var(--pb-color-text, #0f172a)" }}>
@@ -406,62 +291,22 @@ export function ReadyToGoRecommendationsEditor(block: ReadyToGoEditorProps) {
 
 export function ReadyToGoQueryBlock(props: Record<string, unknown>) {
   const runtime = useReadyToGoRuntime();
-  const [locationState] = useState(() => runtime.autoQueryFromUrl ? readTrackingQueryLocationState() : undefined);
-  const [mode, setMode] = useState<"tracking" | "order">(locationState?.tab ?? (text(props, "defaultQueryMode", "tracking") === "order" ? "order" : "tracking"));
-  const [trackingNumber, setTrackingNumber] = useState(locationState?.trackingNumber || text(props, "defaultTrackingNumber", "BT-2048-DEMO"));
-  const [orderNumber, setOrderNumber] = useState(locationState?.orderNumber || text(props, "defaultOrderNumber", ""));
-  const [email, setEmail] = useState(locationState?.email ?? "");
-  const [localError, setLocalError] = useState("");
-  const autoQueryStarted = useRef(false);
-  const previewDemoTrackingNumber = useRef(trackingNumber);
+  // 三套模板共用输入保留、trim 后非空校验、URL 同步和历史回填规则。
+  // Ready-to-go 仅指定查询完成后的页面滚动目标，表单布局和配色仍留在本组件。
+  const { mode, setMode, trackingNumber, setTrackingNumber, orderNumber, setOrderNumber, email, setEmail, localError, loading, submit } = useTrackingQueryForm({
+    initialTrackingNumber: text(props, "defaultTrackingNumber", "BT-2048-DEMO"),
+    initialOrderNumber: text(props, "defaultOrderNumber", ""),
+    initialMode: text(props, "defaultQueryMode", "tracking") === "order" ? "order" : "tracking",
+    onComplete: scrollToTrackingResult
+  });
   const submitLabel = text(props, "submitLabel", "Track Your Order");
   const trackingTabLabel = text(props, "trackingTabLabel", "Tracking Number");
   const orderTabLabel = text(props, "orderTabLabel", "Order Number");
-
-  useEffect(() => {
-    if (autoQueryStarted.current) return;
-    if (locationState?.canAutoQuery) {
-      autoQueryStarted.current = true;
-      void runtime.query(locationState.tab === "tracking"
-        ? { mode: "tracking", trackingNumber: locationState.trackingNumber }
-        : { mode: "order", orderNumber: locationState.orderNumber, email: locationState.email })
-        .finally(() => scrollToTrackingResult());
-      return;
-    }
-    const demoTrackingNumber = previewDemoTrackingNumber.current.trim();
-    if (!runtime.autoQueryDemo || !demoTrackingNumber) return;
-    autoQueryStarted.current = true;
-    void runtime.query({ mode: "tracking", trackingNumber: demoTrackingNumber });
-  }, [locationState, runtime]);
-
-  const submit = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    if (runtime.phase === "loading") return;
-    setLocalError("");
-    if (mode === "order") {
-      if (!orderNumber.trim() || !email.trim()) {
-        setLocalError("Please enter your order number and email address");
-        return;
-      }
-      syncTrackingQueryToUrl("order", orderNumber.trim(), email.trim());
-      void runtime.query({ mode: "order", orderNumber: orderNumber.trim(), email: email.trim() })
-        .finally(() => scrollToTrackingResult());
-      return;
-    }
-    if (!trackingNumber.trim()) {
-      setLocalError("Please enter your tracking number");
-      return;
-    }
-    syncTrackingQueryToUrl("tracking", trackingNumber.trim());
-    void runtime.query({ mode: "tracking", trackingNumber: trackingNumber.trim() })
-      .finally(() => scrollToTrackingResult());
-  };
-  const loading = runtime.phase === "loading";
   return <section style={heroStyle}>
     <div role="region" aria-label="Ready-to-go tracking query" style={formCardStyle}>
       <div role="tablist" aria-label="Tracking method" style={{ display: "flex", width: "100%", borderBottom: "1px solid #cbd5e1" }}>
-        <button type="button" role="tab" aria-selected={mode === "tracking"} onClick={() => { setMode("tracking"); setLocalError(""); }} style={tabStyle(mode === "tracking")}>{trackingTabLabel}</button>
-        <button type="button" role="tab" aria-selected={mode === "order"} onClick={() => { setMode("order"); setLocalError(""); }} style={tabStyle(mode === "order")}>{orderTabLabel}</button>
+        <button type="button" role="tab" aria-selected={mode === "tracking"} onClick={() => setMode("tracking")} style={tabStyle(mode === "tracking")}>{trackingTabLabel}</button>
+        <button type="button" role="tab" aria-selected={mode === "order"} onClick={() => setMode("order")} style={tabStyle(mode === "order")}>{orderTabLabel}</button>
       </div>
       <form onSubmit={submit} style={{ marginTop: 24, display: "flex", flexDirection: "column", gap: 16, flex: 1 }}>
         {mode === "order" ? <>
@@ -473,7 +318,7 @@ export function ReadyToGoQueryBlock(props: Record<string, unknown>) {
           <label htmlFor="ready-to-go-tracking-number" style={{ position: "absolute", width: 1, height: 1, overflow: "hidden", clipPath: "inset(50%)" }}>Tracking number</label>
           <input id="ready-to-go-tracking-number" aria-label="Tracking number" value={trackingNumber} onChange={(event) => setTrackingNumber(event.target.value)} placeholder="Tracking Number" style={inputStyle} />
         </>}
-        {localError ? <p style={{ margin: 0, textAlign: "center", fontSize: 12, color: "#f43f5e" }}>{localError}</p> : null}
+        {localError ? <p role="alert" style={{ margin: 0, textAlign: "center", fontSize: 12, color: "#f43f5e" }}>{localError}</p> : null}
         <button type="submit" disabled={loading} style={{ ...submitButtonStyle(props, loading), border: 0, font: "inherit", fontSize: 15, fontWeight: 600, cursor: loading ? "wait" : "pointer", opacity: loading ? 0.7 : 1 }}>{submitLabel}</button>
         {runtime.phase === "error" ? <p role="alert" style={{ margin: 0, textAlign: "center", fontSize: 12, color: "#f43f5e" }}>{runtime.error}</p> : null}
       </form>
@@ -485,29 +330,43 @@ export function ReadyToGoQueryBlock(props: Record<string, unknown>) {
 
 export function ReadyToGoProgressBlock(props: Record<string, unknown>) {
   const runtime = useReadyToGoRuntime();
+  // 必需区块可以暂时不输出内容：idle/loading 隐藏，empty 显示未找到，error 显示不可用。
+  // 显隐与演示预览隐藏预计送达日期的规则由共用模型决定，不在模板中另设业务分支。
+  const visibility = trackingBlockState(runtime);
   const result = runtime.result;
-  if (runtime.phase === "idle" || runtime.phase === "loading") return null;
-  if (runtime.phase === "empty") return <TrackingNotFound resultAnchor />;
+  if (!visibility.showProgress) return null;
+  if (visibility.showNotFound) return <TrackingNotFound resultAnchor />;
   return <SectionShell title="Shipment progress" resultAnchor>
     <div style={{ ...contentWidth, textAlign: "center", width: "min(1248px, 100%)" }}>
-      {runtime.phase === "error" ? <p style={{ margin: 0, color: "#b42318" }}>Shipment progress is temporarily unavailable.</p> : null}
-      {runtime.phase === "success" && result ? <ProgressResult result={result} showEstimatedDelivery={!runtime.autoQueryDemo} color={text(props, "progressColor")} /> : null}
+      {visibility.showUnavailable ? <p style={{ margin: 0, color: "#b42318" }}>Shipment progress is temporarily unavailable.</p> : null}
+      {visibility.showResult && result ? <ProgressResult
+        result={result}
+        showEstimatedDelivery={visibility.showEstimatedDelivery}
+        color={text(props, "progressColor")}
+        recentQueries={runtime.recentQueries}
+        selectedRecentIndex={runtime.selectedRecentIndex}
+        onSelectRecent={runtime.selectRecentQuery}
+        selectedShipmentIndex={runtime.selectedShipmentIndex}
+        onSelectShipment={runtime.selectShipment}
+      /> : null}
     </div>
   </SectionShell>;
 }
 
 export function ReadyToGoDeliveryBlock(props: Record<string, unknown>) {
   const runtime = useReadyToGoRuntime();
-  if (runtime.phase === "idle" || runtime.phase === "loading" || runtime.phase === "empty") return null;
+  const visibility = trackingBlockState(runtime);
+  if (!visibility.showDelivery) return null;
   const heading = text(props, "heading", "Shipping Details");
   const contentsHeading = text(props, "contentsHeading", "Package Contents");
   const carrierHeading = text(props, "carrierHeading", "Carrier");
+  // Runtime 已将选中包裹投影到 result；与进度区读取同一份结果，避免切换后各区块不同步。
   const result = runtime.result;
   return <SectionShell title={heading}>
-    {runtime.phase === "success" && result ? <DeliveryResult heading={heading} contentsHeading={contentsHeading} carrierHeading={carrierHeading} result={result} /> : <div style={{ ...contentWidth, display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 280px), 500px))", gap: 40, justifyContent: "center", alignItems: "start" }}>
+    {visibility.showResult && result ? <DeliveryResult heading={heading} contentsHeading={contentsHeading} carrierHeading={carrierHeading} result={result} /> : <div style={{ ...contentWidth, display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 280px), 500px))", gap: 40, justifyContent: "center", alignItems: "start" }}>
       <div>
         <h3 style={{ margin: 0, fontSize: 20, lineHeight: "20px", fontWeight: 700 }}>{heading}</h3>
-        {runtime.phase === "error" ? <p style={{ margin: "16px 0 0", color: "#b42318" }}>Delivery details are temporarily unavailable.</p> : null}
+        {visibility.showUnavailable ? <p style={{ margin: "16px 0 0", color: "#b42318" }}>Delivery details are temporarily unavailable.</p> : null}
       </div>
     </div>}
   </SectionShell>;
@@ -516,8 +375,9 @@ export function ReadyToGoDeliveryBlock(props: Record<string, unknown>) {
 export function ReadyToGoRecommendationsBlock(props: Record<string, unknown>) {
   const runtime = useReadyToGoRuntime();
   const heading = text(props, "heading", "You may also like...");
-  const configured = configuredRecommendations(props.products);
-  const items = configured.length ? configured : runtime.recommendations.phase === "success" ? runtime.recommendations.items : [];
+  // 商家选品优先，其次取独立推荐请求的成功结果，不从查单结果里读取 recommendations。
+  // 没有商品只隐藏渲染内容；推荐区块本身仍受模板的必需区块策略保护。
+  const items = recommendationItems(props.products, runtime);
   if (!items.length) return null;
   return <SectionShell title={heading} bordered={false}>
     <div style={contentWidth}>

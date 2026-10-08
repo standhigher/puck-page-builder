@@ -1,3 +1,6 @@
+// 统一的页面业务入口：三套模板读取同一个 Context。下方保留各模板的 Provider 名称作为兼容别名，
+// 宿主选择任一入口在页面外装配一次即可；嵌套多个 Provider 会各自创建状态，并不会合并历史。
+export { TrackingRuntimeProvider, useTrackingRuntime, type TrackingRuntimeProviderProps, type TrackingRuntimeState, type TrackingRuntime, type TrackingRecentQuery } from "./tracking-runtime";
 export {
   ReadyToGoRuntimeProvider,
   type ReadyToGoRuntimeProviderProps,

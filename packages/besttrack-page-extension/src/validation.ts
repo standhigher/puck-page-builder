@@ -84,7 +84,9 @@ const brandedContracts: BlockDefinition[] = [
   block("besttrack.branded.tracking-experience", 1, ["heading", "submitLabel", "trackAnotherLabel", "defaultTrackingNumber", "defaultOrderNumber", "defaultQueryMode", "trackingTabLabel", "orderTabLabel", "shipmentLabels", "heroImageUrl"], ["brand", "compact"], undefined, ["heroImageUrl"]),
   block("besttrack.branded.query", 1, ["heading", "submitLabel", "defaultTrackingNumber", "defaultOrderNumber", "defaultQueryMode", "trackingTabLabel", "orderTabLabel", "shipmentLabels", "heroImageUrl"], ["brand", "compact"], undefined, ["heroImageUrl"]),
   block("besttrack.branded.order-items", 1, ["heading"], ["brand", "minimal"]),
-  block("besttrack.branded.recommendations", 1, ["heading", "hideWhenEmpty"], ["brand", "editorial"]),
+  // 服务端文档契约同步新增的商家选品字段，最后一项声明 products 控件，避免把商品数组当文本校验。
+  // hideWhenEmpty 继续接收旧文档数据；实际 Web 显隐已统一，不再受这个遗留值控制。
+  block("besttrack.branded.recommendations", 1, ["heading", "hideWhenEmpty", "products"], ["brand", "editorial"], undefined, [], [], ["products"]),
   block("besttrack.branded.quick-links", 1, ["heading", "primaryLabel", "primaryHref", "secondaryLabel", "secondaryHref"], ["brand"], undefined, ["primaryHref", "secondaryHref"]),
   block("besttrack.branded.blog", 1, ["heading", "articleTitle", "excerpt", "articleHref", "linkLabel"], ["brand"], undefined, ["articleHref"])
 ];
@@ -97,7 +99,8 @@ const salesContracts: BlockDefinition[] = [
   block("besttrack.sales.service-cards", 1, ["heading", "firstTitle", "firstDescription", "secondTitle", "secondDescription"], ["hero", "commerce"], textProps([["heading", 120], ["firstTitle", 120], ["firstDescription", 280], ["secondTitle", 120], ["secondDescription", 280]])),
   block("besttrack.sales.product-categories", 3, ["heading", "collection"], ["hero", "commerce", "grid"], validateCategories, [], ["collection"]),
   block("besttrack.sales.featured-product", 1, ["heading", "product"], ["hero", "commerce"], validateFeaturedProduct, [], ["product"]),
-  block("besttrack.sales.recommendations", 1, ["heading"], ["hero", "commerce", "grid"], textProps([["heading", 120]]))
+  // 与 Sales 编辑器字段定义同步；只校验文档里的选品配置，不把 Runtime 推荐结果写入文档。
+  block("besttrack.sales.recommendations", 1, ["heading", "products"], ["hero", "commerce", "grid"], textProps([["heading", 120]]), [], [], ["products"])
 ];
 
 function template(id: string, version: number, requiredBlocks: readonly BlockDefinition[]): TemplateDefinition {

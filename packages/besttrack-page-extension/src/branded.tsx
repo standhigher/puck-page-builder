@@ -1,87 +1,23 @@
-import { createContext, useCallback, useContext, useMemo, useRef, useState, type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import type { BlockEditorProps, FieldProps } from "@standhigher/puck-page-builder/runtime";
-import {
-  isEmptyTrackingPageResult,
-  formatTrackingPageMoney,
-  type TrackingPageQuery,
-  type TrackingPageQueryRequest,
-  type TrackingPageQueryResult,
-  type TrackingPageRecommendation,
-  type TrackingPageRuntimePhase,
-  type TrackingPageWatermark
-} from "./tracking-page-runtime";
+import type { TrackingPageQueryResult, TrackingPageRecommendation, TrackingPageWatermark } from "./tracking-page-runtime";
+import { TrackingRuntimeProvider, useTrackingRuntime, type TrackingRuntimeProviderProps, type TrackingRuntimeState } from "./tracking-runtime";
+import { formatRecommendationPrice, recommendationItems, trackingSelection, trackingBlockState } from "./tracking-block-model";
 import { safeTrackingPageUrl } from "./tracking-page-url";
 import { TrackingQueryCard, TrackingQueryResultDetails } from "./tracking-query-experience";
 
-/** Branded uses the shared, display-safe Consumer Runtime result without persisting it. */
-export type BrandedRuntimeState = { phase: TrackingPageRuntimePhase; result?: TrackingPageQueryResult; error?: string };
-type BrandedRuntime = BrandedRuntimeState & {
-  displayedResult?: TrackingPageQueryResult;
-  selectedShipmentId: string | null;
-  query(request: TrackingPageQueryRequest): Promise<void>;
-  reset(): void;
-  selectShipment(id: string): void;
-  watermark?: TrackingPageWatermark;
-};
-
-const initialRuntime: BrandedRuntime = {
-  phase: "idle",
-  selectedShipmentId: null,
-  async query() { return undefined; },
-  reset() { return undefined; },
-  selectShipment() { return undefined; }
-};
-const BrandedRuntimeContext = createContext<BrandedRuntime>(initialRuntime);
-export type BrandedRuntimeProviderProps = {
-  children: ReactNode;
-  /** The discriminated, host-authorized request contract. */
-  query?: TrackingPageQuery;
-  /** Host-decided display state; no entitlement checks happen in this package. */
-  watermark?: TrackingPageWatermark;
-};
+/**
+ * 兼容旧宿主的 Branded 导入名称，实际复用 Ready-to-go 抽出的公共 Provider/Context。
+ * 不再维护 Branded 自己的查询结果、包裹选择或推荐状态；页面上的区块共享同一份状态。
+ */
+export type BrandedRuntimeState = TrackingRuntimeState;
+export type BrandedRuntimeProviderProps = TrackingRuntimeProviderProps;
+export const BrandedRuntimeProvider = TrackingRuntimeProvider;
+const useBrandedRuntime = useTrackingRuntime;
 
 const contentWidth = { width: "min(1200px, 100%)", margin: "0 auto", padding: "0 clamp(16px, 4vw, 48px)", boxSizing: "border-box" as const };
 const cardStyle = { background: "#fff", color: "#0a0a0a", border: "1px solid #e7e7e7", borderRadius: 10, fontFamily: "var(--pb-font-family)" };
 
-export function BrandedRuntimeProvider({ children, query: injectedQuery, watermark }: BrandedRuntimeProviderProps) {
-  const [state, setState] = useState<BrandedRuntimeState>({ phase: "idle" });
-  const [selectedShipmentId, setSelectedShipmentId] = useState<string | null>(null);
-  const requestId = useRef(0);
-  const query = useCallback(async (request: TrackingPageQueryRequest) => {
-    const currentRequestId = ++requestId.current;
-    setState({ phase: "loading" });
-    try {
-      if (!injectedQuery) throw new Error("tracking-query-not-configured");
-      const result = await injectedQuery(request);
-      if (currentRequestId !== requestId.current) return;
-      setSelectedShipmentId(result.shipments?.[0]?.id ?? null);
-      setState({ phase: isEmptyTrackingPageResult(result) ? "empty" : "success", result });
-    } catch {
-      if (currentRequestId !== requestId.current) return;
-      setState({ phase: "error", error: "tracking-query-failed" });
-    }
-  }, [injectedQuery]);
-  const reset = useCallback(() => {
-    requestId.current += 1;
-    setSelectedShipmentId(null);
-    setState({ phase: "idle" });
-  }, []);
-  const displayedResult = useMemo(() => {
-    if (!state.result) return undefined;
-    const shipment = state.result.shipments?.find((item) => item.id === selectedShipmentId);
-    return shipment ? { ...state.result, ...shipment } : state.result;
-  }, [selectedShipmentId, state.result]);
-  const selectShipment = useCallback((id: string) => {
-    if (state.result?.shipments?.some((shipment) => shipment.id === id)) setSelectedShipmentId(id);
-  }, [state.result]);
-  const value = useMemo<BrandedRuntime>(
-    () => ({ ...state, displayedResult, selectedShipmentId, query, reset, selectShipment, watermark }),
-    [displayedResult, query, reset, selectedShipmentId, selectShipment, state, watermark]
-  );
-  return <BrandedRuntimeContext.Provider value={value}>{children}</BrandedRuntimeContext.Provider>;
-}
-
-function useBrandedRuntime() { return useContext(BrandedRuntimeContext); }
 function RuntimeWatermark({ watermark }: { watermark?: TrackingPageWatermark }) { return watermark?.visible ? <small style={{ display: "block", marginTop: 10, color: "#8a8a8a", fontSize: 8, textAlign: "right" }}>{watermark.label || "Powered by BestTrack"}</small> : null; }
 function text(props: Record<string, unknown>, key: string, fallback: string) { return typeof props[key] === "string" ? props[key] : fallback; }
 const safeHref = safeTrackingPageUrl;
@@ -100,23 +36,30 @@ function ProductImage({ src, alt }: { src?: string; alt: string }) {
   return <img src={safeSrc} alt={alt} onError={() => setFailed(true)} style={{ width: 72, height: 72, flex: "0 0 auto", borderRadius: 6, objectFit: "cover", background: "#f2f2f2" }} />;
 }
 
-function ShipmentSwitcher({ shipmentLabels: configuredLabels }: { shipmentLabels?: unknown }) {
+/**
+ * Branded 保留 Hero 上方的横向包裹栏，对应两层选择中的第二层。
+ * 它只在成功结果含多个 shipments 时出现，不限制查询模式，也不计入最近三次查询。
+ * 标签来自真实结果；画布的 shipmentLabels 配置只负责展示编辑占位。
+ */
+function ShipmentSwitcher() {
   const runtime = useBrandedRuntime();
-  const configuredShipments = shipmentLabels(configuredLabels);
-  const shipments = runtime.phase === "idle" || runtime.phase === "loading" ? configuredShipments : runtime.result?.shipments ?? [];
-  if (!shipments.length) return null;
+  const shipments = trackingBlockState(runtime).showResult ? runtime.result?.shipments ?? [] : [];
+  if (shipments.length < 2 || !runtime.result) return null;
+  const { shipmentValues } = trackingSelection(runtime.result, runtime.recentQueries);
   return <div aria-label="Shipment switcher" style={{ ...contentWidth, minWidth: 0, minHeight: 56, display: "flex", alignItems: "center", gap: 8, overflowX: "auto", whiteSpace: "nowrap" }}>
     {shipments.map((shipment, index) => {
-      const selected = (runtime.selectedShipmentId ?? shipments[0]?.id) === shipment.id;
-      return <button key={shipment.id} type="button" onClick={() => runtime.selectShipment(shipment.id)} aria-pressed={selected} style={{ minWidth: 92, minHeight: 44, padding: "0 12px", border: selected ? "1px solid #1a1a1a" : "1px solid #e7e7e7", borderRadius: 4, background: "#fff", color: "#0a0a0a", fontSize: 11, fontWeight: selected ? 700 : 400, cursor: "pointer" }}>{shipment.label || "Shipment #" + (index + 1)}</button>;
+      const selected = runtime.selectedShipmentIndex === index;
+      return <button key={shipment.id} type="button" onClick={() => runtime.selectShipment(index)} aria-pressed={selected} style={{ minWidth: 92, minHeight: 44, padding: "0 12px", border: selected ? "1px solid #1a1a1a" : "1px solid #e7e7e7", borderRadius: 4, background: "#fff", color: "#0a0a0a", fontSize: 11, fontWeight: selected ? 700 : 400, cursor: "pointer" }}>{shipmentValues[index]}</button>;
     })}
   </div>;
 }
 
+// 背景图和卡片布局仍由 Branded 决定，查询交互与完整结果使用公共组件。
+// showShipments=false 只避免卡片内重复展示包裹栏；包裹切换由上方 ShipmentSwitcher 承载。
 function QueryHero(props: Record<string, unknown>) {
   const runtime = useBrandedRuntime();
   const [heroImageFailed, setHeroImageFailed] = useState(false);
-  const result = runtime.displayedResult;
+  const result = runtime.result;
   return <div style={{ position: "relative", minWidth: 0, minHeight: "clamp(520px, 44vw, 560px)", display: "grid", overflow: "hidden", background: "linear-gradient(135deg, #dedbd4, #b9b3aa)" }}>
     {!heroImageFailed && safeImageUrl(props.heroImageUrl) ? <img src={safeImageUrl(props.heroImageUrl)} alt="" onError={() => setHeroImageFailed(true)} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} /> : null}
     <div aria-hidden="true" style={{ position: "absolute", inset: 0, background: "rgba(255,255,255,0.12)" }} />
@@ -143,7 +86,7 @@ function QueryHero(props: Record<string, unknown>) {
         formStyle={{ gap: 12 }}
         inputStyle={{ width: "100%", height: 48, padding: "0 16px", boxSizing: "border-box", border: "1px solid #e2e2e2", borderRadius: 10, font: "inherit" }}
         submitStyle={(loading) => ({ width: "100%", minHeight: 48, marginTop: 12, border: 0, borderRadius: 10, background: loading ? "#6b6b6b" : "#000", color: "#fff", font: "inherit", cursor: loading ? "wait" : "pointer" })}
-        result={result ? <TrackingQueryResultDetails result={result} onTrackAnother={runtime.reset} trackAnotherLabel={text(props, "trackAnotherLabel", "Track another order")} /> : null}
+        result={result ? <TrackingQueryResultDetails showShipments={false} result={result} onTrackAnother={runtime.reset} trackAnotherLabel={text(props, "trackAnotherLabel", "Track another order")} /> : null}
         resultStyle={{ padding: 16, border: "1px solid #e7e7e7", borderRadius: 8, background: "#fffdf0" }}
         watermark={<RuntimeWatermark watermark={runtime.watermark} />}
       />
@@ -151,9 +94,13 @@ function QueryHero(props: Record<string, unknown>) {
   </div>;
 }
 
+// 缺少描述时不补造商品文案；通过公共 URL 校验的商品链接才提供 Reorder，点击仅跳转该链接。
 function PackageContents({ items }: { items: TrackingPageQueryResult["orderItems"] }) {
   if (!items?.length) return <p style={{ margin: 0, color: "#6b6b6b" }}>Package contents are not available for this shipment.</p>;
-  return <div style={{ display: "grid", gap: 16 }}>{items.map((item) => <article key={item.id} style={{ display: "flex", alignItems: "flex-start", gap: 14, minWidth: 0 }}><ProductImage src={item.imageUrl} alt={item.title} /><div style={{ minWidth: 0, overflowWrap: "anywhere" }}><strong>{item.title}</strong><p style={{ margin: "5px 0", color: "#6b6b6b", fontSize: 14 }}>{item.description ?? "Product details are available in your order."}</p><small style={{ color: "#6b6b6b" }}>Qty {item.quantity}</small></div></article>)}</div>;
+  return <div style={{ display: "grid", gap: 16 }}>{items.map((item) => {
+    const href = safeHref(item.href);
+    return <article key={item.id} style={{ display: "flex", alignItems: "flex-start", gap: 14, minWidth: 0 }}><ProductImage src={item.imageUrl} alt={item.title} /><div style={{ minWidth: 0, overflowWrap: "anywhere" }}><strong>{item.title}</strong>{item.description ? <p style={{ margin: "5px 0", color: "#6b6b6b", fontSize: 14 }}>{item.description}</p> : null}<small style={{ color: "#6b6b6b" }}>Qty {item.quantity}</small>{href ? <a href={href} style={{ display: "inline-flex", alignItems: "center", minHeight: 32, marginLeft: 8, padding: "6px 12px", border: "1px solid #e7e7e7", borderRadius: 6, color: "inherit", fontSize: 13 }}>Reorder</a> : null}</div></article>;
+  })}</div>;
 }
 
 export function BrandedTextField({ value, onChange }: FieldProps) {
@@ -209,7 +156,7 @@ export function BrandedOrderItemsEditor(block: BrandedEditorProps) {
 }
 
 export function BrandedRecommendationsEditor(block: BrandedEditorProps) {
-  return <EditorSurface block={block}><h2 style={{ margin: 0, textAlign: "center" }}><InlineText block={block} name="heading" fallback="You might also like" /></h2><p style={{ color: "#6b6b6b", textAlign: "center" }}>Recommendations appear with the active shipment.</p></EditorSurface>;
+  return <EditorSurface block={block}><h2 style={{ margin: 0, textAlign: "center" }}><InlineText block={block} name="heading" fallback="You might also like" /></h2><p style={{ color: "#6b6b6b", textAlign: "center" }}>Recommended products load independently of tracking queries.</p></EditorSurface>;
 }
 
 export function BrandedQuickLinksEditor(block: BrandedEditorProps) {
@@ -227,44 +174,50 @@ export function BrandedAnnouncementBlock(props: Record<string, unknown>) {
   return <section aria-label="Branded announcement" style={{ minHeight: 36, display: "grid", placeItems: "center", padding: "0 16px", background: "#252525", color: "#fff", fontFamily: "var(--pb-font-family)", fontSize: 12, textAlign: "center" }}>{href ? <a href={href} style={{ color: "inherit", textDecoration: "none" }}>{message}</a> : message}</section>;
 }
 
-/** Complete consumer journey: pre-query hero, selected shipment and result details share one controller. */
+/** 查询、进度和配送合在现有 tracking-experience 区块内，布局保持不变，业务状态共用。 */
 export function BrandedTrackingExperienceBlock(props: Record<string, unknown>) {
   return <section aria-label="Branded tracking experience" style={{ background: "#fffdf0", fontFamily: "var(--pb-font-family)" }}>
-    <ShipmentSwitcher shipmentLabels={props.shipmentLabels} />
+    <ShipmentSwitcher />
     <QueryHero {...props} />
   </section>;
 }
 
 /** Legacy editor block retained for manually composed documents; new templates use BrandedTrackingExperienceBlock. */
 export function BrandedQueryBlock(props: Record<string, unknown>) {
-  return <section aria-label="Branded tracking query" style={{ background: "#fffdf0", fontFamily: "var(--pb-font-family)" }}><ShipmentSwitcher shipmentLabels={props.shipmentLabels} /><QueryHero {...props} /></section>;
+  return <section aria-label="Branded tracking query" style={{ background: "#fffdf0", fontFamily: "var(--pb-font-family)" }}><ShipmentSwitcher /><QueryHero {...props} /></section>;
 }
 
 /** Legacy editor block retained for manually composed documents; new templates show package contents in the result. */
 export function BrandedOrderItemsBlock(props: Record<string, unknown>) {
   const runtime = useBrandedRuntime();
-  const items = runtime.displayedResult?.orderItems ?? [];
+  // 兼容旧文档中的独立商品区块，同样遵循配送显隐规则，并读取当前选中包裹的商品。
+  const visibility = trackingBlockState(runtime);
+  if (!visibility.showDelivery) return null;
+  const items = runtime.result?.orderItems ?? [];
   const title = text(props, "heading", "What's Inside");
   return <section aria-label={title} style={{ background: "#fffdf0", color: "#0a0a0a", fontFamily: "var(--pb-font-family)", padding: "clamp(28px, 4vw, 48px) 0" }}><div style={contentWidth}>
-    <h2 style={{ margin: "0 0 20px", fontSize: 20 }}>{title}{runtime.phase === "success" ? " (" + items.length + ")" : ""}</h2>
-    {runtime.phase === "success" ? <PackageContents items={items} /> : <p style={{ margin: 0, color: runtime.phase === "error" ? "#b42318" : "#6b6b6b" }}>{runtime.phase === "error" ? "Order items are temporarily unavailable." : "Track an order to see what is inside."}</p>}
+    <h2 style={{ margin: "0 0 20px", fontSize: 20 }}>{title}{visibility.showResult ? " (" + items.length + ")" : ""}</h2>
+    {visibility.showResult ? <PackageContents items={items} /> : <p style={{ margin: 0, color: "#b42318" }}>Order items are temporarily unavailable.</p>}
   </div></section>;
 }
 
 function RecommendationCard({ item }: { item: TrackingPageRecommendation }) {
   const href = safeHref(item.href);
-  const price = item.price ? formatTrackingPageMoney(item.price) : undefined;
-  return <article style={{ overflow: "hidden", borderRadius: 6, background: "#fff", boxShadow: "0 1px 2px rgb(0 0 0 / 8%)" }}><ProductImage src={item.imageUrl} alt={item.title} /><div style={{ padding: 14 }}><strong>{item.title}</strong>{price?.amount ? <p style={{ margin: "6px 0", fontWeight: 700 }}>{price.amount}</p> : null}<p style={{ margin: "6px 0", color: "#6b6b6b", fontSize: 13 }}>{item.description}</p>{!href ? <span style={{ color: "#6b6b6b", fontSize: 13, fontWeight: 700 }}>View product</span> : <a href={href} style={{ color: "#0a0a0a", fontSize: 13, fontWeight: 700 }}>View product</a>}</div></article>;
+  // 推荐价格沿用 Ready-to-go 的 `$ 0.00` 格式；这是推荐专用规则，不走订单商品的币种格式器。
+  const price = formatRecommendationPrice(item.price);
+  return <article style={{ overflow: "hidden", borderRadius: 6, background: "#fff", boxShadow: "0 1px 2px rgb(0 0 0 / 8%)" }}><ProductImage src={item.imageUrl} alt={item.title} /><div style={{ padding: 14 }}><strong>{item.title}</strong>{price ? <p style={{ margin: "6px 0", fontWeight: 700 }}>{price}</p> : null}<p style={{ margin: "6px 0", color: "#6b6b6b", fontSize: 13 }}>{item.description}</p>{!href ? <span style={{ color: "#6b6b6b", fontSize: 13, fontWeight: 700 }}>View product</span> : <a href={href} style={{ color: "#0a0a0a", fontSize: 13, fontWeight: 700 }}>View product</a>}</div></article>;
 }
 
 export function BrandedRecommendationsBlock(props: Record<string, unknown>) {
   const runtime = useBrandedRuntime();
-  const recommendations = runtime.displayedResult?.recommendations ?? [];
+  // 共用“商家选品优先、独立推荐次之”的来源规则，查单失败或包裹切换不影响推荐。
+  // 空列表统一隐藏；旧文档的 hideWhenEmpty 字段保留兼容，但不再改变这条业务规则。
+  const recommendations = recommendationItems(props.products, runtime);
   const title = text(props, "heading", "You might also like");
-  if ((runtime.phase === "success" || runtime.phase === "empty") && !recommendations.length && text(props, "hideWhenEmpty", "false") === "true") return null;
+  if (!recommendations.length) return null;
   return <section aria-label={title} style={{ background: "#fffdf0", color: "#0a0a0a", fontFamily: "var(--pb-font-family)", padding: "clamp(28px, 4vw, 48px) 0" }}><div style={contentWidth}>
     <h2 style={{ margin: "0 0 24px", textAlign: "center", fontSize: 20 }}>{title}</h2>
-    {runtime.phase === "loading" ? <div aria-label="Loading recommendations" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 16 }}>{[0, 1, 2].map((item) => <span key={item} style={{ display: "block", height: 220, borderRadius: 6, background: "#e7e7e7" }} />)}</div> : runtime.phase === "success" && recommendations.length ? <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 16 }}>{recommendations.map((item) => <RecommendationCard key={item.id} item={item} />)}</div> : <p style={{ margin: 0, textAlign: "center", color: runtime.phase === "error" ? "#b42318" : "#6b6b6b" }}>{runtime.phase === "error" ? "Recommendations are temporarily unavailable." : runtime.phase === "empty" ? "No recommendations are available for that number." : "Recommendations will appear with your order."}</p>}
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 16 }}>{recommendations.map((item) => <RecommendationCard key={item.id} item={item} />)}</div>
   </div></section>;
 }
 

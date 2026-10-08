@@ -3,7 +3,10 @@ import { useCallback, useEffect, useMemo, useState, type CSSProperties, type Rea
 import Autoplay from "embla-carousel-autoplay";
 import useEmblaCarousel from "embla-carousel-react";
 import type { ReadyToGoOrderItem, ReadyToGoRecommendation, ReadyToGoTrackingEvent, ReadyToGoTrackingStep } from "./ready-to-go";
-import type { TrackingPageAd, TrackingPageMoney } from "./tracking-page-runtime";
+import type { TrackingPageAd } from "./tracking-page-runtime";
+import { formatRecommendationPrice } from "./tracking-block-model";
+// 默认进度算法已归到三模板共用模型；保留这个旧导出路径兼容现有引用。
+export { defaultProgress } from "./tracking-block-model";
 import { safeTrackingPageUrl } from "./tracking-page-url";
 
 export const pageFont = { fontFamily: "var(--pb-font-family, Inter, system-ui, sans-serif)" } satisfies CSSProperties;
@@ -41,28 +44,6 @@ export function safeHref(value: unknown) {
 
 export function safeImageUrl(value: unknown) {
   return safeTrackingPageUrl(value);
-}
-
-export function defaultProgress(status: string): ReadyToGoTrackingStep[] {
-  const steps: Array<Pick<ReadyToGoTrackingStep, "id" | "label" | "icon">> = [
-    { id: "ordered", label: "Ordered", icon: "check" },
-    { id: "ready", label: "Order Ready", icon: "bag" },
-    { id: "transit", label: "In Transit", icon: "truck" },
-    { id: "out", label: "Out for Delivery", icon: "box" },
-    { id: "delivered", label: "Delivered", icon: "check" }
-  ];
-  const normalized = status.toLowerCase();
-  const current = normalized.includes("deliver")
-    ? (normalized.includes("out for") ? 3 : 4)
-    : normalized.includes("transit")
-      ? 2
-      : normalized.includes("ready")
-        ? 1
-        : 0;
-  return steps.map((step, index) => ({
-    ...step,
-    state: index < current ? "complete" : index === current ? "current" : "upcoming"
-  }));
 }
 
 function StepIcon({ name, done }: { name: ReadyToGoTrackingStep["icon"]; done: boolean }) {
@@ -170,13 +151,13 @@ export function PackageContents({ items }: { items: ReadyToGoOrderItem[] }) {
   </div>;
 }
 
-/** Track Page carousel shows `$` plus the catalog amount, with a space after the symbol. */
-function formatTrackPageRecommendPrice(price?: TrackingPageMoney) {
-  if (!price || !Number.isInteger(price.amount)) return "";
-  return `$ ${(price.amount / 100).toFixed(2)}`;
-}
-
+/**
+ * Ready-to-go 保留轮播交互，Branded/Sales 可使用自己的网格；商品选择由调用方共用模型完成。
+ * 这里仅接收最终列表，并复用统一价格格式，避免展示组件把查单数据误当作推荐来源。
+ */
 export function RecommendationCards({ items }: { items: ReadyToGoRecommendation[] }) {
+  // 保留 Ready-to-go 的轮播规则：每 3 秒前进一项，悬停暂停；拖动或点击不会永久关闭自动播放。
+  // 插件实例在挂载期间保持稳定，避免商品或查询状态重渲染时重建计时器。
   const autoplay = useMemo(() => Autoplay({ delay: 3000, stopOnInteraction: false, stopOnMouseEnter: true }), []);
   const [emblaRef, emblaApi] = useEmblaCarousel({ loop: true, align: "start", slidesToScroll: 1 }, [autoplay]);
   const [canScrollPrev, setCanScrollPrev] = useState(false);
@@ -191,6 +172,8 @@ export function RecommendationCards({ items }: { items: ReadyToGoRecommendation[
 
   useEffect(() => {
     if (!emblaApi) return;
+    // 商品数量/容器尺寸可能触发重算，不能只在点击箭头时更新可滚动状态。
+    // 首帧及 select/reInit 都向 Embla 取实际能力；商品不足以滚动时不显示无效箭头。
     const frame = window.requestAnimationFrame(onSelect);
     emblaApi.on("select", onSelect);
     emblaApi.on("reInit", onSelect);
@@ -203,6 +186,7 @@ export function RecommendationCards({ items }: { items: ReadyToGoRecommendation[
 
   useEffect(() => {
     if (typeof window.matchMedia !== "function") return;
+    // 窄屏只隐藏两侧箭头，轮播拖动及自动播放仍保留；窗口跨过断点时同步更新。
     const media = window.matchMedia("(max-width: 768px)");
     const update = () => setHideButtons(media.matches);
     update();
@@ -241,7 +225,7 @@ export function RecommendationCards({ items }: { items: ReadyToGoRecommendation[
       <div style={{ display: "flex" }}>
         {items.map((item) => {
           const href = safeHref(item.href);
-          const displayPrice = formatTrackPageRecommendPrice(item.price);
+          const displayPrice = formatRecommendationPrice(item.price);
           const card = <>
             <div style={{ width: 262, height: 262, maxWidth: "100%", borderRadius: 8, border: "1px solid #E3E3E3", overflow: "hidden", background: "#f1f5f9" }}>
               <ProductImage src={item.imageUrl} alt={item.title} size={262} />
@@ -310,6 +294,67 @@ export function EstimatedDeliveryCard({ dateText, steps = 5 }: { dateText: strin
     <p style={{ margin: "6px 0 0", color: "#202124", fontSize: 22, fontWeight: 700, lineHeight: 1.15, letterSpacing: 0, overflowWrap: "anywhere", wordBreak: "break-word" }}>{dateText}</p>
     <p style={{ margin: "6px 0 0", color: "#5f6368", fontSize: 13, fontWeight: 400, lineHeight: 1.35 }}>Estimated time may update as tracking progresses.</p>
   </div>;
+}
+
+/** 沿用原 Track Page 的 `.bst-order-badges` / `.bst-order-badge` 外观。 */
+const orderBadgeRowStyle: CSSProperties = {
+  display: "flex",
+  flexWrap: "wrap",
+  alignItems: "center",
+  justifyContent: "center",
+  gap: 12,
+  margin: "0 auto"
+};
+const orderBadgeStyle = (active: boolean): CSSProperties => ({
+  appearance: "none",
+  height: 36,
+  minWidth: 128,
+  borderRadius: 8,
+  border: `1px solid ${active ? "#c01400" : "#cbd5e1"}`,
+  padding: "0 16px",
+  font: "inherit",
+  fontSize: 14,
+  fontWeight: 600,
+  color: active ? "#c01400" : "#64748b",
+  background: "transparent",
+  cursor: "pointer"
+});
+
+/**
+ * 两层选择共用的纯展示按钮组：只报告点击索引，不发请求，也不持有选中状态。
+ * 调用方分别传入历史恢复或包裹切换回调；三条上限属于历史层，不能在这里截断包裹列表。
+ */
+export function TrackPageOrderBadges({
+  values,
+  selectedIndex,
+  onSelect,
+  style
+}: {
+  values: string[];
+  selectedIndex: number;
+  onSelect: (index: number) => void;
+  style?: CSSProperties;
+}) {
+  if (values.length === 0) return null;
+  return <div style={{ ...orderBadgeRowStyle, ...style }}>
+    {values.map((value, index) => {
+      const active = selectedIndex === index;
+      return <button
+        key={`${value}-${index}`}
+        type="button"
+        aria-pressed={active}
+        onClick={() => onSelect(index)}
+        style={orderBadgeStyle(active)}
+      >{value}</button>;
+    })}
+  </div>;
+}
+
+/** 第一层只有一个查询标识时显示文本；mode 用于区分订单号/运单号文案，不控制包裹拆分。 */
+export function TrackPageQueryNumber({ mode, value }: { mode: "tracking" | "order"; value: string }) {
+  return <p style={{ margin: 0, fontSize: 20, fontWeight: 400, lineHeight: 1.4, color: "#000", overflowWrap: "anywhere" }}>
+    {mode === "order" ? "Order" : "Tracking"}: {value}
+  </p>;
 }
 
 export function SectionShell({ title, children, bordered = true, resultAnchor = false }: { title: string; children: ReactNode; bordered?: boolean; resultAnchor?: boolean }) {

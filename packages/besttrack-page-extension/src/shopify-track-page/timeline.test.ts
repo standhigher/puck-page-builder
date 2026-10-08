@@ -3,6 +3,7 @@ import type { TrackMilestone } from './pages/home/types'
 import {
   buildShippingDetailsFromMilestone,
   buildTrackingStepsFromMilestone,
+  mergeDisplayValues,
 } from './timeline'
 
 const milestoneWithoutCarrierTimes = {
@@ -90,6 +91,18 @@ const milestoneWithoutCarrierTimes = {
   carrier: 'HYE',
   package_items: [],
 } as unknown as TrackMilestone
+
+// 此工具只合并第一层查询标识；三条上限和去重规则不适用于当前结果的包裹列表。
+describe('mergeDisplayValues', () => {
+  it('keeps the newest value first and caps the list at three', () => {
+    expect(mergeDisplayValues(['B', 'C'], ['A'])).toEqual(['A', 'B', 'C'])
+    expect(mergeDisplayValues(['A', 'B', 'C'], ['D'])).toEqual(['D', 'A', 'B'])
+  })
+
+  it('moves a repeated value to the front without duplicating it', () => {
+    expect(mergeDisplayValues(['B', 'A', 'C'], ['A'])).toEqual(['A', 'B', 'C'])
+  })
+})
 
 describe('tracking timeline with incomplete API data', () => {
   it('renders steps when carrier events return time as null', () => {

@@ -94,6 +94,8 @@ export function buildShopifyTrackQueryPayload(request: TrackingPageQueryRequest,
   } as const;
 }
 
+// 沿用原接口的分页请求参数；商家未选品时默认返回店铺前 8 个产品的规则由后端负责。
+// pageSize 的默认值仍为 20，不表示前端要生成、补齐或截断成固定数量的商品。
 export function buildShopifyRecommendPayload(page = 1, pageSize = 20) {
   return { page, page_size: pageSize } as const;
 }
@@ -147,6 +149,7 @@ function mapAd(ad?: AdConfig | null): TrackingPageAd | undefined {
 }
 
 function mapMilestone(milestone: TrackMilestone | undefined, locale: Locale, index: number): TrackingPageShipment {
+  // 一个旧接口 milestone 对应一个包裹；进度、完整事件、商品与预计送达一起转换，供切换时联动。
   const steps = toProgress(buildTrackingStepsFromMilestone(milestone, locale));
   const events = toEvents(buildShippingDetailsFromMilestone(milestone, locale));
   const current = [...steps].reverse().find((step) => step.state !== "upcoming");
@@ -171,9 +174,8 @@ function mapMilestone(milestone: TrackMilestone | undefined, locale: Locale, ind
 }
 
 /**
- * Convert a legacy `/track/query` envelope into the display-safe runtime result.
- * A non-zero business `code` becomes `outcome: "empty"`. Network failures must
- * still throw so the template can keep them distinct from a missing order.
+ * 将旧 /track/query 响应映射为三套模板共用的结果模型，非零业务 code 转为 empty。
+ * 本函数只处理响应；网络重试和异常转 empty 的兼容行为由 createShopifyTrackQuery 负责。
  */
 export function mapShopifyTrackQueryResponse(
   response: ShopifyTrackApiResponse<TrackResponse | null | undefined>,
@@ -185,8 +187,11 @@ export function mapShopifyTrackQueryResponse(
   }
 
   const data = response.data;
+  // 先规整旧接口的可空字段，再保留 mileStoneList 中所有包裹，不按查询模式截成一条。
+  // 第二层是否出现取决于最终 shipments 数量；它们不占最近 3 条查询记录的名额。
   const milestones = sanitizeMilestones(data?.mileStoneList);
   const shipments = milestones.map((milestone, index) => mapMilestone(milestone, locale, index));
+  // 顶层字段默认使用首包裹；成功 code 但缺少包裹时仍沿用旧接口的基础 Ordered 展示。
   const primary = shipments[0] ?? mapMilestone(undefined, locale, 0);
   const trackingNumber = request.mode === "tracking"
     ? request.trackingNumber.trim()
@@ -207,6 +212,7 @@ export function mapShopifyTrackQueryResponse(
     events: primary.events,
     orderItems: primary.orderItems,
     ad,
+    // 旧接口广告是本次响应共用配置，因此复制到各包裹，切换后仍能读取同一广告。
     shipments: shipments.map((shipment) => ({ ...shipment, ad }))
   };
 }
@@ -239,6 +245,7 @@ export function mapShopifyRecommendationsResponse(
   response: ShopifyTrackApiResponse<{ products?: ShopifyRecommendProduct[] } | null | undefined>
 ): TrackingPageRecommendation[] {
   const products = response.data?.products ?? [];
+  // 保持后端给出的商品顺序与数量；默认的店铺前 8 个产品也通过同一映射流程展示。
   return products.map((product) => ({
     id: product.id,
     title: product.title,
@@ -256,6 +263,7 @@ async function postWithRetry<T>(
   retries: number
 ) {
   let lastError: unknown;
+  // retries 是首次请求以外的重试次数；只有 post 抛错才重试，业务 code 由映射层处理。
   for (let attempt = 0; attempt <= retries; attempt += 1) {
     try {
       return await post<T>(withShopifyTrackCacheBust(url), body);
@@ -267,8 +275,9 @@ async function postWithRetry<T>(
 }
 
 /**
- * Original `/track/query` lookup: snake_case body, `_t` cache-bust, one retry,
- * and `code !== 0` or exhausted throws become a missing-order result.
+ * 保留旧 /track/query 协议：snake_case 请求体、_t 防缓存、默认额外重试一次。
+ * 业务失败和重试耗尽均返回 empty；自定义宿主 query 若抛错，则由 Runtime 转为 error。
+ * 英文重查仍请求同一真实接口，不是退回 Mock；仅在显式开启且当前语言不是 EN 时启用。
  */
 export function createShopifyTrackQuery(transport: ShopifyTrackPageTransport): TrackingPageQuery {
   const retries = transport.retries ?? 1;
@@ -297,6 +306,7 @@ export function createShopifyTrackQuery(transport: ShopifyTrackPageTransport): T
   };
 }
 
+/** 推荐独立请求；请求或映射抛错时返回空列表，不影响查单状态，也不回退到演示商品。 */
 export function createShopifyRecommendationsQuery(post: ShopifyTrackPagePost): TrackingPageRecommendationsQuery {
   return async () => {
     try {
@@ -308,7 +318,9 @@ export function createShopifyRecommendationsQuery(post: ShopifyTrackPagePost): T
   };
 }
 
+// 复用原 Track Page 的编号合并规则，供公共 Runtime 管理第一层最近查询；包裹列表不经过合并。
 export {
+  mergeDisplayValues,
   readTrackingQueryFromLocation,
   readTrackingQueryLocationState,
   scrollToTrackingResult,

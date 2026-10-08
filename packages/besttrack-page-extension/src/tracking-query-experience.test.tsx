@@ -1,4 +1,5 @@
 import { fireEvent, render, screen } from "@testing-library/react";
+import "@testing-library/jest-dom/vitest";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { TrackingQueryCard, TrackingQueryResultDetails } from "./tracking-query-experience";
 
@@ -28,9 +29,10 @@ describe("TrackingQueryCard", () => {
     fireEvent.click(screen.getByRole("tab", { name: "Tracking Number" }));
     expect((screen.getByLabelText("Tracking number") as HTMLInputElement).value).toBe("BT-9000");
 
-    fireEvent.change(screen.getByLabelText("Tracking number"), { target: { value: "bad input" } });
+    // 空白字符串经 trim 后才判空；同时验证拦截请求和把焦点交还给首个缺失字段。
+    fireEvent.change(screen.getByLabelText("Tracking number"), { target: { value: "   " } });
     fireEvent.click(screen.getByRole("button", { name: "Track" }));
-    expect(screen.getByRole("alert").textContent).toContain("Enter a valid tracking number.");
+    expect(screen.getByRole("alert")).not.toBeEmptyDOMElement();
     expect(document.activeElement).toBe(screen.getByLabelText("Tracking number"));
     expect(sharedProps.onQuery).not.toHaveBeenCalled();
   });
@@ -90,7 +92,7 @@ describe("TrackingQueryCard", () => {
     const emptyStatus = screen.getByRole("region", { name: "Tracking query status" });
     expect(document.activeElement).toBe(emptyStatus);
     expect(emptyStatus.getAttribute("aria-describedby")).toBeTruthy();
-    expect(screen.getByRole("status").textContent).toContain("couldn't find an order");
+    expect(screen.getByText("Can not find order")).toBeInTheDocument();
 
     rerender(<TrackingQueryCard {...sharedProps} phase="error" />);
     const errorStatus = screen.getByRole("region", { name: "Tracking query status" });
@@ -101,7 +103,8 @@ describe("TrackingQueryCard", () => {
 });
 
 describe("TrackingQueryResultDetails", () => {
-  it("renders the full in-card result with five stages, bounded events and item prices", () => {
+  it("renders the full in-card result with five stages, all events and item prices", () => {
+    // 特意提供第四条事件，防止卡片沿用旧的前三条折叠逻辑而与 Ready-to-go 全量展示不一致。
     render(<TrackingQueryResultDetails result={{
       trackingNumber: "BT-2048",
       orderNumber: "#2048",
@@ -127,9 +130,6 @@ describe("TrackingQueryResultDetails", () => {
     expect(screen.getByText("$12.00")).not.toBeNull();
     expect(screen.getByText("$15.00")).not.toBeNull();
     expect(screen.getByLabelText("Studio tote image unavailable")).not.toBeNull();
-    expect(screen.queryByText("Shipment information received")).toBeNull();
-
-    fireEvent.click(screen.getByRole("button", { name: "Show all events" }));
     expect(screen.getByText("Shipment information received")).not.toBeNull();
   });
 
@@ -145,7 +145,7 @@ describe("TrackingQueryResultDetails", () => {
       ]
     }} />);
 
-    for (const name of ["Track another", "Copy", "Show all events"]) {
+    for (const name of ["Track another", "Copy"]) {
       const action = screen.getByRole("button", { name });
       expect(action.style.minWidth).toBe("44px");
       expect(action.style.minHeight).toBe("44px");

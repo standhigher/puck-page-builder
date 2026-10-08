@@ -1,7 +1,12 @@
-import { useEffect, useId, useRef, useState, type CSSProperties, type FormEvent, type KeyboardEvent, type ReactNode } from "react";
-import { formatTrackingPageMoney, isValidOrderEmail, isValidOrderNumber, isValidTrackingNumber, type TrackingPageQueryRequest, type TrackingPageQueryResult, type TrackingPageRuntimePhase, type TrackingPageTrackingStep } from "./tracking-page-runtime";
+import { useEffect, useId, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactNode } from "react";
+import { formatTrackingPageMoney, type TrackingPageQueryRequest, type TrackingPageQueryResult, type TrackingPageRuntimePhase, type TrackingPageTrackingStep } from "./tracking-page-runtime";
 import { safeTrackingPageUrl } from "./tracking-page-url";
 import { TrackingLoading } from "./tracking-loading";
+import { TrackingNotFound } from "./tracking-not-found";
+import { TrackPageOrderBadges, TrackPageQueryNumber, TrackingPageAdSlot } from "./track-page-display";
+import { useTrackingRuntime } from "./tracking-runtime";
+import { useTrackingQueryForm } from "./tracking-query-form";
+import { trackingEvents, trackingSelection, trackingSteps, trackingBlockState } from "./tracking-block-model";
 
 type QueryMode = "tracking" | "order";
 type FieldName = "tracking" | "order" | "email";
@@ -19,6 +24,7 @@ export type TrackingQueryCardProps = {
   trackingPlaceholder?: string;
   orderPlaceholder?: string;
   emailPlaceholder?: string;
+  /** 兼容旧调用参数；空结果已统一由 TrackingNotFound 呈现，不再使用各模板的独立提示。 */
   emptyMessage?: string;
   errorMessage?: string;
   trackingInputLabel?: string;
@@ -87,15 +93,10 @@ const defaultSubmitStyle = (loading: boolean): CSSProperties => ({
   cursor: loading ? "wait" : "pointer"
 });
 
-function fieldError(field: FieldName) {
-  if (field === "tracking") return "Enter a valid tracking number.";
-  if (field === "order") return "Enter a valid order number.";
-  return "Enter a valid email address.";
-}
-
 /**
- * Shared consumer query interaction for Branded and Sales. It keeps transient
- * query input in the browser and never writes request values into PageDocument.
+ * Branded、Sales 共用的查询卡片，业务控制继续复用 Ready-to-go 的 useTrackingQueryForm。
+ * 此层负责各模板传入的样式、键盘焦点和卡片内滚动，不重新实现校验或查询缓存。
+ * 消费者输入由共用表单管理，提交时同步查询 URL，不会通过编辑器接口写入 PageDocument。
  */
 export function TrackingQueryCard({
   phase,
@@ -110,7 +111,6 @@ export function TrackingQueryCard({
   trackingPlaceholder = "Enter your tracking number",
   orderPlaceholder = "Enter your order number",
   emailPlaceholder = "Enter your email",
-  emptyMessage = "We couldn't find an order or shipment for that number.",
   errorMessage = "We couldn't retrieve this order right now. Please try again later.",
   trackingInputLabel = "Tracking number",
   orderInputLabel = "Order number",
@@ -137,20 +137,20 @@ export function TrackingQueryCard({
   const orderTabId = useId();
   const tabPanelId = useId();
   const queryStatusId = useId();
-  const [mode, setMode] = useState<QueryMode>(initialMode);
-  const [trackingNumber, setTrackingNumber] = useState(initialTrackingNumber);
-  const [orderNumber, setOrderNumber] = useState(initialOrderNumber);
-  const [email, setEmail] = useState("");
-  const [errors, setErrors] = useState<Partial<Record<FieldName, string>>>({});
+  // 显式传入 onQuery/phase 兼容卡片单独使用；在模板中，它们就是同一公共 Runtime 的入口和状态。
+  const { mode, setMode, trackingNumber, setTrackingNumber, orderNumber, setOrderNumber, email, setEmail, localError, firstInvalidField, loading, submit } = useTrackingQueryForm({ initialTrackingNumber, initialOrderNumber, initialMode, onQuery, phase });
   const cardRef = useRef<HTMLDivElement>(null);
   const resultRef = useRef<HTMLDivElement>(null);
   const trackingInputRef = useRef<HTMLInputElement>(null);
   const orderInputRef = useRef<HTMLInputElement>(null);
   const emailInputRef = useRef<HTMLInputElement>(null);
   const tabRefs = useRef<Record<QueryMode, HTMLButtonElement | null>>({ tracking: null, order: null });
-  const loading = phase === "loading";
-  const terminalPhase = phase === "success" || phase === "empty" || phase === "error";
+  // success/empty/error 都有结果反馈；idle/loading 不保留上一笔结果区。
+  // 空结果用未找到组件，错误则分别提示进度和配送不可用，与 Ready-to-go 的区块语义一致。
+  const visibility = trackingBlockState({ phase });
+  const terminalPhase = visibility.showProgress;
 
+  // 卡片有独立滚动容器，因此结果出现后滚动卡片并聚焦结果，而不是滚动整页。
   useEffect(() => {
     if (!terminalPhase) return;
     const card = cardRef.current;
@@ -161,14 +161,14 @@ export function TrackingQueryCard({
     resultNode?.focus({ preventScroll: true });
   }, [phase, terminalPhase]);
 
-  const focusField = (field: FieldName) => {
-    const input = field === "tracking" ? trackingInputRef.current : field === "order" ? orderInputRef.current : emailInputRef.current;
+  // 共用表单只返回第一个非空校验失败的字段；卡片把焦点和错误描述关联到该输入框。
+  useEffect(() => {
+    const input = firstInvalidField === "tracking" ? trackingInputRef.current : firstInvalidField === "order" ? orderInputRef.current : firstInvalidField === "email" ? emailInputRef.current : null;
     input?.focus();
-  };
+  }, [firstInvalidField, localError]);
 
   const setActiveMode = (nextMode: QueryMode, moveFocus = false) => {
     setMode(nextMode);
-    setErrors({});
     if (moveFocus) tabRefs.current[nextMode]?.focus();
   };
 
@@ -185,46 +185,17 @@ export function TrackingQueryCard({
     setActiveMode(nextMode, true);
   };
 
-  const clearError = (field: FieldName) => {
-    setErrors((current) => {
-      if (!current[field]) return current;
-      const next = { ...current };
-      delete next[field];
-      return next;
-    });
-  };
-
-  const submit = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    if (loading) return;
-    const nextErrors: Partial<Record<FieldName, string>> = {};
-    const normalizedTrackingNumber = trackingNumber.trim();
-    const normalizedOrderNumber = orderNumber.trim();
-    const normalizedEmail = email.trim();
-    if (mode === "tracking" && !isValidTrackingNumber(normalizedTrackingNumber)) nextErrors.tracking = fieldError("tracking");
-    if (mode === "order" && !isValidOrderNumber(normalizedOrderNumber)) nextErrors.order = fieldError("order");
-    if (mode === "order" && !isValidOrderEmail(normalizedEmail)) nextErrors.email = fieldError("email");
-    const firstInvalidField = mode === "tracking" ? "tracking" : nextErrors.order ? "order" : nextErrors.email ? "email" : undefined;
-    if (firstInvalidField && nextErrors[firstInvalidField]) {
-      setErrors(nextErrors);
-      focusField(firstInvalidField);
-      return;
-    }
-    setErrors({});
-    void onQuery(mode === "tracking"
-      ? { mode, trackingNumber: normalizedTrackingNumber }
-      : { mode, orderNumber: normalizedOrderNumber, email: normalizedEmail });
-  };
-
-  const errorFor = (field: FieldName) => errors[field];
+  // 输入修改只更新值，提示随共用表单的重新提交/模式切换/历史恢复清除；不另设逐字段错误状态。
+  const errorFor = (field: FieldName) => firstInvalidField === field ? localError : undefined;
   const inputWithError = (field: FieldName): CSSProperties => ({ ...inputStyle, borderColor: errorFor(field) ? "#b42318" : inputStyle.borderColor ?? "#cbd5e1" });
-  const message = phase === "empty" ? emptyMessage : phase === "error" ? errorMessage : undefined;
+  const message = visibility.showUnavailable ? errorMessage : undefined;
   const cardData = cardDataAttribute ? { [cardDataAttribute]: "true" } : {};
   const resultData = resultDataAttribute ? { [resultDataAttribute]: "true" } : {};
 
   const activeTabId = mode === "tracking" ? trackingTabId : orderTabId;
-  const resultLabel = phase === "success" ? "Tracking result" : "Tracking query status";
+  const resultLabel = visibility.showResult ? "Tracking result" : "Tracking query status";
 
+  // 表单保留 noValidate：email 输入类型用于输入体验，实际提交统一执行 Ready-to-go 的非空校验。
   return <div ref={cardRef} data-tracking-query-card {...cardData} aria-busy={loading || undefined} style={{ boxSizing: "border-box", minWidth: 0, maxWidth: "100%", overflowX: "hidden", overflowY: "auto", overscrollBehavior: "contain", scrollPaddingBlock: 16, ...cardStyle }}>
     <h1 style={{ margin: "0 0 28px", textAlign: "center", ...headingStyle }}>{heading}</h1>
     <div role="tablist" aria-label="Tracking method" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", borderBottom: "1px solid #cbd5e1", marginBottom: 18, ...tabListStyle }}>
@@ -235,47 +206,35 @@ export function TrackingQueryCard({
     <form noValidate onSubmit={submit} style={{ display: "grid", gap: 12, minWidth: 0, ...formStyle }}>
       {mode === "tracking" ? <div>
         <label htmlFor={trackingInputId} style={srOnly}>{trackingInputLabel}</label>
-        <input ref={trackingInputRef} id={trackingInputId} aria-label={trackingInputLabel} aria-invalid={Boolean(errorFor("tracking"))} aria-describedby={errorFor("tracking") ? trackingInputId + "-error" : undefined} value={trackingNumber} onChange={(event) => { setTrackingNumber(event.target.value); clearError("tracking"); }} placeholder={trackingPlaceholder} style={inputWithError("tracking")} />
+        <input ref={trackingInputRef} id={trackingInputId} aria-label={trackingInputLabel} aria-invalid={Boolean(errorFor("tracking"))} aria-describedby={errorFor("tracking") ? trackingInputId + "-error" : undefined} value={trackingNumber} onChange={(event) => { setTrackingNumber(event.target.value); }} placeholder={trackingPlaceholder} style={inputWithError("tracking")} />
         {errorFor("tracking") ? <p id={trackingInputId + "-error"} role="alert" style={{ margin: "6px 0 0", color: "#b42318", fontSize: 13 }}>{errorFor("tracking")}</p> : null}
       </div> : <>
         <div>
           <label htmlFor={orderInputId} style={srOnly}>{orderInputLabel}</label>
-          <input ref={orderInputRef} id={orderInputId} aria-label={orderInputLabel} aria-invalid={Boolean(errorFor("order"))} aria-describedby={errorFor("order") ? orderInputId + "-error" : undefined} value={orderNumber} onChange={(event) => { setOrderNumber(event.target.value); clearError("order"); }} placeholder={orderPlaceholder} style={inputWithError("order")} />
+          <input ref={orderInputRef} id={orderInputId} aria-label={orderInputLabel} aria-invalid={Boolean(errorFor("order"))} aria-describedby={errorFor("order") ? orderInputId + "-error" : undefined} value={orderNumber} onChange={(event) => { setOrderNumber(event.target.value); }} placeholder={orderPlaceholder} style={inputWithError("order")} />
           {errorFor("order") ? <p id={orderInputId + "-error"} role="alert" style={{ margin: "6px 0 0", color: "#b42318", fontSize: 13 }}>{errorFor("order")}</p> : null}
         </div>
         <div>
           <label htmlFor={emailInputId} style={srOnly}>{emailInputLabel}</label>
-          <input ref={emailInputRef} id={emailInputId} type="email" aria-label={emailInputLabel} aria-invalid={Boolean(errorFor("email"))} aria-describedby={errorFor("email") ? emailInputId + "-error" : undefined} value={email} onChange={(event) => { setEmail(event.target.value); clearError("email"); }} placeholder={emailPlaceholder} style={inputWithError("email")} />
+          <input ref={emailInputRef} id={emailInputId} type="email" aria-label={emailInputLabel} aria-invalid={Boolean(errorFor("email"))} aria-describedby={errorFor("email") ? emailInputId + "-error" : undefined} value={email} onChange={(event) => { setEmail(event.target.value); }} placeholder={emailPlaceholder} style={inputWithError("email")} />
           {errorFor("email") ? <p id={emailInputId + "-error"} role="alert" style={{ margin: "6px 0 0", color: "#b42318", fontSize: 13 }}>{errorFor("email")}</p> : null}
         </div>
       </>}
       <button type="submit" disabled={loading} style={submitStyle(loading)}>{submitLabel}</button>
     </form>
     </div>
-    {message ? <p id={queryStatusId} role={phase === "error" ? "alert" : "status"} aria-live={phase === "error" ? "assertive" : "polite"} style={{ margin: "16px 0 0", color: phase === "error" ? "#b42318" : "#64748b", ...messageStyle }}>{message}</p> : null}
-    {phase === "success" ? <p id={queryStatusId} role="status" aria-live="polite" style={srOnly}>Tracking details loaded.</p> : null}
-    {terminalPhase ? <div ref={resultRef} role="region" aria-label={resultLabel} aria-describedby={queryStatusId} data-tracking-query-result {...resultData} data-testid={resultTestId} tabIndex={-1} style={{ minWidth: 0, overflowWrap: "anywhere", marginTop: phase === "success" ? 20 : 0, ...resultStyle }}>{phase === "success" ? result : null}</div> : null}
+    {message ? <p id={queryStatusId} role="alert" aria-live="assertive" style={{ margin: "16px 0 0", color: "#b42318", ...messageStyle }}>{message}</p> : null}
+    {visibility.showResult ? <p id={queryStatusId} role="status" aria-live="polite" style={srOnly}>Tracking details loaded.</p> : null}
+    {terminalPhase ? <div ref={resultRef} role="region" aria-label={resultLabel} aria-describedby={queryStatusId} data-tracking-query-result {...resultData} data-testid={resultTestId} tabIndex={-1} style={{ minWidth: 0, overflowWrap: "anywhere", marginTop: visibility.showResult ? 20 : 0, ...resultStyle }}>{visibility.showResult ? result : visibility.showNotFound ? <div id={queryStatusId}><TrackingNotFound /></div> : <><section aria-label="Shipment progress"><p style={{ color: "#b42318" }}>Shipment progress is temporarily unavailable.</p></section><section aria-label="Shipping Details"><p style={{ color: "#b42318" }}>Delivery details are temporarily unavailable.</p></section></>}</div> : null}
     {watermark}
     {loading ? <TrackingLoading /> : null}
   </div>;
 }
 
-function defaultProgress(status: string): TrackingPageTrackingStep[] {
-  const steps: Array<Pick<TrackingPageTrackingStep, "id" | "label" | "icon">> = [
-    { id: "ordered", label: "Ordered", icon: "check" },
-    { id: "ready", label: "Order Ready", icon: "bag" },
-    { id: "transit", label: "In Transit", icon: "truck" },
-    { id: "out", label: "Out for Delivery", icon: "box" },
-    { id: "delivered", label: "Delivered", icon: "check" }
-  ];
-  const normalized = status.toLowerCase();
-  const current = normalized.includes("deliver") ? (normalized.includes("out for") ? 3 : 4) : normalized.includes("transit") ? 2 : normalized.includes("ready") ? 1 : 0;
-  return steps.map((step, index) => ({ ...step, state: index < current ? "complete" : index === current ? "current" : "upcoming" }));
-}
-
+// 节点数量由共用模型/接口结果决定，卡片完整展示，不再固定截取五个节点。
 function TrackingProgressDetails({ steps }: { steps: TrackingPageTrackingStep[] }) {
-  return <ol aria-label="Delivery progress" style={{ display: "grid", gridTemplateColumns: "repeat(5, minmax(0, 1fr))", gap: 4, margin: "20px 0 0", padding: 0, listStyle: "none" }}>
-    {steps.slice(0, 5).map((step, index) => <li key={step.id} style={{ minWidth: 0, textAlign: "center", color: step.state === "upcoming" ? "#64748b" : "#0f172a" }}>
+  return <ol aria-label="Delivery progress" style={{ display: "grid", gridTemplateColumns: `repeat(${steps.length}, minmax(0, 1fr))`, gap: 4, margin: "20px 0 0", padding: 0, listStyle: "none" }}>
+    {steps.map((step, index) => <li key={step.id} style={{ minWidth: 0, textAlign: "center", color: step.state === "upcoming" ? "#64748b" : "#0f172a" }}>
       <span aria-label={step.label + " " + step.state} style={{ display: "grid", placeItems: "center", width: 28, height: 28, margin: "0 auto", border: "1px solid " + (step.state === "upcoming" ? "#94a3b8" : "#0f172a"), borderRadius: "50%", background: step.state === "current" ? "#0f172a" : "#fff", color: step.state === "current" ? "#fff" : "#0f172a", fontSize: 13, fontWeight: 700 }}>{step.state === "complete" || step.state === "current" ? "✓" : index + 1}</span>
       <span style={{ display: "block", marginTop: 6, overflowWrap: "anywhere", fontSize: 11, lineHeight: 1.25 }}>{step.label}</span>
       {step.date ? <span style={{ display: "block", marginTop: 3, color: "#94a3b8", fontSize: 10, lineHeight: 1.2 }}>{step.date}</span> : null}
@@ -284,20 +243,18 @@ function TrackingProgressDetails({ steps }: { steps: TrackingPageTrackingStep[] 
 }
 
 function TrackingEvents({ result }: { result: TrackingPageQueryResult }) {
-  const [expanded, setExpanded] = useState(false);
-  const events = result.events ?? (result.latestEvent ? [{ id: "latest", title: result.latestEvent, at: result.updatedAt, state: "current" as const }] : []);
+  // 有完整事件时全部展示；事件列表为空或缺失时，由共用模型尝试使用 latestEvent 摘要。
+  const events = trackingEvents(result);
   if (!events.length) return <p style={{ margin: "12px 0 0", color: "#64748b", fontSize: 14 }}>Tracking events are not available yet. Please try again later.</p>;
-  const visibleEvents = events.slice(0, expanded ? 50 : 3);
   return <div aria-label="Shipping events" style={{ marginTop: 16 }}>
     <ol style={{ display: "grid", gap: 14, margin: 0, padding: 0, listStyle: "none" }}>
-      {visibleEvents.map((event, index) => <li key={event.id} style={{ position: "relative", minWidth: 0, paddingLeft: 22, overflowWrap: "anywhere" }}>
+      {events.map((event, index) => <li key={event.id} style={{ position: "relative", minWidth: 0, paddingLeft: 22, overflowWrap: "anywhere" }}>
         <span aria-hidden="true" style={{ position: "absolute", left: 0, top: 4, width: 10, height: 10, borderRadius: "50%", background: event.state === "current" || index === 0 ? "#111827" : "#cbd5e1" }} />
         <strong style={{ display: "block", fontSize: 14 }}>{event.title}</strong>
         {event.detail ? <span style={{ display: "block", marginTop: 2, color: "#64748b", fontSize: 13 }}>{event.detail}</span> : null}
         {event.at ? <time style={{ display: "block", marginTop: 3, color: "#94a3b8", fontSize: 12 }}>{event.at}</time> : null}
       </li>)}
     </ol>
-    {events.length > 3 ? <button type="button" onClick={() => setExpanded((current) => !current)} style={{ minWidth: 44, minHeight: 44, marginTop: 14, padding: "6px 12px", border: "1px solid #cbd5e1", borderRadius: 6, background: "#fff", color: "#0f172a", font: "inherit", fontSize: 13, cursor: "pointer" }}>{expanded ? "Show recent events" : "Show all events"}</button> : null}
   </div>;
 }
 
@@ -308,13 +265,15 @@ function TrackingOrderItemImage({ src, title }: { src?: string; title: string })
   return <img src={imageUrl} alt="" onError={() => setFailed(true)} style={{ width: 56, height: 56, borderRadius: 6, objectFit: "cover", background: "#f1f5f9" }} />;
 }
 
+// 商品明细属于必要配送能力；成功结果缺少商品时保留标题与说明，避免误以为区块被移除。
 function TrackingOrderItems({ items }: { items: NonNullable<TrackingPageQueryResult["orderItems"]> }) {
-  if (!items.length) return null;
   return <section aria-label="Order items" style={{ marginTop: 24, borderTop: "1px solid #e2e8f0", paddingTop: 18 }}>
     <h2 style={{ margin: 0, fontSize: 16 }}>Items in your order</h2>
     <div style={{ display: "grid", gap: 12, marginTop: 12 }}>
+      {!items.length ? <p style={{ margin: 0, color: "#64748b", fontSize: 14 }}>Package contents are not available for this shipment.</p> : null}
       {items.map((item) => {
         const price = item.price ? formatTrackingPageMoney(item.price) : undefined;
+        // Reorder 与商品标题共用这个安全链接，仅提供跳转，不会直接创建订单或执行加购。
         const href = safeTrackingPageUrl(item.href);
         return <article key={item.id} style={{ display: "grid", gridTemplateColumns: "56px minmax(0, 1fr)", gap: 12, alignItems: "center" }}>
           <TrackingOrderItemImage src={item.imageUrl} title={item.title} />
@@ -322,6 +281,7 @@ function TrackingOrderItems({ items }: { items: NonNullable<TrackingPageQueryRes
             {href ? <a href={href} style={{ color: "inherit", fontWeight: 700, overflowWrap: "anywhere" }}>{item.title}</a> : <strong style={{ overflowWrap: "anywhere" }}>{item.title}</strong>}
             {item.description ? <p style={{ margin: "3px 0 0", color: "#64748b", fontSize: 13 }}>{item.description}</p> : null}
             <p style={{ display: "flex", flexWrap: "wrap", gap: 8, margin: "4px 0 0", color: "#475569", fontSize: 13 }}><span>Qty {item.quantity}</span>{price?.amount ? <span>{price.amount}{price.startsAt ? " and up" : ""}</span> : null}{price?.compareAt ? <s style={{ color: "#94a3b8" }}>{price.compareAt}</s> : null}</p>
+            {href ? <a href={href} style={{ display: "inline-flex", alignItems: "center", minHeight: 32, marginTop: 6, padding: "6px 12px", border: "1px solid #cbd5e1", borderRadius: 6, color: "inherit", fontSize: 13 }}>Reorder</a> : null}
           </div>
         </article>;
       })}
@@ -329,29 +289,46 @@ function TrackingOrderItems({ items }: { items: NonNullable<TrackingPageQueryRes
   </section>;
 }
 
-/** Complete, display-safe tracking result for Branded and Sales query cards. */
-export function TrackingQueryResultDetails({ result, onTrackAnother, trackAnotherLabel = "Track another" }: { result: TrackingPageQueryResult; onTrackAnother?: () => void; trackAnotherLabel?: string }) {
+/**
+ * Branded、Sales 卡片中的完整结果视图：历史查询、包裹选择、进度、配送及商品共用数据规则。
+ * 第一层历史最多三条，点击从 Runtime 恢复缓存；第二层取当前 result.shipments，数量大于一
+ * 就允许切换，与表单当前模式无关。showShipments 仅供 Branded 把第二层放到 Hero 外部。
+ * result 已包含选中包裹的字段，因此时间线、广告、承运商和商品随同一次选择更新。
+ * 承运商/目的地为 null 或 undefined 时使用 Ready-to-go 的缺省说明，不把空字符串也视为缺失。
+ * 广告图片缺失、无效或加载失败时，由公共广告组件隐藏该子区域。
+ */
+export function TrackingQueryResultDetails({ result, onTrackAnother, trackAnotherLabel = "Track another", showShipments = true }: { result: TrackingPageQueryResult; onTrackAnother?: () => void; trackAnotherLabel?: string; showShipments?: boolean }) {
   const [copied, setCopied] = useState(false);
-  const progress = result.progress?.length === 5 ? result.progress : defaultProgress(result.status);
+  const runtime = useTrackingRuntime();
+  // 预计送达沿用共用预览规则：autoQueryDemo 时隐藏，正式结果也必须实际包含日期才展示。
+  const visibility = trackingBlockState(runtime);
+  // 不要求接口恰好返回五个节点：只要节点列表非空就完整展示，缺失时才生成共用默认进度。
+  const progress = trackingSteps(result);
+  const { identity, shipmentValues } = trackingSelection(result, runtime.recentQueries);
   const copyTrackingNumber = () => {
     if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
       void navigator.clipboard.writeText(result.trackingNumber).then(() => setCopied(true)).catch(() => undefined);
     }
   };
   return <section aria-label="Tracking result details" style={{ minWidth: 0, overflowWrap: "anywhere" }}>
+    {identity.values.length > 1
+      ? <TrackPageOrderBadges values={identity.values} selectedIndex={runtime.selectedRecentIndex} onSelect={runtime.selectRecentQuery} style={{ marginBottom: 16 }} />
+      : identity.values[0] ? <div style={{ marginBottom: 16 }}><TrackPageQueryNumber mode={identity.mode} value={identity.values[0]} /></div> : null}
+    {showShipments && shipmentValues.length > 1 ? <TrackPageOrderBadges values={shipmentValues} selectedIndex={runtime.selectedShipmentIndex} onSelect={runtime.selectShipment} style={{ marginBottom: 16 }} /> : null}
     <div style={{ display: "flex", flexWrap: "wrap", alignItems: "start", justifyContent: "space-between", gap: 12 }}>
-      <div style={{ minWidth: 0, flex: "1 1 180px" }}><strong style={{ fontSize: 17 }}>Your order is {result.status || "being updated"}</strong>{result.estimatedDelivery ? <p style={{ margin: "5px 0 0", color: "#475569", fontSize: 14 }}>Estimated delivery: {result.estimatedDelivery}</p> : null}</div>
+      <div style={{ minWidth: 0, flex: "1 1 180px" }}><strong style={{ fontSize: 17 }}>Your order is {result.status || "being updated"}</strong>{visibility.showEstimatedDelivery && result.estimatedDelivery ? <p style={{ margin: "5px 0 0", color: "#475569", fontSize: 14 }}>Estimated delivery: {result.estimatedDelivery}</p> : null}</div>
       {onTrackAnother ? <button type="button" onClick={onTrackAnother} style={{ minWidth: 44, minHeight: 44, flex: "0 0 auto", padding: "6px 10px", border: "1px solid #cbd5e1", borderRadius: 6, background: "#fff", color: "#0f172a", font: "inherit", fontSize: 12, cursor: "pointer" }}>{trackAnotherLabel}</button> : null}
     </div>
     <TrackingProgressDetails steps={progress} />
     <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 140px), 1fr))", gap: 10, marginTop: 22, padding: 12, borderRadius: 8, background: "#f8fafc", color: "#334155", fontSize: 13 }}>
-      <span style={{ minWidth: 0, overflowWrap: "anywhere" }}><strong>Carrier</strong><br />{result.carrier || "—"}</span>
+      <span style={{ minWidth: 0, overflowWrap: "anywhere" }}><strong>Carrier</strong><br />{result.carrier ?? "Not available"}</span>
       <span style={{ minWidth: 0, overflowWrap: "anywhere" }}><strong>Tracking number</strong><br /><span>{result.trackingNumber}</span> <button type="button" onClick={copyTrackingNumber} style={{ minWidth: 44, minHeight: 44, border: 0, background: "transparent", color: "#0f172a", font: "inherit", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>{copied ? "Copied" : "Copy"}</button></span>
-      <span style={{ minWidth: 0, overflowWrap: "anywhere" }}><strong>Destination</strong><br />{result.destination || "—"}</span>
+      <span style={{ minWidth: 0, overflowWrap: "anywhere" }}><strong>Destination</strong><br />{result.destination ?? "Destination details are not available."}</span>
       <span style={{ minWidth: 0, overflowWrap: "anywhere" }}><strong>Transit time</strong><br />{result.transitDuration || "—"}</span>
       {result.orderNumber ? <span style={{ minWidth: 0, overflowWrap: "anywhere" }}><strong>Order number</strong><br />{result.orderNumber}</span> : null}
     </div>
     <section aria-label="Tracking timeline" style={{ marginTop: 24, borderTop: "1px solid #e2e8f0", paddingTop: 18 }}><h2 style={{ margin: 0, fontSize: 16 }}>Tracking timeline</h2><TrackingEvents result={result} /></section>
+    <TrackingPageAdSlot ad={result.ad} />
     <TrackingOrderItems items={result.orderItems ?? []} />
   </section>;
 }

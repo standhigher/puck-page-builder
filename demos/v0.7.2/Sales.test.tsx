@@ -73,15 +73,20 @@ describe("V0.8 Sales", () => {
     ]));
   });
 
-  it("uses one tracking query for sales order items and product recommendations", async () => {
+  it("queries order items and loads product recommendations independently", async () => {
+    // 查单响应保留旧 recommendations 字段，但首次提交前出现的推荐必须来自独立回调。
     const registry = createExtensionRegistry([bestTrackSalesExtension]);
     const query = vi.fn<TrackingPageQuery>().mockResolvedValue({ trackingNumber: "BT-2024", status: "In transit", orderItems: [{ id: "case", title: "Travel case", quantity: 1 }], recommendations: [{ id: "cover", title: "Delivery cover", description: "A simple protection plan." }] });
-    render(<SalesRuntimeProvider query={query}><WebRenderer document={registry.getTemplate("besttrack.sales")!.create()} registry={registry} /></SalesRuntimeProvider>);
+    const queryRecommendations = vi.fn(async () => [{ id: "cover", title: "Delivery cover", description: "A simple protection plan." }]);
+    render(<SalesRuntimeProvider query={query} queryRecommendations={queryRecommendations}><WebRenderer document={registry.getTemplate("besttrack.sales")!.create()} registry={registry} /></SalesRuntimeProvider>);
+    expect(await screen.findByText("Delivery cover")).toBeVisible();
+    expect(query).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", { name: "Track order" }));
     await waitFor(() => expect(query).toHaveBeenCalledWith({ mode: "tracking", trackingNumber: "BT-2048-DEMO" }));
     const result = await screen.findByTestId("sales-result");
     expect(within(result).getByText("Travel case")).toBeVisible();
     expect(screen.getByText("Delivery cover")).toBeVisible();
+    expect(queryRecommendations).toHaveBeenCalledOnce();
   });
 
   it("shows controlled empty and invalid collection-resource states", () => {
@@ -94,17 +99,19 @@ describe("V0.8 Sales", () => {
   });
 
   it("renders Consumer Runtime empty results, secondary shipments, and safe product fallbacks", async () => {
+    // 连续两次响应分别覆盖 empty 隐藏配送内容，以及 tracking 查询返回多包裹的展示路径。
     const registry = createExtensionRegistry([bestTrackSalesExtension]);
     const query = vi.fn<TrackingPageQuery>().mockResolvedValueOnce({ trackingNumber: "BT-empty", status: "Not found", outcome: "empty" }).mockResolvedValueOnce({ trackingNumber: "BT-main", status: "In transit", shipments: [{ id: "main", label: "Main shipment", trackingNumber: "BT-main" }, { id: "second", label: "Shipment #2", trackingNumber: "BT-second", status: "Delivered" }], orderItems: [{ id: "case", title: "Travel case", quantity: 1, imageUrl: "javascript:unsafe" }], recommendations: [{ id: "cover", title: "Delivery cover", description: "A simple protection plan.", imageUrl: "javascript:unsafe", href: "javascript:unsafe" }] });
-    render(<SalesRuntimeProvider query={query}><WebRenderer document={registry.getTemplate("besttrack.sales")!.create()} registry={registry} /></SalesRuntimeProvider>);
+    render(<SalesRuntimeProvider query={query} queryRecommendations={async () => [{ id: "cover", title: "Delivery cover", description: "A simple protection plan.", imageUrl: "javascript:unsafe", href: "javascript:unsafe" }]}><WebRenderer document={registry.getTemplate("besttrack.sales")!.create()} registry={registry} /></SalesRuntimeProvider>);
 
     fireEvent.click(screen.getByRole("button", { name: "Track order" }));
-    expect(await screen.findByText("We couldn’t find an order for that number.")).toBeVisible();
-    expect(screen.getByText("No order items are available for that number.")).toBeVisible();
+    expect(await screen.findByText("Can not find order")).toBeVisible();
+    expect(screen.queryByRole("region", { name: "Items in your order" })).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Track order" }));
-    expect(await screen.findByText("Shipment #2")).toBeVisible();
-    expect(within(screen.getByTestId("sales-result")).getByLabelText("Travel case image unavailable")).toBeVisible();
+    const result = await screen.findByTestId("sales-result");
+    expect(within(result).getByRole("button", { name: "BT-second" })).toBeVisible();
+    expect(within(result).getByLabelText("Travel case image unavailable")).toBeVisible();
     expect(screen.getByLabelText("Delivery cover image unavailable")).toBeVisible();
     expect(screen.queryByRole("link", { name: "Delivery cover" })).not.toBeInTheDocument();
   });
@@ -117,17 +124,19 @@ describe("V0.8 Sales", () => {
     expect(screen.queryByText("upstream credential detail")).not.toBeInTheDocument();
   });
 
-  it("rejects malformed customer input before it reaches the Consumer Runtime", () => {
+  it("rejects empty customer input before it reaches the Consumer Runtime", () => {
+    // 共用表单只检查 trim 后是否为空；这里不再用旧模板的运单格式正则构造失败输入。
     const registry = createExtensionRegistry([bestTrackSalesExtension]);
     const query = vi.fn<TrackingPageQuery>();
     render(<SalesRuntimeProvider query={query}><WebRenderer document={registry.getTemplate("besttrack.sales")!.create()} registry={registry} /></SalesRuntimeProvider>);
-    fireEvent.change(screen.getByLabelText("Sales tracking number"), { target: { value: "not valid!" } });
+    fireEvent.change(screen.getByLabelText("Sales tracking number"), { target: { value: "   " } });
     fireEvent.click(screen.getByRole("button", { name: "Track order" }));
-    expect(screen.getByRole("alert")).toHaveTextContent("Enter a valid tracking number.");
+    expect(screen.getByRole("alert")).toHaveTextContent("Please enter your tracking number");
     expect(query).not.toHaveBeenCalled();
   });
 
-  it("announces loading for every result block and rejects insecure resource URLs", async () => {
+  it("announces query loading, hides result blocks and rejects insecure resource URLs", async () => {
+    // 手动挂起查单以观察 loading：反馈在查询区，订单内容暂时隐藏，静态资源错误仍可见。
     const registry = createExtensionRegistry([bestTrackSalesExtension]);
     let resolveQuery: (value: TrackingPageQueryResult) => void = () => undefined;
     const query = vi.fn<TrackingPageQuery>(() => new Promise<TrackingPageQueryResult>((resolve) => { resolveQuery = resolve; }));
@@ -138,11 +147,12 @@ describe("V0.8 Sales", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Track order" }));
     expect(await screen.findByRole("status", { name: "查询中..." })).toBeVisible();
-    expect(screen.getByRole("region", { name: "Items in your order" })).toHaveAttribute("aria-busy", "true");
+    expect(screen.queryByRole("region", { name: "Items in your order" })).not.toBeInTheDocument();
     expect(screen.getByText("Collection reference is invalid.")).toBeVisible();
 
     resolveQuery({ trackingNumber: "BT-2048-DEMO", status: "In transit" });
-    expect(await screen.findByText("No recommendations are available for this order.")).toBeVisible();
+    expect(await screen.findByText("Your order is In transit")).toBeVisible();
+    expect(screen.queryByRole("region", { name: "Recommended for you" })).not.toBeInTheDocument();
   });
 
   it("uses transient resolution for collection links and product availability", () => {

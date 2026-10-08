@@ -294,31 +294,31 @@ describe("PageDocumentEditorShell V0.4", () => {
   });
 
   it("synchronizes Ready-to-go edit-mode values between the canvas, inspector and PageDocument", async () => {
+    // 用实际保留的按钮文案字段验证双向编辑：检查器写入画布，再从画布写回检查器与文档。
     const registry = createExtensionRegistry([bestTrackPageExtension]);
     const changes: PageDocument[] = [];
     renderEditor({ initialDocument: registry.getTemplate("besttrack.ready-to-go")!.create(), registry, onDocumentChange: (next) => changes.push(next) });
 
     fireEvent.click(screen.getByRole("group", { name: "Select Order query in canvas" }));
-    const headingInput = screen.getByLabelText("Heading");
-    expect(headingInput).toHaveValue("Track your order");
+    const buttonInput = screen.getByLabelText("Button label");
+    expect(buttonInput).toHaveValue("Track Your Order");
     expect(screen.queryByLabelText("Canvas poweredBy")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Track Your Order" })).not.toBeInTheDocument();
 
-    fireEvent.change(headingInput, { target: { value: "Find your parcel" } });
+    fireEvent.change(buttonInput, { target: { value: "Find your parcel" } });
     const editor = screen.getByTestId("page-document-editor");
-    await waitFor(() => expect(editor.querySelector<HTMLInputElement>('[data-ready-to-go-editor-field="heading"]')).toHaveValue("Find your parcel"));
+    await waitFor(() => expect(editor.querySelector<HTMLInputElement>('[data-ready-to-go-editor-field="submitLabel"]')).toHaveValue("Find your parcel"));
 
     const submit = editor.querySelector<HTMLInputElement>('[data-ready-to-go-editor-field="submitLabel"]');
-    expect(submit).toHaveValue("Track Your Order");
+    expect(submit).toHaveValue("Find your parcel");
     fireEvent.change(submit!, { target: { value: "Check delivery" } });
 
-    const buttonInput = screen.getByLabelText("Button label");
     await waitFor(() => expect(buttonInput).toHaveValue("Check delivery"));
     const colorInput = screen.getByLabelText("Button color");
     expect(colorInput).toHaveAttribute("type", "color");
     expect(colorInput).toHaveValue("#111111");
     fireEvent.change(colorInput, { target: { value: "#005bd3" } });
-    expect(changes.at(-1)?.blocks.find((block) => block.type === "besttrack.ready-to-go.query")?.props).toMatchObject({ heading: "Find your parcel", submitLabel: "Check delivery", submitButtonColor: "#005bd3" });
+    expect(changes.at(-1)?.blocks.find((block) => block.type === "besttrack.ready-to-go.query")?.props).toMatchObject({ submitLabel: "Check delivery", submitButtonColor: "#005bd3" });
   });
 
   it("synchronizes Sales editor-preview text with the inspector", async () => {

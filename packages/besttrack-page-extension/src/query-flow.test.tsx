@@ -20,11 +20,10 @@ describe("discriminated query cards", () => {
     const query = vi.fn<TrackingPageQuery>().mockResolvedValue({ trackingNumber: "BT-2048", status: "Delivered", latestEvent: "Left at the front door" });
     render(<SalesRuntimeProvider query={query}><SalesQueryBlock heading="Track" submitLabel="Find" /></SalesRuntimeProvider>);
     fireEvent.click(screen.getByRole("tab", { name: "Order Number" }));
+    // 订单号和邮箱都为空时在表单边界拦截；不依赖旧 Sales 分字段格式错误文案。
     fireEvent.click(screen.getByRole("button", { name: "Find" }));
-    expect(screen.getAllByRole("alert").map((element) => element.textContent)).toEqual(expect.arrayContaining([
-      "Enter a valid order number.",
-      "Enter a valid email address."
-    ]));
+    expect(screen.getByRole("alert")).not.toBeEmptyDOMElement();
+    expect(query).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("tab", { name: "Tracking Number" }));
     fireEvent.change(screen.getByLabelText("Sales tracking number"), { target: { value: "BT-2048" } });
     fireEvent.click(screen.getByRole("button", { name: "Find" }));

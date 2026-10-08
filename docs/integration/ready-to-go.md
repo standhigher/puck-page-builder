@@ -10,19 +10,23 @@ const registry = createExtensionRegistry([bestTrackPageExtension]);
 const document = registry.getTemplate("besttrack.ready-to-go")!.create();
 ```
 
-模板创建出的页面是普通 `PageDocument`，可在编辑器修改并保存；之后的模板升级不会自动覆盖已有页面。
+模板创建出的页面是普通 `PageDocument`，可在编辑器修改并保存；四个基础区块都不可删除或复制，但没有数据时可隐藏内容。之后的模板升级不会自动覆盖已有页面或补齐历史缺块。三套模板的共享范围与兼容边界见 [Ready-to-go 共用基础能力](./ready-to-go-shared-foundation.md)。
 
 ## RuntimeState 与数据边界
 
-每个 Ready-to-go 页面都由 `ReadyToGoRuntimeProvider` 包裹。查询区块只发起受控 `query`；物流进度和配送信息订阅查单 RuntimeState。推荐商品与原 Track Page 一样页面打开即加载，不依赖是否点击查询：
+每页由一份公共 `TrackingRuntimeProvider` 包裹。Ready-to-go、Branded、Sales 共用它；原 `ReadyToGoRuntimeProvider` 等名称保留为兼容入口。查询区块只发起受控 `query`；物流进度和配送信息订阅查单 RuntimeState。推荐商品与原 Track Page 一样页面打开即加载，不依赖是否点击查询。区块 `products` 非空时优先使用商家选品，否则读取独立推荐请求；不读取 `query` 结果中的 `recommendations`：
 
 ```tsx
-<ReadyToGoRuntimeProvider query={query}>
+// WebRenderer 只渲染文档；公共 Provider 接收宿主回调，为三套模板区块提供同一份查询状态。
+// 推荐回调独立于 query，不能仅把推荐商品塞进查单返回值。
+<TrackingRuntimeProvider query={query} queryRecommendations={queryRecommendations}>
   <WebRenderer document={document} registry={registry} />
-</ReadyToGoRuntimeProvider>
+</TrackingRuntimeProvider>
 ```
 
 不传 `query` 且不传 `transport` 时，Provider 使用显式 Mock，适用于本地编辑与 Mock Preview。对接原 Shopify Track Page 后端时注入 `transport.post`，不要再手写一套 camelCase 查询参数。鉴权、超时和 App Proxy 前缀仍由宿主补在 `post` 里。失败不会回退为 Mock，也不要把 Session Token、订单私密数据或查询结果写入 `PageDocument`。
+
+商家未选品时，推荐后端默认返回该店铺前 8 个产品，前端展示独立推荐请求的结果。宿主需提供 `queryRecommendations` 或 `transport` 才能取得这份默认商品；未选品本身不应被当作隐藏推荐的条件。
 
 ## 预览 Demo 与正式查单
 
@@ -31,9 +35,10 @@ const document = registry.getTemplate("besttrack.ready-to-go")!.create();
 仅 Mock / Studio 预览可以打开 `autoQueryDemo`：进入预览时用表单上的 demo 运单号自动查一笔订单，用来展示完整效果。预览 Demo 不显示 EDD（`Est. Delivery`），避免把占位日期当成真实预计送达。画布编辑器本身也不渲染 EDD。
 
 ```tsx
-<ReadyToGoRuntimeProvider query={mockQuery} autoQueryDemo>
+// 表单每次挂载只查询初始演示编号一次，用于展示预览；这不会预填三条历史，也不会自动加载推荐。
+<TrackingRuntimeProvider query={mockQuery} autoQueryDemo>
   <WebRenderer document={document} registry={registry} />
-</ReadyToGoRuntimeProvider>
+</TrackingRuntimeProvider>
 ```
 
 next-page-studio 只在模板预览、自定义模板预览和草稿预览传入该开关；`/p/:pageId` 已发布页不传。回溯说明、入口对照和测试见 [Ready-to-go 预览 Demo 自动查单](./ready-to-go-preview-demo.md)。线上 `transport` / 消费者页不要打开这个开关。
@@ -42,17 +47,19 @@ next-page-studio 只在模板预览、自定义模板预览和草稿预览传入
 
 ```tsx
 import {
-  ReadyToGoRuntimeProvider,
+  TrackingRuntimeProvider,
   withShopifyAppProxyPrefix
 } from "@standhigher/besttrack-page-extension";
 
-<ReadyToGoRuntimeProvider
+// 未注入 query / queryRecommendations 时，transport 分别负责查单与推荐接口。
+// 同一 post 封装处理 App Proxy 前缀；鉴权与请求超时等仍需由宿主 apiPost 实现。
+<TrackingRuntimeProvider
   transport={{
     post: (url, body) => apiPost(withShopifyAppProxyPrefix(url, APP_PROXY_PREFIX), body)
   }}
 >
   <WebRenderer document={document} registry={registry} />
-</ReadyToGoRuntimeProvider>
+</TrackingRuntimeProvider>
 ```
 
 Ready-to-go 只换了 PageDocument + WebRenderer 渲染链路。`transport` 路径完整复用原 Track Page 逻辑：
@@ -69,6 +76,10 @@ Ready-to-go 只换了 PageDocument + WebRenderer 渲染链路。`transport` 路�
 自定义 `query` 仍可用于 Mock、测试或新的 Consumer Runtime；一旦传入 `query`，就不再走 `/track/query`。
 
 Shopify Demo 的 `/page-builder` 已包含该模板的编辑器和 Consumer WebRenderer 预览。独立访问时使用 Mock；通过嵌入式 Shopify 应用访问时才启用现有 Session Token 保护的 Live DataSource。
+
+## 最近查询与包裹切换
+
+最近成功查询去重后最多保留 3 条；切换历史记录会回填输入并恢复内存结果，不重新请求。结果包含多个包裹时，切换同时更新进度、配送、商品和广告。切换查询模式或订单邮箱后开始新的记录组。旧请求不会覆盖已切换的结果，推荐状态始终独立。
 
 ## 查询未找到订单
 

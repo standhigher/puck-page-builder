@@ -1,4 +1,7 @@
 import { describe, expect, it } from "vitest";
+import { createExtensionRegistry, validatePageDocumentWithRegistry } from "../../puck-page-builder/src/core/extensions";
+import { canApplyCanvasDocument, canDeleteBlock, canDuplicateBlock } from "../../puck-page-builder/src/editor/policy";
+import { bestTrackDocumentValidationExtensions } from "./validation";
 import { brandedTemplatePolicy } from "./branded-definition";
 import { bestTrackBrandedExtension } from "./branded-definition";
 import { readyToGoTemplatePolicy } from "./ready-to-go-definition";
@@ -26,13 +29,48 @@ describe("BestTrack template PRD compatibility metadata", () => {
       contentsHeading: { validation: { maxLength: 52 } },
       carrierHeading: { validation: { maxLength: 52 } }
     });
-    expect(bestTrackPageExtension.blocks?.find((block) => block.type === "besttrack.ready-to-go.recommendations")?.policy).toMatchObject({ singleton: true });
-    expect(bestTrackPageExtension.blocks?.find((block) => block.type === "besttrack.ready-to-go.recommendations")?.policy).not.toMatchObject({ allowDelete: false });
+    expect(bestTrackPageExtension.blocks?.find((block) => block.type === "besttrack.ready-to-go.recommendations")?.policy).toMatchObject({ required: true, singleton: true, allowDelete: false });
     expect(bestTrackBrandedExtension.blocks?.find((block) => block.type === "besttrack.branded.tracking-experience")?.policy).toMatchObject({ required: true, singleton: true, allowDelete: false });
     expect(bestTrackSalesExtension.blocks?.find((block) => block.type === "besttrack.sales.query")?.policy).toMatchObject({ required: true, singleton: true, allowDelete: false });
   });
 
+  // 各模板用不同区块组合承载同样的必要能力；逐一检查操作权限和画布整份文档替换入口。
+  it.each([
+    [bestTrackPageExtension, readyToGoTemplatePolicy, ["query", "progress", "delivery", "recommendations"]],
+    [bestTrackBrandedExtension, brandedTemplatePolicy, ["tracking-experience", "recommendations"]],
+    [bestTrackSalesExtension, salesTemplatePolicy, ["query", "order-items", "other-tracking", "recommendations"]]
+  ] as const)("protects the base capabilities in $0.name documents and canvas changes", (extension, policy, suffixes) => {
+    const registry = createExtensionRegistry([extension]);
+    const document = registry.getTemplate(policy.templateId)!.create();
+    for (const suffix of suffixes) {
+      const type = `${policy.templateId}.${suffix}`;
+      const block = document.blocks.find((item) => item.type === type)!;
+      expect(block).toBeDefined();
+      expect(policy.blocks.find((item) => item.blockType === type)).toMatchObject({ singleton: true, deletable: false });
+      expect(canDeleteBlock(block, document.blocks, registry.getBlock(type), undefined)).toBe(false);
+      expect(canDuplicateBlock(block, document.blocks, registry.getBlock(type), undefined)).toBe(false);
+      // 即使绕过删除按钮直接提交少一个区块的画布结果，也必须被编辑策略拒绝。
+      expect(canApplyCanvasDocument(document, { ...document, blocks: document.blocks.filter((item) => item.id !== block.id) }, (blockType) => registry.getBlock(blockType), undefined)).toBe(false);
+    }
+  });
+
+  it("accepts merchant recommendation products through client and server contracts", () => {
+    // 编辑器字段与服务端轻量校验使用不同 Registry，商家选品必须在两端都能通过。
+    const extensions = [bestTrackPageExtension, bestTrackBrandedExtension, bestTrackSalesExtension];
+    const registry = createExtensionRegistry(extensions);
+    const serverRegistry = createExtensionRegistry(bestTrackDocumentValidationExtensions);
+    for (const extension of extensions) {
+      const document = registry.getTemplate(extension.name)!.create();
+      const block = document.blocks.find((item) => item.type.endsWith(".recommendations"))!;
+      block.props.products = [{ id: "gid://shopify/Product/123", title: "Merchant selection", handle: "merchant-selection" }];
+      expect(registry.getBlock(block.type)?.fields.products).toMatchObject({ control: "products" });
+      expect(validatePageDocumentWithRegistry(document, registry).filter((issue) => issue.path.includes("products"))).toEqual([]);
+      expect(validatePageDocumentWithRegistry(document, serverRegistry).filter((issue) => issue.path.includes("products"))).toEqual([]);
+    }
+  });
+
   it("keeps query validation local and deterministic", () => {
+    // 这里保留旧格式校验工具自身的契约；共用查询表单已改为 trim + 非空，不调用这些工具。
     expect(isValidTrackingNumber("BT-2048-DEMO")).toBe(true);
     expect(isValidTrackingNumber("not valid!")).toBe(false);
     expect(isValidOrderNumber("ORDER-2048")).toBe(true);

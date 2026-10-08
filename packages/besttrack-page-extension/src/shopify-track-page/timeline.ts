@@ -635,6 +635,10 @@ const sanitizeEstimatedDelivery = (
   }
 }
 
+/**
+ * 规整旧接口的可空文本、节点列表和商品数据，供后续进度/时间线映射安全读取。
+ * 此处只清洗结构，不把缺少字段当作查询失败，也不根据查询模式过滤包裹。
+ */
 export const sanitizeMilestone = (milestone: TrackMilestone | null | undefined): TrackMilestone => ({
   tracking_number: asText(milestone?.tracking_number),
   nodeList: Array.isArray(milestone?.nodeList) ? milestone.nodeList.map(sanitizeTrackingNode) : [],
@@ -648,9 +652,16 @@ export const sanitizeMilestone = (milestone: TrackMilestone | null | undefined):
   estimated_delivery: sanitizeEstimatedDelivery(milestone?.estimated_delivery),
 })
 
+/** 保留接口数组的顺序和全部条目；第二层包裹列表由这份完整结果构建。 */
 export const sanitizeMilestones = (milestones: TrackMilestone[] | null | undefined) =>
   Array.isArray(milestones) ? milestones.map(sanitizeMilestone) : []
 
+/**
+ * 把本次显示编号放到最前，再接上历史中未与本次重复的编号，最终只保留 3 个。
+ * 共用 Runtime 每次传入一个成功查询编号；模式/邮箱分组和结果缓存由 Runtime 处理，
+ * 此处不接收包裹列表，第二层 shipments 也不受这个上限影响。
+ * 本次没有有效编号时直接保留旧数组，不改变其顺序或长度。
+ */
 export function mergeDisplayValues(previous: string[], next: string[]) {
   const normalizedNext = next.filter(Boolean)
   if (normalizedNext.length === 0) {

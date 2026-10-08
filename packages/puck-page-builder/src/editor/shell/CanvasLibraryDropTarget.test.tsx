@@ -1,4 +1,6 @@
 import { act, createEvent, fireEvent, render, screen } from "@testing-library/react";
+// 显式载入 DOM 断言及其类型，让本文件参与包内独立类型检查时也能识别 toHaveTextContent 等扩展。
+import "@testing-library/jest-dom/vitest";
 import { useRef, type ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { CanvasLibraryDropTarget } from "./CanvasLibraryDropTarget";

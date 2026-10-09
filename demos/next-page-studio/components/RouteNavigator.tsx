@@ -7,6 +7,7 @@ import { pageListServerSnapshot, pageListSnapshot, subscribeToPages } from "../l
 
 const templatePreviews = [
   { label: "Ready-to-go 预览", href: "/templates/besttrack.ready-to-go/preview" },
+  { label: "Ready-to-go Loading", href: "/templates/besttrack.ready-to-go/loading" },
   { label: "Branded 预览", href: "/templates/besttrack.branded/preview" },
   { label: "Sales 预览", href: "/templates/besttrack.sales/preview" }
 ];

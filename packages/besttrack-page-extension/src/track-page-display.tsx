@@ -7,6 +7,7 @@ import type { TrackingPageAd } from "./tracking-page-runtime";
 import { formatRecommendationPrice } from "./tracking-block-model";
 // 默认进度算法已归到三模板共用模型；保留这个旧导出路径兼容现有引用。
 export { defaultProgress } from "./tracking-block-model";
+import { resolveShopifyRecommendHref } from "./shopify-track-query";
 import { safeTrackingPageUrl } from "./tracking-page-url";
 
 export const pageFont = { fontFamily: "var(--pb-font-family, Inter, system-ui, sans-serif)" } satisfies CSSProperties;
@@ -34,12 +35,27 @@ const trackingProgressStyles = `
 }
 `;
 
+// 名称本身必须裁成单行，完整文案只能放在同级弹层里，否则会被 overflow 裁掉。
+const packageNameStyles = `
+.bt-package-name { position: relative; width: 100%; max-width: 100%; min-width: 0; outline: none; }
+.bt-package-name__text { display: block; width: 100%; max-width: 100%; margin: 0; overflow: hidden; font-size: 14px; font-weight: 500; color: #1e293b; text-overflow: ellipsis; white-space: nowrap; }
+.bt-package-name__tooltip { position: absolute; bottom: calc(100% + 8px); left: 0; z-index: 30; width: max-content; max-width: min(320px, calc(100vw - 48px)); padding: 8px 10px; border-radius: 6px; background: #0f172a; box-shadow: 0 12px 28px rgba(15, 23, 42, 0.18); color: #fff; font-size: 12px; font-weight: 500; line-height: 1.35; opacity: 0; overflow-wrap: anywhere; pointer-events: none; transform: translateY(2px); transition: opacity 0.15s ease, transform 0.15s ease, visibility 0.15s ease; visibility: hidden; white-space: normal; }
+.bt-package-name:hover .bt-package-name__tooltip,
+.bt-package-name:focus-within .bt-package-name__tooltip { opacity: 1; transform: translateY(0); visibility: visible; }
+.bt-package-reorder { box-sizing: border-box; display: inline-flex; width: fit-content; height: 30px; flex-shrink: 0; align-items: center; justify-content: center; font-size: 13px; font-weight: 500; color: #1e293b; border: 1px solid #cbd5e1; border-radius: 6px; padding: 0 16px; background: #fff; cursor: pointer; text-decoration: none; transition: border-color 0.15s; }
+.bt-package-reorder:hover { border-color: #94a3b8; }
+`;
+
 export function text(props: Record<string, unknown>, key: string, fallback = "") {
   return typeof props[key] === "string" ? props[key] : fallback;
 }
 
 export function safeHref(value: unknown) {
   return safeTrackingPageUrl(value);
+}
+
+function packageReorderHref(href?: string) {
+  return safeHref(href) ?? resolveShopifyRecommendHref(href) ?? "/products/";
 }
 
 export function safeImageUrl(value: unknown) {
@@ -134,16 +150,20 @@ export function ShippingTimeline({ events }: { events: ReadyToGoTrackingEvent[] 
 export function PackageContents({ items }: { items: ReadyToGoOrderItem[] }) {
   if (!items.length) return <p style={{ margin: 0, color: "#64748b", fontSize: 14 }}>Package contents are not available for this shipment.</p>;
   return <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+    <style>{packageNameStyles}</style>
     {items.map((item) => {
       const title = item.title;
-      return <article key={item.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "8px 0" }}>
+      return <article key={item.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "8px 0", overflow: "visible" }}>
         <ProductImage src={item.imageUrl} alt={title} />
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <p style={{ margin: 0, fontSize: 14, fontWeight: 500, color: "#1e293b", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{title}</p>
+        <div style={{ flex: 1, minWidth: 0, overflow: "visible" }}>
+          <div className="bt-package-name" tabIndex={0} aria-label={title}>
+            <p className="bt-package-name__text">{title}</p>
+            <span className="bt-package-name__tooltip" role="tooltip">{title}</span>
+          </div>
           {item.description ? <p style={{ margin: "4px 0 0", fontSize: 13, color: "#64748b" }}>{item.description}</p> : null}
           <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8, marginTop: 4 }}>
             <p style={{ margin: 0, fontSize: 13, color: "#64748b" }}>x{item.quantity}</p>
-            {safeHref(item.href) ? <a href={safeHref(item.href)} style={{ display: "inline-flex", minHeight: 32, alignItems: "center", padding: "6px 16px", border: "1px solid #cbd5e1", borderRadius: 6, color: "#1e293b", fontSize: 13, fontWeight: 500, textDecoration: "none" }}>Reorder</a> : null}
+            <a href={packageReorderHref(item.href)} className="bt-package-reorder">Reorder</a>
           </div>
         </div>
       </article>;

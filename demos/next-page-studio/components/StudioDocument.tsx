@@ -72,14 +72,16 @@ const mockRecommendationsQuery: TrackingPageRecommendationsQuery = async () => [
  * 三套模板的 Provider 名称已是同一组件的别名，无需按模板嵌套，否则会形成彼此隔离的状态。
  * previewAutoQuery 仅控制预览自动查询，既不预填三条历史，也不代表生产页面应自动查单。
  */
-export function StudioDocument({ document, previewAutoQuery = false }: { document: PageDocument; previewAutoQuery?: boolean }) {
+const hangingQuery: TrackingPageQuery = () => new Promise(() => undefined);
+
+export function StudioDocument({ document, previewAutoQuery = false, holdLoading = false }: { document: PageDocument; previewAutoQuery?: boolean; holdLoading?: boolean }) {
   // 按实际区块命名空间判断，因此复制出的自定义模板也能看到操作提示；提示本身不执行查询。
   const showRecentQueryHint = document.blocks.some((block) => ["besttrack.ready-to-go", "besttrack.branded", "besttrack.sales"].some((templateId) => block.type.startsWith(`${templateId}.`)));
   return <>
-    {showRecentQueryHint ? <p style={{ margin: 0, padding: "10px 24px", background: "#f8fafc", color: "#475569", fontSize: 13, lineHeight: 1.5 }}>
+    {showRecentQueryHint && !holdLoading ? <p style={{ margin: 0, padding: "10px 24px", background: "#f8fafc", color: "#475569", fontSize: 13, lineHeight: 1.5 }}>
       连续查询 {DEMO_QUERY_NUMBERS.join("、")}，结果区会留下最近 3 条，点击可切换。
     </p> : null}
-    <TrackingRuntimeProvider query={mockQuery} queryRecommendations={mockRecommendationsQuery} adPreview={studioAdExample} autoQueryDemo={previewAutoQuery}>
+    <TrackingRuntimeProvider query={holdLoading ? hangingQuery : mockQuery} queryRecommendations={mockRecommendationsQuery} adPreview={studioAdExample} autoQueryDemo={previewAutoQuery || holdLoading}>
       <WebRenderer document={document} registry={pageStudioRegistry} />
     </TrackingRuntimeProvider>
   </>;

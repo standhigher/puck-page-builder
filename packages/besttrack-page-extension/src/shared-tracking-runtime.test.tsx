@@ -184,7 +184,8 @@ describe.each(templates)("$name uses the Ready-to-go foundation", ({ Provider, Q
     submitTracking(trackingLabel, "AAA");
     await screen.findByText(/Status AAA/);
     fireEvent.click(screen.getByRole("button", { name: "BBB" }));
-    for (const value of ["Second carrier", "Second destination", "Second parcel event", "Second parcel item"]) expect(screen.getByText(value)).toBeInTheDocument();
+    for (const value of ["Second carrier", "Second destination", "Second parcel event"]) expect(screen.getByText(value)).toBeInTheDocument();
+    expect(screen.getAllByText("Second parcel item").length).toBeGreaterThan(0);
     expect(screen.getByText(/Oct 12 - Oct 14/)).toBeInTheDocument();
     expect(screen.getByText(/Status BBB/)).toBeInTheDocument();
     expect(screen.queryByText("First parcel event")).toBeNull();

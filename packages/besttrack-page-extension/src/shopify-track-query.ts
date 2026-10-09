@@ -124,12 +124,17 @@ function toEvents(details: ReturnType<typeof buildShippingDetailsFromMilestone>)
 }
 
 function toOrderItems(items: PackageItem[] | undefined): TrackingPageOrderItem[] {
-  return (items ?? []).map((item, index) => ({
-    id: item.variant_id || item.product_id || `item-${index}`,
-    title: [item.title, item.variant_title].filter(Boolean).join(" - "),
-    quantity: item.quantity,
-    imageUrl: item.image_url || undefined
-  }));
+  return (items ?? []).map((item, index) => {
+    const productId = (item.product_id ?? "").replace("gid://shopify/Product/", "");
+    const href = resolveShopifyRecommendHref(undefined, productId);
+    return {
+      id: item.variant_id || item.product_id || `item-${index}`,
+      title: [item.title, item.variant_title].filter(Boolean).join(" - "),
+      quantity: item.quantity,
+      imageUrl: item.image_url || undefined,
+      ...(href ? { href } : {})
+    };
+  });
 }
 
 function cityRegion(milestone?: TrackMilestone) {

@@ -20,7 +20,7 @@ export function TrackingLoading() {
   const id = useId();
   return <>
     <style>{loadingStyles}</style>
-    <div role="status" aria-label="查询中..." aria-live="polite" aria-atomic="true" style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 16, marginTop: 56, paddingBottom: 8, textAlign: "center" }}>
+    <div role="status" aria-label="查询中..." aria-live="polite" aria-atomic="true" style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 16, marginTop: 45, paddingBottom: 8, textAlign: "center" }}>
       <p style={{ margin: 0, color: "var(--pb-color-muted, #64748b)", fontSize: 14, fontWeight: 400, lineHeight: "20px" }}>查询中...</p>
       <svg width="56" height="64" viewBox="0 0 56 64" fill="none" aria-hidden="true" focusable="false" style={{ display: "block", flexShrink: 0, overflow: "visible" }}>
       <defs>

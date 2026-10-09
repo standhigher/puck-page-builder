@@ -86,7 +86,11 @@ describe("Shopify Track Page query helpers", () => {
     expect(result.destination).toBe("Shanghai, Shanghai, CN");
     expect(result.destination).not.toContain("Secret Street");
     expect(result.ad).toEqual({ imageUrl: "https://cdn.example.test/promo.png", href: "https://shop.example.test/promo" });
-    expect(result.orderItems?.[0]).toMatchObject({ title: "Tote - Black", quantity: 1 });
+    expect(result.orderItems?.[0]).toMatchObject({
+      title: "Tote - Black",
+      quantity: 1,
+      href: `${window.location.origin}/products/1`
+    });
     expect(result.progress?.map((step) => step.state)).toEqual(["complete", "complete", "current", "upcoming", "upcoming"]);
     expect(result.events?.[0]?.title).toContain("Accepted at the hub");
     expect(result.estimatedDelivery).toBe(formatEstimatedDelivery(transitMilestone.estimated_delivery, "EN")?.dateText);

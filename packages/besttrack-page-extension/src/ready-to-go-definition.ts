@@ -6,7 +6,7 @@ const text = (label: string, options: Partial<FieldConfig> = {}) => ({ field: "b
 function withTemplatePolicy(blocks: BlockDefinition[], protectedBlocks: readonly string[]): BlockDefinition[] {
   return blocks.map((block) => ({ ...block, policy: { singleton: true, ...(protectedBlocks.includes(block.type) ? { required: true, allowDelete: false } : {}) } }));
 }
-// 查询、进度、配送、推荐四项能力都必须保留：下面的保护名单包含全部四个区块。
+// 查询、进度、配送必须保留。推荐商品保持单例，允许删除，删掉后仍可从区块库加回。
 // required/allowDelete 约束编辑器操作，singleton 禁止复制；无数据时是否隐藏由 Web 组件决定。
 // 此处不会给已有缺块文档自动补区块，也不等同于读取文档时的完整性迁移。
 const readyToGoBlocks: BlockDefinition[] = withTemplatePolicy([
@@ -86,14 +86,14 @@ const readyToGoBlocks: BlockDefinition[] = withTemplatePolicy([
     },
     render: { web: ReadyToGoRecommendationsBlock, editor: ReadyToGoRecommendationsEditor }
   }
-], ["besttrack.ready-to-go.query", "besttrack.ready-to-go.progress", "besttrack.ready-to-go.delivery", "besttrack.ready-to-go.recommendations"]);
+], ["besttrack.ready-to-go.query", "besttrack.ready-to-go.progress", "besttrack.ready-to-go.delivery"]);
 
 // 面向宿主的策略概览需与上面 BlockDefinition.policy 的保护名单保持一致。
 export const readyToGoTemplatePolicy = defineTemplatePolicy(
   "besttrack.ready-to-go",
   "Ready-to-go",
   readyToGoBlocks.map((block) => block.type),
-  ["besttrack.ready-to-go.query", "besttrack.ready-to-go.progress", "besttrack.ready-to-go.delivery", "besttrack.ready-to-go.recommendations"]
+  ["besttrack.ready-to-go.query", "besttrack.ready-to-go.progress", "besttrack.ready-to-go.delivery"]
 );
 
 export function createReadyToGoTemplate(): TemplateDefinition {

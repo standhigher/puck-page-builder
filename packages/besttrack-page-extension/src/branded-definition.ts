@@ -8,7 +8,7 @@ function withTemplatePolicy(blocks: BlockDefinition[], protectedBlocks: readonly
   return blocks.map((block) => ({ ...block, policy: { singleton: true, ...(protectedBlocks.includes(block.type) ? { required: true, allowDelete: false } : {}) } }));
 }
 // 保留 Branded 原有区块组合：tracking-experience 承载查询、进度和配送，推荐单独承载。
-// 两者都锁定为必需能力，公告沿用已有保护规则；有无内容展示仍由公共运行状态决定。
+// tracking-experience 与公告锁定；推荐商品保持单例，允许删除。有无内容展示仍由公共运行状态决定。
 const brandedBlocks: BlockDefinition[] = withTemplatePolicy([
   { type: "besttrack.branded.announcement", version: 1, label: "Announcement", category: "BestTrack Branded", targets: ["web"], defaultProps: { message: "Check out our summer sale", href: "https://example.com/collections/sale" }, defaultVariant: "brand", variants: [{ id: "brand", label: "Brand" }, { id: "minimal", label: "Minimal", theme: { "color.primary": "#202223" } }], fields: { message: text("Announcement", { control: "textarea" }), href: httpsUrl("Announcement URL") }, render: { web: BrandedAnnouncementBlock, editor: BrandedAnnouncementEditor } },
   { type: "besttrack.branded.tracking-experience", version: 1, label: "Tracking experience", category: "BestTrack Branded", targets: ["web"], defaultProps: { heading: "Track your order", submitLabel: "Track", trackAnotherLabel: "Track another order", defaultTrackingNumber: "DEMO-YQTRACK9999", defaultOrderNumber: "", defaultQueryMode: "tracking", trackingTabLabel: "Tracking Number", orderTabLabel: "Order Number", shipmentLabels: "Shipment #1|Shipment #2|Shipment #3", heroImageUrl: "https://images.unsplash.com/photo-1596462502278-27bfdc403348?auto=format&fit=crop&w=1600&q=85" }, defaultVariant: "brand", variants: [{ id: "brand", label: "Brand" }, { id: "compact", label: "Compact", theme: { spacing: "12px" } }], fields: { heading: text("Heading"), submitLabel: text("Button label"), trackAnotherLabel: text("Track another label"), defaultTrackingNumber: text("Default tracking number"), defaultOrderNumber: text("Default order number"), defaultQueryMode: text("Default query mode"), trackingTabLabel: text("Tracking tab label"), orderTabLabel: text("Order tab label"), shipmentLabels: text("Shipment labels (separate with |)"), heroImageUrl: httpsUrl("Hero image URL") }, render: { web: BrandedTrackingExperienceBlock, editor: BrandedTrackingExperienceEditor } },
@@ -19,7 +19,7 @@ const brandedBlocks: BlockDefinition[] = withTemplatePolicy([
   { type: "besttrack.branded.recommendations", version: 1, label: "Recommended products", category: "BestTrack Branded", targets: ["web"], defaultProps: { heading: "You might also like", hideWhenEmpty: "false", products: [] }, defaultVariant: "brand", variants: [{ id: "brand", label: "Brand" }, { id: "editorial", label: "Editorial", theme: { "color.surface": "#fffdf0" } }], fields: { heading: text("Heading"), products: { field: "besttrack.branded.products", label: "推荐商品 (Shopify)", control: "products", group: "Content" } }, render: { web: BrandedRecommendationsBlock, editor: BrandedRecommendationsEditor } },
   { type: "besttrack.branded.quick-links", version: 1, label: "Quick links", category: "BestTrack Branded", targets: ["web"], defaultProps: { heading: "Need help?", primaryLabel: "Shipping help", primaryHref: "https://example.com/pages/shipping", secondaryLabel: "Contact us", secondaryHref: "https://example.com/pages/contact" }, defaultVariant: "brand", variants: [{ id: "brand", label: "Brand" }], fields: { heading: text("Heading"), primaryLabel: text("Primary link label"), primaryHref: httpsUrl("Primary link URL"), secondaryLabel: text("Secondary link label"), secondaryHref: httpsUrl("Secondary link URL") }, render: { web: BrandedQuickLinksBlock, editor: BrandedQuickLinksEditor } },
   { type: "besttrack.branded.blog", version: 1, label: "Blog", category: "BestTrack Branded", targets: ["web"], defaultProps: { heading: "From our journal", articleTitle: "Delivery tips for every season", excerpt: "Simple ways to make every delivery feel considered.", articleHref: "https://example.com/blogs/news", linkLabel: "Read the story" }, defaultVariant: "brand", variants: [{ id: "brand", label: "Brand" }], fields: { heading: text("Heading"), articleTitle: text("Article title"), excerpt: text("Excerpt", { control: "textarea" }), articleHref: httpsUrl("Article URL"), linkLabel: text("Link label") }, render: { web: BrandedBlogBlock, editor: BrandedBlogEditor } }
-], ["besttrack.branded.announcement", "besttrack.branded.tracking-experience", "besttrack.branded.recommendations"]);
+], ["besttrack.branded.announcement", "besttrack.branded.tracking-experience"]);
 
 const brandedDefaultBlockTypes = brandedBlocks.filter((block) => !["besttrack.branded.query", "besttrack.branded.order-items"].includes(block.type)).map((block) => block.type);
 // 与区块原生 policy 使用相同保护名单，供宿主展示模板组成；不额外生成或迁移区块。
@@ -27,7 +27,7 @@ export const brandedTemplatePolicy = defineTemplatePolicy(
   "besttrack.branded",
   "Branded",
   brandedDefaultBlockTypes,
-  ["besttrack.branded.announcement", "besttrack.branded.tracking-experience", "besttrack.branded.recommendations"]
+  ["besttrack.branded.announcement", "besttrack.branded.tracking-experience"]
 );
 
 export function createBrandedTemplate(): TemplateDefinition {

@@ -1,5 +1,5 @@
 import { Puck, usePuck } from "@puckeditor/core";
-import { Badge, Banner, Button, ButtonGroup, Frame, InlineStack, Select, Text, TextField, Toast } from "@shopify/polaris";
+import { Badge, Banner, Button, ButtonGroup, Frame, InlineStack, Modal, Select, Text, TextField, Toast } from "@shopify/polaris";
 import { DeleteIcon, DragHandleIcon, LayoutSectionIcon, MenuIcon, ProductIcon, RedoIcon, UndoIcon, XIcon } from "@shopify/polaris-icons";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
 import { createPageDocumentPuckConfig } from "../../adapters/puck/page-document-config";
@@ -567,11 +567,12 @@ function InspectorActions({ block, canDuplicate, canDelete, canMove, canMoveUp, 
 }
 
 function DeleteConfirmation({ block, config, i18n, onCancel, onConfirm }: { block: BlockNode; config?: DeleteConfirmationConfig; i18n: ReturnType<typeof createAdminI18n>; onCancel: () => void; onConfirm: () => void }) {
-  return <div className="pb-delete-confirmation-backdrop" role="presentation"><section className="pb-delete-confirmation" role="dialog" aria-modal="true" aria-labelledby="pb-delete-confirmation-title"><Text as="h2" variant="headingMd" id="pb-delete-confirmation-title">{config?.title ?? i18n.t("confirmDeleteTitle")}</Text><Text as="p" variant="bodyMd">{config?.message?.(block) ?? i18n.t("confirmDeleteMessage")}</Text><ButtonGroup><Button onClick={onCancel}>{config?.cancelLabel ?? i18n.t("cancel")}</Button><Button tone="critical" onClick={onConfirm}>{config?.confirmLabel ?? i18n.t("confirm")}</Button></ButtonGroup></section></div>;
+  const message = config?.message?.(block) ?? i18n.t("confirmDeleteMessage");
+  return <Modal open onClose={onCancel} title={config?.title ?? i18n.t("confirmDeleteTitle")} primaryAction={{ content: config?.confirmLabel ?? i18n.t("confirm"), destructive: true, onAction: onConfirm }} secondaryActions={[{ content: config?.cancelLabel ?? i18n.t("cancel"), onAction: onCancel }]}><Modal.Section>{typeof message === "string" ? <Text as="p" variant="bodyMd">{message}</Text> : message}</Modal.Section></Modal>;
 }
 
 function LeaveConfirmation({ i18n, onCancel, onConfirm }: { i18n: ReturnType<typeof createAdminI18n>; onCancel: () => void; onConfirm: () => void }) {
-  return <div className="pb-delete-confirmation-backdrop" role="presentation"><section className="pb-delete-confirmation" role="dialog" aria-modal="true" aria-labelledby="pb-leave-confirmation-title"><Text as="h2" variant="headingMd" id="pb-leave-confirmation-title">{i18n.t("confirmLeaveTitle")}</Text><Text as="p" variant="bodyMd">{i18n.t("leaveWarning")}</Text><ButtonGroup><Button onClick={onCancel}>{i18n.t("cancel")}</Button><Button tone="critical" onClick={onConfirm}>{i18n.t("leave")}</Button></ButtonGroup></section></div>;
+  return <Modal open onClose={onCancel} title={i18n.t("confirmLeaveTitle")} primaryAction={{ content: i18n.t("leave"), destructive: true, onAction: onConfirm }} secondaryActions={[{ content: i18n.t("cancel"), onAction: onCancel }]}><Modal.Section><Text as="p" variant="bodyMd">{i18n.t("leaveWarning")}</Text></Modal.Section></Modal>;
 }
 
 function inspectorFieldConfig(name: string, field: FieldConfig): FieldConfig {

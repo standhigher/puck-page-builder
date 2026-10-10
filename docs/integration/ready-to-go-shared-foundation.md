@@ -1,6 +1,6 @@
 # Ready-to-go 共用基础能力
 
-Ready-to-go、Branded、Sales 统一使用 Ready-to-go 的业务逻辑。查询、物流进度、配送详情、推荐商品四项能力都必须保留。
+Ready-to-go、Branded、Sales 统一使用 Ready-to-go 的业务逻辑。查询、物流进度、配送详情必须留在页面中。推荐商品默认提供，商家可以删除。
 
 当前实现由业务扩展包导出的 `TrackingRuntimeProvider` 统一管理。`ReadyToGoRuntimeProvider`、`BrandedRuntimeProvider`、`SalesRuntimeProvider` 是同一个 Provider 的兼容入口，宿主每页只需装配一份。通用 Page Builder Core 仍不提供自动 DataSource 执行或鉴权编排。
 
@@ -15,9 +15,9 @@ Ready-to-go、Branded、Sales 统一使用 Ready-to-go 的业务逻辑。查询�
 | 配送 `besttrack.ready-to-go.delivery` | 物流时间线、广告、包裹商品、承运商、目的地 | 与进度同步更新，不能维护第二份查询结果 |
 | 推荐 `besttrack.ready-to-go.recommendations` | 商家选品或独立推荐接口、商品卡片、商品链接、价格、轮播 | 独立于查单加载，查单失败不清空推荐 |
 
-“必要”指文档组成和功能必须保留。展示仍按数据状态控制：未查单时不显示订单内容、没有推荐时隐藏推荐区域、没有广告时隐藏广告位。
+“必要”指查询、进度、配送必须留在文档里。推荐商品默认出现在新页面中，商家可以删除，删除后仍可从区块库加回一份。展示仍按数据状态控制：未查单时不显示订单内容、没有推荐时隐藏推荐区域、没有广告时隐藏广告位。
 
-Ready-to-go 四区块均声明 `required: true`、`singleton: true`、`allowDelete: false`。Branded 的 tracking-experience 承载查询、进度、配送，和 recommendations 一起锁定；Sales 保留 query、order-items、other-tracking 和 recommendations，相关区块同样锁定。原公告锁定规则不变。
+Ready-to-go 的查询、进度、配送声明 `required: true`、`singleton: true`、`allowDelete: false`。推荐商品只声明 `singleton: true`。Branded 的 tracking-experience 承载查询、进度、配送并保持锁定，recommendations 可删除；Sales 的 query、order-items、other-tracking 保持锁定，recommendations 可删除。原公告锁定规则不变。
 
 这些策略禁止编辑器删除、复制必要区块，也拒绝画布绕过控制的删除。已有文档不自动插入缺失区块，也没有改变模板 ID 或版本。`requiredBlocks` 只检查 Registry 装配依赖；当前 `validatePageDocumentWithRegistry` 只校验已存在区块，不能单独保证历史文档完整。历史缺块文档由宿主补齐并审核后再用于完整业务页面，本次没有自动迁移。
 

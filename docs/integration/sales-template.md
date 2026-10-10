@@ -95,8 +95,9 @@ Prices follow Ready-to-go's `$ 0.00` recommendation display; Sales retains its
 grid layout. `autoQueryDemo` is only for explicit Mock previews and suppresses
 estimated delivery; production hosts omit it.
 
-The query, order-items, other-tracking and recommendations blocks cannot be
-deleted or duplicated in the editor; announcement keeps its existing lock.
+The query, order-items and other-tracking blocks cannot be deleted or
+duplicated in the editor. Recommendations stay singleton and can be deleted,
+then added back from the block library. Announcement keeps its existing lock.
 New documents contain all base capabilities. Existing missing blocks are not
 automatically inserted and historical documents need host review; see
 [Ready-to-go shared foundation](./ready-to-go-shared-foundation.md).

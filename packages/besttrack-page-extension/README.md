@@ -6,6 +6,7 @@ namespaced v1 block IDs, default block order, theme tokens, and exported
 `TemplatePolicy` metadata. All default blocks are singleton. Protected
 query/structure blocks now use the core `BlockDefinition.policy` contract
 (`required`, `singleton`, and `allowDelete: false`), which the editor enforces.
+Recommendation blocks stay singleton and can be deleted.
 
 ## Query provider
 

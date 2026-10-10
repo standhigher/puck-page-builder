@@ -10,7 +10,7 @@ const registry = createExtensionRegistry([bestTrackPageExtension]);
 const document = registry.getTemplate("besttrack.ready-to-go")!.create();
 ```
 
-模板创建出的页面是普通 `PageDocument`，可在编辑器修改并保存；四个基础区块都不可删除或复制，但没有数据时可隐藏内容。之后的模板升级不会自动覆盖已有页面或补齐历史缺块。三套模板的共享范围与兼容边界见 [Ready-to-go 共用基础能力](./ready-to-go-shared-foundation.md)。
+模板创建出的页面是普通 `PageDocument`，可在编辑器修改并保存。查询、进度、配送不可删除或复制；推荐商品不可复制，可以删除，删掉后仍可从区块库加回。没有数据时可隐藏内容。之后的模板升级不会自动覆盖已有页面或补齐历史缺块。三套模板的共享范围与兼容边界见 [Ready-to-go 共用基础能力](./ready-to-go-shared-foundation.md)。
 
 ## RuntimeState 与数据边界
 

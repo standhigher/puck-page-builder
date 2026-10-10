@@ -29,16 +29,18 @@ describe("BestTrack template PRD compatibility metadata", () => {
       contentsHeading: { validation: { maxLength: 52 } },
       carrierHeading: { validation: { maxLength: 52 } }
     });
-    expect(bestTrackPageExtension.blocks?.find((block) => block.type === "besttrack.ready-to-go.recommendations")?.policy).toMatchObject({ required: true, singleton: true, allowDelete: false });
+    expect(bestTrackPageExtension.blocks?.find((block) => block.type === "besttrack.ready-to-go.recommendations")?.policy).toEqual({ singleton: true });
+    expect(bestTrackBrandedExtension.blocks?.find((block) => block.type === "besttrack.branded.recommendations")?.policy).toEqual({ singleton: true });
+    expect(bestTrackSalesExtension.blocks?.find((block) => block.type === "besttrack.sales.recommendations")?.policy).toEqual({ singleton: true });
     expect(bestTrackBrandedExtension.blocks?.find((block) => block.type === "besttrack.branded.tracking-experience")?.policy).toMatchObject({ required: true, singleton: true, allowDelete: false });
     expect(bestTrackSalesExtension.blocks?.find((block) => block.type === "besttrack.sales.query")?.policy).toMatchObject({ required: true, singleton: true, allowDelete: false });
   });
 
   // 各模板用不同区块组合承载同样的必要能力；逐一检查操作权限和画布整份文档替换入口。
   it.each([
-    [bestTrackPageExtension, readyToGoTemplatePolicy, ["query", "progress", "delivery", "recommendations"]],
-    [bestTrackBrandedExtension, brandedTemplatePolicy, ["tracking-experience", "recommendations"]],
-    [bestTrackSalesExtension, salesTemplatePolicy, ["query", "order-items", "other-tracking", "recommendations"]]
+    [bestTrackPageExtension, readyToGoTemplatePolicy, ["query", "progress", "delivery"]],
+    [bestTrackBrandedExtension, brandedTemplatePolicy, ["tracking-experience"]],
+    [bestTrackSalesExtension, salesTemplatePolicy, ["query", "order-items", "other-tracking"]]
   ] as const)("protects the base capabilities in $0.name documents and canvas changes", (extension, policy, suffixes) => {
     const registry = createExtensionRegistry([extension]);
     const document = registry.getTemplate(policy.templateId)!.create();
@@ -52,6 +54,12 @@ describe("BestTrack template PRD compatibility metadata", () => {
       // 即使绕过删除按钮直接提交少一个区块的画布结果，也必须被编辑策略拒绝。
       expect(canApplyCanvasDocument(document, { ...document, blocks: document.blocks.filter((item) => item.id !== block.id) }, (blockType) => registry.getBlock(blockType), undefined)).toBe(false);
     }
+    const recommendationsType = `${policy.templateId}.recommendations`;
+    const recommendations = document.blocks.find((item) => item.type === recommendationsType)!;
+    expect(policy.blocks.find((item) => item.blockType === recommendationsType)).toMatchObject({ singleton: true, deletable: true });
+    expect(canDeleteBlock(recommendations, document.blocks, registry.getBlock(recommendationsType), undefined)).toBe(true);
+    expect(canDuplicateBlock(recommendations, document.blocks, registry.getBlock(recommendationsType), undefined)).toBe(false);
+    expect(canApplyCanvasDocument(document, { ...document, blocks: document.blocks.filter((item) => item.id !== recommendations.id) }, (blockType) => registry.getBlock(blockType), undefined)).toBe(true);
   });
 
   it("accepts merchant recommendation products through client and server contracts", () => {

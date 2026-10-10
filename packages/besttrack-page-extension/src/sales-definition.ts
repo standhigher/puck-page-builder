@@ -45,7 +45,7 @@ function withTemplatePolicy(blocks: BlockDefinition[], protectedBlocks: readonly
   return blocks.map((block) => ({ ...block, policy: { singleton: true, ...(protectedBlocks.includes(block.type) ? { required: true, allowDelete: false } : {}) } }));
 }
 // Sales 保留现有拆分方式：query 内有完整查单结果，order-items/other-tracking 提供页面级展示。
-// 这些业务区块与 recommendations 一并保护，避免编辑后丢失基础能力；公告维持原保护规则。
+// 这些业务区块继续保护；推荐商品保持单例，允许删除。公告维持原保护规则。
 // “必需”限制删除/复制，不要求无结果时也渲染空壳，更不会自动补齐历史文档缺失的区块。
 const salesBlocks: BlockDefinition[] = withTemplatePolicy([
   { type: "besttrack.sales.announcement", version: 1, label: "Announcement", category: "BestTrack Sales", targets: ["web"], defaultProps: { message: "Free delivery on orders over $50" }, defaultVariant: "hero", variants: [{ id: "hero", label: "Sales Hero" }, { id: "commerce", label: "Commerce" }, { id: "minimal", label: "Minimal", theme: { "color.primary": "#202223" } }], fields: { message: longText("Announcement", "Short, customer-facing promotion copy.") }, validate: textProps([["message", 280]]), render: { web: SalesAnnouncementBlock, editor: SalesAnnouncementEditor } },
@@ -57,14 +57,14 @@ const salesBlocks: BlockDefinition[] = withTemplatePolicy([
   { type: "besttrack.sales.featured-product", version: 1, label: "Featured product", category: "BestTrack Sales", targets: ["web"], defaultProps: { heading: "Featured product", product: { id: "gid://shopify/Product/1", kind: "product", title: "Featured product", handle: "featured-product" } }, defaultVariant: "hero", variants: [{ id: "hero", label: "Sales Hero" }, { id: "commerce", label: "Commerce" }], fields: { heading: shortText("Heading"), product: { field: "besttrack.shopify.product", label: "Product", group: "Resource", description: "Browse through an authorized host integration. Current availability is resolved only at runtime." } }, validate: validateFeaturedProduct, render: { web: SalesFeaturedProductBlock, editor: SalesFeaturedProductEditor } },
   // 与另外两套模板一样保存商家选品配置；空数组表示交给独立推荐来源，不能改读查单推荐。
   { type: "besttrack.sales.recommendations", version: 1, label: "Recommended products", category: "BestTrack Sales", targets: ["web"], defaultProps: { heading: "Complete your order", products: [] }, defaultVariant: "hero", variants: [{ id: "hero", label: "Sales Hero" }, { id: "commerce", label: "Commerce" }, { id: "grid", label: "Product grid", theme: { "color.surface": "#f8fafc" } }], fields: { heading: shortText("Heading"), products: { field: "besttrack.sales.products", label: "推荐商品 (Shopify)", control: "products", group: "Content" } }, validate: textProps([["heading", 120]]), render: { web: SalesRecommendationsBlock, editor: SalesRecommendationsEditor } }
-], ["besttrack.sales.announcement", "besttrack.sales.query", "besttrack.sales.order-items", "besttrack.sales.other-tracking", "besttrack.sales.recommendations"]);
+], ["besttrack.sales.announcement", "besttrack.sales.query", "besttrack.sales.order-items", "besttrack.sales.other-tracking"]);
 
 // 宿主策略概览和上面原生 policy 保持一致，防止界面允许移除底层明确保护的业务区块。
 export const salesTemplatePolicy = defineTemplatePolicy(
   "besttrack.sales",
   "Sales",
   salesBlocks.map((block) => block.type),
-  ["besttrack.sales.announcement", "besttrack.sales.query", "besttrack.sales.order-items", "besttrack.sales.other-tracking", "besttrack.sales.recommendations"]
+  ["besttrack.sales.announcement", "besttrack.sales.query", "besttrack.sales.order-items", "besttrack.sales.other-tracking"]
 );
 
 /** Sales v3 uses stable IDs and JSON-only Shopify resource references in new documents. */

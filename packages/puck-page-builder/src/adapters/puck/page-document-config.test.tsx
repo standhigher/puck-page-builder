@@ -28,8 +28,8 @@ describe("PageDocument Puck permissions", () => {
     expect(component.resolvePermissions?.({ props: { id: recommendation.id } })).toEqual({ duplicate: false });
   });
 
-  it("protects all four necessary Ready-to-go blocks from deletion", () => {
-    // 验证业务 Registry 的保护策略确实传给 Puck；推荐内容为空也不意味着区块可以删除。
+  it("protects query, progress and delivery, and allows deleting recommendations", () => {
+    // 验证业务 Registry 的保护策略确实传给 Puck；推荐商品可以删除，其余基础区块不行。
     const registry = createExtensionRegistry([bestTrackPageExtension]);
     const document = registry.getTemplate("besttrack.ready-to-go")!.create();
     const resolve = ({ id, type }: { id: string; type: string }) => {
@@ -41,7 +41,7 @@ describe("PageDocument Puck permissions", () => {
       "besttrack.ready-to-go.query": false,
       "besttrack.ready-to-go.progress": false,
       "besttrack.ready-to-go.delivery": false,
-      "besttrack.ready-to-go.recommendations": false
+      "besttrack.ready-to-go.recommendations": true
     } as const;
 
     for (const [type, canDelete] of Object.entries(expected)) {

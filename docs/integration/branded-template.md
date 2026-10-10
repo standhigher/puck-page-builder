@@ -59,10 +59,11 @@ products the region is hidden; legacy `hideWhenEmpty` remains readable in
 saved documents but no longer changes this shared rule. The Branded grid stays
 in place and recommendation prices follow Ready-to-go's `$ 0.00` display.
 
-The composite tracking-experience and recommendations blocks are mandatory
-and cannot be deleted or duplicated in the editor; announcement remains
-protected. Existing documents are not automatically retrofitted with missing
-blocks. See the shared foundation document for that compatibility boundary.
+The composite tracking-experience block is mandatory and cannot be deleted or
+duplicated in the editor. Recommendations stay singleton and can be deleted,
+then added back from the block library. Announcement remains protected.
+Existing documents are not automatically retrofitted with missing blocks. See
+the shared foundation document for that compatibility boundary.
 
 ## Brand configuration
 

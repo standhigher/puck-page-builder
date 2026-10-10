@@ -341,7 +341,6 @@ function PageDocumentEditor({ iframe = true, registry, adminLocale, onSave, onPu
         </header>
         {editor.loadState === "success" ? <Banner tone="success">{i18n.t("success")}</Banner> : null}
         {notice && notice !== "published" ? <div className={`pb-editor-notice pb-editor-notice--${notice}`} data-testid="editor-notice" data-notice={notice}><Banner tone="critical">{i18n.t(notice)}</Banner></div> : null}
-        {validationIssues.length > 0 ? <Banner tone="critical" title="区块属性未通过校验"><ul>{validationIssues.map((issue) => <li key={`${issue.path}-${issue.message}`}>{issue.path}: {issue.message}</li>)}</ul></Banner> : null}
         <div className={`pb-workspace pb-workspace--document${leftRailOpen ? "" : " pb-workspace--left-closed"}${rightPanelOpen ? "" : " pb-workspace--right-closed"}`} data-left-panel={leftRailOpen ? "open" : "closed"} data-right-panel={rightPanelOpen ? "open" : "closed"}>
           <nav className="pb-tool-rail" aria-label="编辑器工具">
             <Button accessibilityLabel={i18n.t("blocks")} icon={LayoutSectionIcon} pressed={blockView === "blocks" && leftRailOpen} variant="tertiary" onClick={() => { setBlockView("blocks"); setLeftRailOpen(true); }} />

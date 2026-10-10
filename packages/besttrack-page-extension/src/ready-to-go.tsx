@@ -141,6 +141,14 @@ export function ReadyToGoTextField({ value, onChange }: FieldProps) {
 
 type ReadyToGoEditorProps = BlockEditorProps<Record<string, unknown>>;
 
+/** 旧模板把这个演示号写进了 defaultProps，已发布文档里可能还留着。输入框留空，才能露出 placeholder。 */
+const LEGACY_READY_TO_GO_DEMO_TRACKING_NUMBER = "BT-2048-DEMO";
+
+function readyToGoTrackingNumber(source: Record<string, unknown>) {
+  const value = text(source, "defaultTrackingNumber", "");
+  return value === LEGACY_READY_TO_GO_DEMO_TRACKING_NUMBER ? "" : value;
+}
+
 function InlineText({ block, name, fallback }: { block: ReadyToGoEditorProps; name: string; fallback: string }) {
   const value = text(block, name, fallback);
   if (!block.selected) return <span data-ready-to-go-editor-field={name}>{value}</span>;
@@ -238,7 +246,8 @@ export function ReadyToGoQueryEditor(block: ReadyToGoEditorProps) {
         <input
           aria-label="Canvas default tracking number"
           readOnly={!block.selected}
-          value={text(block, "defaultTrackingNumber", "BT-2048-DEMO")}
+          value={readyToGoTrackingNumber(block)}
+          placeholder="Tracking Number"
           onMouseDown={(event) => block.selected && event.stopPropagation()}
           onClick={(event) => block.selected && event.stopPropagation()}
           onChange={(event) => block.onPropsChange({ defaultTrackingNumber: event.currentTarget.value })}
@@ -294,7 +303,7 @@ export function ReadyToGoQueryBlock(props: Record<string, unknown>) {
   // 三套模板共用输入保留、trim 后非空校验、URL 同步和历史回填规则。
   // Ready-to-go 仅指定查询完成后的页面滚动目标，表单布局和配色仍留在本组件。
   const { mode, setMode, trackingNumber, setTrackingNumber, orderNumber, setOrderNumber, email, setEmail, localError, loading, submit } = useTrackingQueryForm({
-    initialTrackingNumber: text(props, "defaultTrackingNumber", "BT-2048-DEMO"),
+    initialTrackingNumber: readyToGoTrackingNumber(props),
     initialOrderNumber: text(props, "defaultOrderNumber", ""),
     initialMode: text(props, "defaultQueryMode", "tracking") === "order" ? "order" : "tracking",
     onComplete: scrollToTrackingResult

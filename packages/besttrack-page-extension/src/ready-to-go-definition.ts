@@ -20,7 +20,7 @@ const readyToGoBlocks: BlockDefinition[] = withTemplatePolicy([
       heading: "",
       submitLabel: "Track Your Order",
       submitButtonColor: "#111111",
-      defaultTrackingNumber: "BT-2048-DEMO",
+      defaultTrackingNumber: "",
       defaultOrderNumber: "",
       defaultQueryMode: "tracking",
       trackingTabLabel: "Tracking Number",

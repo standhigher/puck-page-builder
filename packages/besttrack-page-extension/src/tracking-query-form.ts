@@ -60,8 +60,9 @@ export function useTrackingQueryForm({ initialTrackingNumber, initialOrderNumber
         .finally(onComplete);
       return;
     }
-    const demoTrackingNumber = previewDemoTrackingNumber.current.trim();
-    if (!runtime.autoQueryDemo || !demoTrackingNumber) return;
+    // 输入框不再预填演示号。预览仍要自动查一单时，空输入改查这个内部编号，不写回输入框。
+    const demoTrackingNumber = previewDemoTrackingNumber.current.trim() || "BT-2048-DEMO";
+    if (!runtime.autoQueryDemo) return;
     autoQueryStarted.current = true;
     // 演示路径固定查初始运单号，不触发 onComplete 滚动，避免预览一打开就自动跳离查询区。
     void query({ mode: "tracking", trackingNumber: demoTrackingNumber });

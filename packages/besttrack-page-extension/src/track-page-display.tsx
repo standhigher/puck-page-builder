@@ -86,7 +86,7 @@ export function ProductImage({ src, alt, size = 60 }: { src?: string; alt: strin
     flex: "0 0 auto",
     borderRadius: "var(--pb-radius, 8px)",
     objectFit: "contain",
-    background: "#f1f5f9"
+    background: "#fff"
   };
   if (!safeSrc || failed) {
     return <span aria-label={alt + " image unavailable"} style={{ ...box, display: "grid", placeItems: "center", color: "#94a3b8", fontSize: 12 }}>{alt.slice(0, 1).toUpperCase()}</span>;
@@ -247,7 +247,7 @@ export function RecommendationCards({ items }: { items: ReadyToGoRecommendation[
           const href = safeHref(item.href);
           const displayPrice = formatRecommendationPrice(item.price);
           const card = <>
-            <div style={{ width: 262, height: 262, maxWidth: "100%", borderRadius: 8, border: "1px solid #E3E3E3", overflow: "hidden", background: "#f1f5f9" }}>
+            <div style={{ width: 262, height: 262, maxWidth: "100%", borderRadius: 8, border: "1px solid #E3E3E3", overflow: "hidden", background: "#fff" }}>
               <ProductImage src={item.imageUrl} alt={item.title} size={262} />
             </div>
             <div style={{ padding: "12px 8px", textAlign: "center", fontSize: 14 }}>

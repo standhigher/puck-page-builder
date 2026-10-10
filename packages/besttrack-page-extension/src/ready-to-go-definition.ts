@@ -82,7 +82,7 @@ const readyToGoBlocks: BlockDefinition[] = withTemplatePolicy([
     variants: [{ id: "default", label: "Default" }, { id: "grid", label: "Grid", theme: { "color.surface": "#ffffff" } }],
     fields: {
       heading: text("Heading", { validation: { maxLength: 100 } }),
-      products: { field: "besttrack.ready-to-go.products", label: "推荐商品 (Shopify)", control: "products", group: "Content" }
+      products: { field: "besttrack.ready-to-go.products", label: "推荐商品 (Store)", control: "products", group: "Content" }
     },
     render: { web: ReadyToGoRecommendationsBlock, editor: ReadyToGoRecommendationsEditor }
   }

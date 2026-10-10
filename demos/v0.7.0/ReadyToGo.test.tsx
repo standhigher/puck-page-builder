@@ -1,4 +1,5 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import "@testing-library/jest-dom/vitest";
 import { describe, expect, it, vi } from "vitest";
 import { bestTrackPageExtension, ReadyToGoRuntimeProvider, type TrackingPageQuery, type TrackingPageRecommendationsQuery } from "../../packages/besttrack-page-extension/src";
 import { ReadyToGoDeliveryEditor, ReadyToGoProgressEditor, ReadyToGoQueryBlock, ReadyToGoQueryEditor, ReadyToGoRecommendationsEditor } from "../../packages/besttrack-page-extension/src/ready-to-go";
@@ -42,8 +43,34 @@ describe("V0.7.0 Ready-to-go", () => {
     }
     expect(registry.getBlock("besttrack.ready-to-go.query")?.fields.submitButtonColor).toMatchObject({ control: "color", label: "Button color" });
     expect(document?.blocks[0]?.props.submitButtonColor).toBe("#111111");
+    expect(document?.blocks[0]?.props.defaultTrackingNumber).toBe("");
     expect(registry.getBlock("besttrack.ready-to-go.progress")?.fields.progressColor).toMatchObject({ control: "color", label: "Progress color" });
     expect(document?.blocks[1]?.props.progressColor).toBe("#0f172a");
+  });
+
+  it("shows the Tracking Number placeholder instead of a prefilled demo number", () => {
+    renderReadyToGo();
+    const input = screen.getByLabelText("Tracking number");
+    expect(input).toHaveValue("");
+    expect(input).toHaveAttribute("placeholder", "Tracking Number");
+  });
+
+  it("ignores a published document that still stores the old demo tracking number", () => {
+    render(
+      <ReadyToGoRuntimeProvider>
+        <ReadyToGoQueryBlock defaultTrackingNumber="BT-2048-DEMO" />
+      </ReadyToGoRuntimeProvider>
+    );
+    expect(screen.getByLabelText("Tracking number")).toHaveValue("");
+  });
+
+  it("keeps a merchant-configured default tracking number", () => {
+    render(
+      <ReadyToGoRuntimeProvider>
+        <ReadyToGoQueryBlock defaultTrackingNumber="SHOP-1001" />
+      </ReadyToGoRuntimeProvider>
+    );
+    expect(screen.getByLabelText("Tracking number")).toHaveValue("SHOP-1001");
   });
 
   it("applies submitButtonColor to the query submit button", () => {
@@ -109,7 +136,7 @@ describe("V0.7.0 Ready-to-go", () => {
     expect(screen.queryByLabelText("Canvas estimatedDeliveryTitle")).not.toBeInTheDocument();
     expect(within(screen.getByLabelText("Ready-to-go delivery editor")).getByLabelText("Shipping events")).toBeVisible();
     expect(screen.queryByText("Advertisement space")).not.toBeInTheDocument();
-    expect(screen.getByText("Demo shipment item")).toBeVisible();
+    expect(screen.getByLabelText("Demo shipment item")).toBeVisible();
     expect(screen.getByText("Shipping protection")).toBeVisible();
     expect(onPropsChange).toHaveBeenCalledWith({ submitLabel: "Check delivery" });
     expect(onPropsChange).toHaveBeenCalledWith({ defaultTrackingNumber: "BT-EDIT" });
@@ -179,7 +206,7 @@ describe("V0.7.0 Ready-to-go", () => {
   });
 
   it("wraps progress labels inside equal columns instead of overlapping them", () => {
-    render(<ReadyToGoProgressEditor />);
+    render(<ReadyToGoProgressEditor blockId="progress" selected={false} onPropsChange={vi.fn()} />);
     const track = screen.getByLabelText("Delivery progress").querySelector(":scope > div");
     expect(track).toHaveStyle({ display: "grid" });
     expect((track as HTMLElement).style.gridTemplateColumns).toContain("minmax(0, 1fr)");
@@ -219,7 +246,7 @@ describe("V0.7.0 Ready-to-go", () => {
     expect(screen.getByText("Courier assigned")).toBeVisible();
     expect(screen.getByText("BestTrack")).toBeVisible();
     expect(screen.getByText("Shanghai")).toBeVisible();
-    expect(screen.getByText("Travel case")).toBeVisible();
+    expect(screen.getByLabelText("Travel case")).toBeVisible();
     expect(screen.queryByText("Shipping protection")).not.toBeInTheDocument();
     expect(screen.getByText("Sep 22 - Sep 24")).toBeVisible();
     const estimatedDelivery = screen.getByLabelText("Est. Delivery");
@@ -244,6 +271,7 @@ describe("V0.7.0 Ready-to-go", () => {
     const query = vi.fn<TrackingPageQuery>().mockReturnValue(pending.promise);
     renderReadyToGo(query);
 
+    fireEvent.change(screen.getByLabelText("Tracking number"), { target: { value: "BT-2048" } });
     fireEvent.click(screen.getByRole("button", { name: "Track Your Order" }));
     expect(screen.getByRole("button", { name: "Track Your Order" })).toBeDisabled();
     expect(screen.getByRole("status", { name: "查询中..." })).toHaveTextContent("查询中...");
@@ -265,6 +293,7 @@ describe("V0.7.0 Ready-to-go", () => {
       status: "Ordered"
     });
     renderReadyToGo(query);
+    fireEvent.change(screen.getByLabelText("Tracking number"), { target: { value: "BT-1000" } });
     fireEvent.click(screen.getByRole("button", { name: "Track Your Order" }));
     expect(await screen.findByText("Not available")).toBeVisible();
     expect(screen.getByText("Destination details are not available.")).toBeVisible();

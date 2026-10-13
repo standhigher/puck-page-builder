@@ -617,10 +617,7 @@ const sanitizeRawEvent = (event: RawEvent | null | undefined): RawEvent => ({
 
 const sanitizePackageItem = (item: PackageItem | null | undefined): PackageItem => ({
   product_id: asText(item?.product_id),
-  handle: asText(item?.handle).trim() || asText(item?.product_handle).trim(),
-  variant_id: typeof item?.variant_id === 'number' && Number.isSafeInteger(item.variant_id)
-    ? String(item.variant_id)
-    : asText(item?.variant_id),
+  variant_id: asText(item?.variant_id),
   title: asText(item?.title),
   variant_title: asText(item?.variant_title),
   image_url: asText(item?.image_url),

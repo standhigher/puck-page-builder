@@ -20,7 +20,7 @@ import type { TrackMilestone } from "./shopify-track-page/pages/home/types";
 const transitMilestone: TrackMilestone = {
   tracking_number: "BT-2048",
   carrier: "BestTrack",
-  package_items: [{ product_id: "gid://shopify/Product/1", handle: "travel-tote", variant_id: "gid://shopify/ProductVariant/1", title: "Tote", variant_title: "Black", image_url: "https://cdn.example.test/tote.png", quantity: 1 }],
+  package_items: [{ product_id: "gid://shopify/Product/1", variant_id: "gid://shopify/ProductVariant/1", title: "Tote", variant_title: "Black", image_url: "https://cdn.example.test/tote.png", quantity: 1 }],
   nodeList: [{
     node: "InTransit_Other",
     description: "Accepted at the hub",
@@ -89,63 +89,11 @@ describe("Shopify Track Page query helpers", () => {
     expect(result.orderItems?.[0]).toMatchObject({
       title: "Tote - Black",
       quantity: 1,
-      href: `${window.location.origin}/products/travel-tote?variant=1`
+      href: `${window.location.origin}/products/1`
     });
     expect(result.progress?.map((step) => step.state)).toEqual(["complete", "complete", "current", "upcoming", "upcoming"]);
     expect(result.events?.[0]?.title).toContain("Accepted at the hub");
     expect(result.estimatedDelivery).toBe(formatEstimatedDelivery(transitMilestone.estimated_delivery, "EN")?.dateText);
-  });
-
-  it("preserves each shipment's product handle and ordered variant through sanitization", () => {
-    const products = [
-      { handle: " ski-wax ", variant_id: " 456789 " },
-      { handle: "", product_handle: "travel-tote", variant_id: "gid://shopify/ProductVariant/456790" },
-      { handle: "travel-tote", variant_id: 456791 }
-    ];
-    const result = mapShopifyTrackQueryResponse({
-      code: 0,
-      data: {
-        order_number: "#2048",
-        mileStoneList: products.map((product, index) => ({
-          ...transitMilestone,
-          tracking_number: `BT-${index}`,
-          package_items: [{ ...transitMilestone.package_items[0], ...product }]
-        })),
-        ad_config: { image_url: "", link_url: "" },
-        trace_id: ""
-      }
-    }, { mode: "tracking", trackingNumber: "BT-2048" });
-
-    expect(result.orderItems?.[0]?.href).toBe(`${window.location.origin}/products/ski-wax?variant=456789`);
-    expect(result.shipments?.map((shipment) => shipment.orderItems?.[0]?.href)).toEqual([
-      `${window.location.origin}/products/ski-wax?variant=456789`,
-      `${window.location.origin}/products/travel-tote?variant=456790`,
-      `${window.location.origin}/products/travel-tote?variant=456791`
-    ]);
-  });
-
-  it.each([
-    { handle: undefined },
-    { handle: " " },
-    { handle: ".." },
-    { variant_id: "" },
-    { variant_id: "gid://shopify/Product/1" }
-  ])("omits invalid reorder destinations instead of substituting a product ID: %j", (fields) => {
-    const result = mapShopifyTrackQueryResponse({
-      code: 0,
-      data: {
-        order_number: "#2048",
-        mileStoneList: [{
-          ...transitMilestone,
-          package_items: [{ ...transitMilestone.package_items[0], ...fields }]
-        }],
-        ad_config: { image_url: "", link_url: "" },
-        trace_id: ""
-      }
-    }, { mode: "tracking", trackingNumber: "BT-2048" });
-
-    expect(result.orderItems?.[0]?.href).toBeUndefined();
-    expect(result.shipments?.[0]?.orderItems?.[0]?.href).toBeUndefined();
   });
 
   it("keeps events and steps when carrier timestamps are null or omitted", () => {

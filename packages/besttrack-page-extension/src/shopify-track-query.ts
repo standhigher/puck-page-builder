@@ -125,17 +125,10 @@ function toEvents(details: ReturnType<typeof buildShippingDetailsFromMilestone>)
 
 function toOrderItems(items: PackageItem[] | undefined): TrackingPageOrderItem[] {
   return (items ?? []).map((item, index) => {
-    // Shopify product routes use handles; the ordered variant must stay selected.
-    const handle = item.handle?.trim();
-    const variantId = String(item.variant_id ?? "").trim().replace(/^gid:\/\/shopify\/ProductVariant\//, "");
-    const productHref = handle && handle !== "." && handle !== ".."
-      ? resolveShopifyRecommendHref(undefined, encodeURIComponent(handle))
-      : undefined;
-    const href = productHref && /^[1-9]\d*$/.test(variantId)
-      ? `${productHref}?variant=${variantId}`
-      : undefined;
+    const productId = (item.product_id ?? "").replace("gid://shopify/Product/", "");
+    const href = resolveShopifyRecommendHref(undefined, productId);
     return {
-      id: String(item.variant_id || item.product_id || `item-${index}`),
+      id: item.variant_id || item.product_id || `item-${index}`,
       title: [item.title, item.variant_title].filter(Boolean).join(" - "),
       quantity: item.quantity,
       imageUrl: item.image_url || undefined,

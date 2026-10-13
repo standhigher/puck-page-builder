@@ -26,7 +26,9 @@ export type RawEvent = {
 
 export type PackageItem = {
   product_id: string
-  variant_id: string
+  handle?: string
+  product_handle?: string
+  variant_id: string | number
   title: string
   variant_title: string
   image_url: string

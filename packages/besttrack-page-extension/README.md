@@ -31,6 +31,13 @@ recommendation carousel, and the original
 progress / shipping / empty-state mapping. The host only supplies fetch,
 App Proxy prefix, and credentials.
 
+For Reorder, each `mileStoneList[].package_items[]` entry must include the
+product's `handle` (or `product_handle`) and the ordered `variant_id`. Numeric
+variant IDs and `gid://shopify/ProductVariant/...` strings are supported. The
+adapter builds `/products/{handle}?variant={variantId}` on the current shop;
+it never uses `product_id` as a handle. Missing handles or invalid variant IDs
+leave Reorder disabled in Ready-to-go instead of linking to a nonexistent page.
+
 Branded and Sales keep the discriminated `query` callback:
 
 ```tsx

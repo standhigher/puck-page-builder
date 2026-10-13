@@ -7,7 +7,6 @@ import type { TrackingPageAd } from "./tracking-page-runtime";
 import { formatRecommendationPrice } from "./tracking-block-model";
 // 默认进度算法已归到三模板共用模型；保留这个旧导出路径兼容现有引用。
 export { defaultProgress } from "./tracking-block-model";
-import { resolveShopifyRecommendHref } from "./shopify-track-query";
 import { safeTrackingPageUrl } from "./tracking-page-url";
 
 export const pageFont = { fontFamily: "var(--pb-font-family, Inter, system-ui, sans-serif)" } satisfies CSSProperties;
@@ -44,6 +43,7 @@ const packageNameStyles = `
 .bt-package-name:focus-within .bt-package-name__tooltip { opacity: 1; transform: translateY(0); visibility: visible; }
 .bt-package-reorder { box-sizing: border-box; display: inline-flex; width: fit-content; height: 30px; flex-shrink: 0; align-items: center; justify-content: center; font-size: 13px; font-weight: 500; color: #1e293b; border: 1px solid #cbd5e1; border-radius: 6px; padding: 0 16px; background: #fff; cursor: pointer; text-decoration: none; transition: border-color 0.15s; }
 .bt-package-reorder:hover { border-color: #94a3b8; }
+.bt-package-reorder:disabled { cursor: not-allowed; opacity: 0.5; }
 `;
 
 export function text(props: Record<string, unknown>, key: string, fallback = "") {
@@ -55,7 +55,7 @@ export function safeHref(value: unknown) {
 }
 
 function packageReorderHref(href?: string) {
-  return safeHref(href) ?? resolveShopifyRecommendHref(href) ?? "/products/";
+  return safeHref(href) ?? (href?.startsWith("/products/") ? href : undefined);
 }
 
 export function safeImageUrl(value: unknown) {
@@ -153,6 +153,7 @@ export function PackageContents({ items }: { items: ReadyToGoOrderItem[] }) {
     <style>{packageNameStyles}</style>
     {items.map((item) => {
       const title = item.title;
+      const reorderHref = packageReorderHref(item.href);
       return <article key={item.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "8px 0", overflow: "visible" }}>
         <ProductImage src={item.imageUrl} alt={title} />
         <div style={{ flex: 1, minWidth: 0, overflow: "visible" }}>
@@ -163,7 +164,9 @@ export function PackageContents({ items }: { items: ReadyToGoOrderItem[] }) {
           {item.description ? <p style={{ margin: "4px 0 0", fontSize: 13, color: "#64748b" }}>{item.description}</p> : null}
           <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8, marginTop: 4 }}>
             <p style={{ margin: 0, fontSize: 13, color: "#64748b" }}>x{item.quantity}</p>
-            <a href={packageReorderHref(item.href)} className="bt-package-reorder">Reorder</a>
+            {reorderHref
+              ? <a href={reorderHref} className="bt-package-reorder">Reorder</a>
+              : <button type="button" className="bt-package-reorder" disabled>Reorder</button>}
           </div>
         </div>
       </article>;

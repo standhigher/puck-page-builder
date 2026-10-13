@@ -26,22 +26,23 @@ describe("Package contents name", () => {
     expect(screen.getByRole("tooltip", { hidden: true })).toHaveTextContent(title);
   });
 
-  it("always shows Reorder next to quantity using the product path", () => {
+  it("shows Reorder next to quantity with the product handle and selected variant", () => {
     render(<PackageContents items={[{
       id: "gid://shopify/Product/1",
       title: "Tote",
       quantity: 1,
-      href: "/products/1"
+      href: "/products/travel-tote?variant=456789"
     }]} />);
 
     const reorder = screen.getByRole("link", { name: "Reorder" });
-    expect(reorder).toHaveAttribute("href", `${window.location.origin}/products/1`);
+    expect(reorder).toHaveAttribute("href", "/products/travel-tote?variant=456789");
     expect(reorder).toHaveClass("bt-package-reorder");
   });
 
-  it("still shows Reorder when the item has no href", () => {
+  it("disables Reorder when the item has no valid destination", () => {
     render(<PackageContents items={[{ id: "wax", title: "Wax", quantity: 1 }]} />);
 
-    expect(screen.getByRole("link", { name: "Reorder" })).toHaveAttribute("href", "/products/");
+    expect(screen.queryByRole("link", { name: "Reorder" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Reorder" })).toBeDisabled();
   });
 });

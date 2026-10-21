@@ -1,4 +1,5 @@
-export type AdminLocale = "zh-CN" | "en";
+export type AdminLocale = "zh-CN" | "en" | "es" | "pt" | "fr";
+type ChromeOverlayLocale = Exclude<AdminLocale, "zh-CN" | "en">;
 
 const messages = {
   "zh-CN": {
@@ -135,8 +136,51 @@ const messages = {
 
 export type AdminMessageKey = keyof typeof messages["zh-CN"];
 
+const chromeOverlays: Record<ChromeOverlayLocale, Partial<Record<AdminMessageKey, string>>> = {
+  es: {
+    blocks: "Bloques",
+    desktop: "Escritorio",
+    tablet: "Tablet",
+    mobile: "Móvil",
+    preview: "Vista previa",
+    publish: "Publicar",
+    publishing: "Publicando…"
+  },
+  pt: {
+    blocks: "Blocos",
+    desktop: "Computador",
+    tablet: "Tablet",
+    mobile: "Telemóvel",
+    preview: "Pré-visualização",
+    publish: "Publicar",
+    publishing: "A publicar…"
+  },
+  fr: {
+    blocks: "Blocs",
+    desktop: "Ordinateur",
+    tablet: "Tablette",
+    mobile: "Mobile",
+    preview: "Aperçu",
+    publish: "Publier",
+    publishing: "Publication…"
+  }
+};
+
+function resolveAdminLocale(locale?: string): AdminLocale {
+  if (!locale) return "zh-CN";
+  const normalized = locale.trim().toLowerCase().replace(/_/g, "-");
+  if (normalized === "en" || normalized.startsWith("en-")) return "en";
+  if (normalized === "zh" || normalized.startsWith("zh-")) return "zh-CN";
+  if (normalized === "es" || normalized.startsWith("es-")) return "es";
+  if (normalized === "pt" || normalized.startsWith("pt-")) return "pt";
+  if (normalized === "fr" || normalized.startsWith("fr-")) return "fr";
+  return "zh-CN";
+}
+
 /** Minimal, dependency-free Admin copy catalog. Product locale remains PageDocument.settings.locale. */
 export function createAdminI18n(locale?: string) {
-  const resolvedLocale: AdminLocale = locale === "en" || locale === "en-US" ? "en" : "zh-CN";
-  return { locale: resolvedLocale, t: (key: AdminMessageKey) => messages[resolvedLocale][key] };
+  const resolvedLocale = resolveAdminLocale(locale);
+  const base = resolvedLocale === "en" ? "en" : "zh-CN";
+  const overlay = resolvedLocale === "en" || resolvedLocale === "zh-CN" ? undefined : chromeOverlays[resolvedLocale];
+  return { locale: resolvedLocale, t: (key: AdminMessageKey) => overlay?.[key] ?? messages[base][key] };
 }

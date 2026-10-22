@@ -9,7 +9,7 @@ describe("Studio loading demo", () => {
     expect(document).toBeTruthy();
     render(<StudioDocument document={document!} holdLoading />);
 
-    expect(await screen.findByRole("status", { name: "查询中..." })).toHaveTextContent("查询中...");
+    expect(await screen.findByRole("status", { name: "Searching..." })).toHaveTextContent("Searching...");
     expect(screen.getByText("You may also like...")).toBeInTheDocument();
   });
 });

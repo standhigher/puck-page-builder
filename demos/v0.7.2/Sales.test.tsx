@@ -146,7 +146,7 @@ describe("V0.8 Sales", () => {
     render(<SalesRuntimeProvider query={query}><WebRenderer document={document} registry={registry} /></SalesRuntimeProvider>);
 
     fireEvent.click(screen.getByRole("button", { name: "Track order" }));
-    expect(await screen.findByRole("status", { name: "查询中..." })).toBeVisible();
+    expect(await screen.findByRole("status", { name: "Searching..." })).toBeVisible();
     expect(screen.queryByRole("region", { name: "Items in your order" })).not.toBeInTheDocument();
     expect(screen.getByText("Collection reference is invalid.")).toBeVisible();
 

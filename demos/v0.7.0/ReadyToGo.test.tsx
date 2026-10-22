@@ -274,13 +274,13 @@ describe("V0.7.0 Ready-to-go", () => {
     fireEvent.change(screen.getByLabelText("Tracking number"), { target: { value: "BT-2048" } });
     fireEvent.click(screen.getByRole("button", { name: "Track Your Order" }));
     expect(screen.getByRole("button", { name: "Track Your Order" })).toBeDisabled();
-    expect(screen.getByRole("status", { name: "查询中..." })).toHaveTextContent("查询中...");
+    expect(screen.getByRole("status", { name: "Searching..." })).toHaveTextContent("Searching...");
     expect(screen.queryByLabelText("Shipment progress")).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Shipping Details")).not.toBeInTheDocument();
 
     pending.reject(new Error("carrier-timeout"));
     expect(await screen.findByRole("alert")).toHaveTextContent("We couldn’t retrieve this order right now. Please try again later.");
-    expect(screen.queryByText("查询中...")).not.toBeInTheDocument();
+    expect(screen.queryByText("Searching...")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Track Your Order" })).toBeEnabled();
     expect(screen.getByText("Shipment progress is temporarily unavailable.")).toBeVisible();
     expect(screen.getByText("Delivery details are temporarily unavailable.")).toBeVisible();

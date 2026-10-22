@@ -41,7 +41,7 @@ describe("TrackingQueryCard", () => {
     render(<TrackingQueryCard {...sharedProps} phase="loading" />);
 
     expect(screen.getByRole("button", { name: "Track" })).toBeDisabled();
-    expect(screen.getByRole("status", { name: "查询中..." })).toHaveTextContent("查询中...");
+    expect(screen.getByRole("status", { name: "Searching..." })).toHaveTextContent("Searching...");
     expect(screen.queryByText("Checking your order...")).not.toBeInTheDocument();
   });
 

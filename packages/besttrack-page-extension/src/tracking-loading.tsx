@@ -20,8 +20,8 @@ export function TrackingLoading() {
   const id = useId();
   return <>
     <style>{loadingStyles}</style>
-    <div role="status" aria-label="查询中..." aria-live="polite" aria-atomic="true" style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 16, marginTop: 45, paddingBottom: 8, textAlign: "center" }}>
-      <p style={{ margin: 0, color: "var(--pb-color-muted, #64748b)", fontSize: 14, fontWeight: 400, lineHeight: "20px" }}>查询中...</p>
+    <div role="status" aria-label="Searching..." aria-live="polite" aria-atomic="true" style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 16, marginTop: 45, paddingBottom: 8, textAlign: "center" }}>
+      <p style={{ margin: 0, color: "var(--pb-color-muted, #64748b)", fontSize: 14, fontWeight: 400, lineHeight: "20px" }}>Searching...</p>
       <svg width="56" height="64" viewBox="0 0 56 64" fill="none" aria-hidden="true" focusable="false" style={{ display: "block", flexShrink: 0, overflow: "visible" }}>
       <defs>
         <linearGradient id={`${id}-top`} x1="10" y1="28" x2="44" y2="40" gradientUnits="userSpaceOnUse">

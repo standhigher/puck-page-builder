@@ -5,6 +5,7 @@ import { useTrackingRuntime } from "./tracking-runtime";
 
 type QueryMode = "tracking" | "order";
 type FieldName = "tracking" | "order" | "email";
+const PREVIEW_DEMO_TRACKING_NUMBER = "BT-2048-DEMO";
 
 /** 三套模板共用 Ready-to-go 的输入与提交规则；样式、滚动容器由调用方通过界面和 onComplete 决定。 */
 export function useTrackingQueryForm({ initialTrackingNumber, initialOrderNumber = "", initialMode = "tracking", onComplete, onQuery, phase }: {
@@ -28,8 +29,6 @@ export function useTrackingQueryForm({ initialTrackingNumber, initialOrderNumber
   const [localError, setLocalError] = useState("");
   const [firstInvalidField, setFirstInvalidField] = useState<FieldName>();
   const autoQueryStarted = useRef(false);
-  // 演示自动查询固定使用初始编号，不能随着用户输入下一笔编号而重新触发。
-  const previewDemoTrackingNumber = useRef(trackingNumber);
   const selected = runtime.recentQueries[runtime.selectedRecentIndex];
   const [lastSelectionRevision, setLastSelectionRevision] = useState(runtime.selectionRevision);
 
@@ -60,12 +59,11 @@ export function useTrackingQueryForm({ initialTrackingNumber, initialOrderNumber
         .finally(onComplete);
       return;
     }
-    // 输入框不再预填演示号。预览仍要自动查一单时，空输入改查这个内部编号，不写回输入框。
-    const demoTrackingNumber = previewDemoTrackingNumber.current.trim() || "BT-2048-DEMO";
+    // 自动预览只查内部演示号，不使用配置文案或当前输入，也不把演示号写回输入框。
     if (!runtime.autoQueryDemo) return;
     autoQueryStarted.current = true;
-    // 演示路径固定查初始运单号，不触发 onComplete 滚动，避免预览一打开就自动跳离查询区。
-    void query({ mode: "tracking", trackingNumber: demoTrackingNumber });
+    // 不触发 onComplete 滚动，避免预览一打开就自动跳离查询区。
+    void query({ mode: "tracking", trackingNumber: PREVIEW_DEMO_TRACKING_NUMBER });
   }, [locationState, onComplete, query, runtime.autoQueryDemo]);
 
   const setMode = (next: QueryMode) => {

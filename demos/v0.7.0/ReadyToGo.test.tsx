@@ -64,13 +64,255 @@ describe("V0.7.0 Ready-to-go", () => {
     expect(screen.getByLabelText("Tracking number")).toHaveValue("");
   });
 
-  it("keeps a merchant-configured default tracking number", () => {
+  it("shows saved tracking copy as a placeholder and submits only the user's input", async () => {
+    const query = vi.fn<TrackingPageQuery>().mockResolvedValue({ trackingNumber: "BT-1001", status: "In transit" });
     render(
-      <ReadyToGoRuntimeProvider>
-        <ReadyToGoQueryBlock defaultTrackingNumber="SHOP-1001" />
+      <ReadyToGoRuntimeProvider query={query}>
+        <ReadyToGoQueryBlock defaultTrackingNumber="please add order" />
       </ReadyToGoRuntimeProvider>
     );
-    expect(screen.getByLabelText("Tracking number")).toHaveValue("SHOP-1001");
+    const input = screen.getByLabelText("Tracking number");
+    expect(input).toHaveValue("");
+    expect(input).toHaveAttribute("placeholder", "please add order");
+
+    fireEvent.click(screen.getByRole("button", { name: "Track Your Order" }));
+    expect(screen.getByRole("alert")).toHaveTextContent("Please enter your tracking number");
+    expect(query).not.toHaveBeenCalled();
+
+    fireEvent.change(input, { target: { value: "  BT-1001  " } });
+    fireEvent.click(screen.getByRole("button", { name: "Track Your Order" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Track Your Order" })).toBeEnabled());
+    expect(query).toHaveBeenCalledExactlyOnceWith({ mode: "tracking", trackingNumber: "BT-1001" });
+  });
+
+  it("does not submit an order placeholder even when the customer has entered an email", async () => {
+    const query = vi.fn<TrackingPageQuery>().mockResolvedValue({ trackingNumber: "BT-1001", status: "In transit" });
+    render(
+      <ReadyToGoRuntimeProvider query={query}>
+        <ReadyToGoQueryBlock defaultOrderNumber="Enter your order number" defaultQueryMode="order" />
+      </ReadyToGoRuntimeProvider>
+    );
+    const input = screen.getByLabelText("Order number");
+    expect(input).toHaveValue("");
+    expect(input).toHaveAttribute("placeholder", "Enter your order number");
+    fireEvent.change(screen.getByLabelText("Email"), { target: { value: "buyer@example.test" } });
+    fireEvent.click(screen.getByRole("button", { name: "Track Your Order" }));
+    expect(screen.getByRole("alert")).toHaveTextContent("Please enter your order number and email address");
+    expect(query).not.toHaveBeenCalled();
+
+    fireEvent.change(input, { target: { value: "ORDER-1001" } });
+    fireEvent.click(screen.getByRole("button", { name: "Track Your Order" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Track Your Order" })).toBeEnabled());
+    expect(query).toHaveBeenCalledExactlyOnceWith({ mode: "order", orderNumber: "ORDER-1001", email: "buyer@example.test" });
+  });
+
+  it("shows configured email copy without submitting it as the customer's email", async () => {
+    const query = vi.fn<TrackingPageQuery>().mockResolvedValue({ trackingNumber: "BT-1001", status: "In transit" });
+    render(
+      <ReadyToGoRuntimeProvider query={query}>
+        <ReadyToGoQueryBlock defaultQueryMode="order" emailPlaceholder="Email used at checkout" />
+      </ReadyToGoRuntimeProvider>
+    );
+    const email = screen.getByLabelText("Email");
+    expect(email).toHaveValue("");
+    expect(email).toHaveAttribute("placeholder", "Email used at checkout");
+
+    fireEvent.change(screen.getByLabelText("Order number"), { target: { value: "ORDER-1001" } });
+    fireEvent.click(screen.getByRole("button", { name: "Track Your Order" }));
+    expect(screen.getByRole("alert")).toHaveTextContent("Please enter your order number and email address");
+    expect(query).not.toHaveBeenCalled();
+
+    fireEvent.change(email, { target: { value: "buyer@example.test" } });
+    fireEvent.click(screen.getByRole("button", { name: "Track Your Order" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Track Your Order" })).toBeEnabled());
+    expect(query).toHaveBeenCalledExactlyOnceWith({ mode: "order", orderNumber: "ORDER-1001", email: "buyer@example.test" });
+  });
+
+  it.each([undefined, ""])("keeps the default Email hint when emailPlaceholder is %s", (emailPlaceholder) => {
+    render(<ReadyToGoQueryBlock defaultQueryMode="order" emailPlaceholder={emailPlaceholder} />);
+    expect(screen.getByLabelText("Email")).toHaveValue("");
+    expect(screen.getByLabelText("Email")).toHaveAttribute("placeholder", "Email");
+  });
+
+  it("uses the internal demo number in automatic preview without submitting placeholder copy", async () => {
+    const query = vi.fn<TrackingPageQuery>().mockResolvedValue({ trackingNumber: "BT-2048-DEMO", status: "In transit" });
+    render(
+      <ReadyToGoRuntimeProvider query={query} autoQueryDemo>
+        <ReadyToGoQueryBlock defaultTrackingNumber="please add order" />
+      </ReadyToGoRuntimeProvider>
+    );
+    await waitFor(() => expect(screen.getByRole("button", { name: "Track Your Order" })).toBeEnabled());
+    expect(query).toHaveBeenCalledExactlyOnceWith({ mode: "tracking", trackingNumber: "BT-2048-DEMO" });
+    expect(screen.getByLabelText("Tracking number")).toHaveValue("");
+    expect(screen.getByLabelText("Tracking number")).toHaveAttribute("placeholder", "please add order");
+
+    fireEvent.click(screen.getByRole("button", { name: "Track Your Order" }));
+    expect(screen.getByRole("alert")).toHaveTextContent("Please enter your tracking number");
+    expect(query).toHaveBeenCalledTimes(1);
+  });
+
+  it("previews and edits placeholder copy through the existing document field", () => {
+    const onPropsChange = vi.fn();
+    const props = { blockId: "query", defaultTrackingNumber: "please add order", onPropsChange };
+    const { rerender } = render(<ReadyToGoQueryEditor {...props} selected={false} />);
+    const input = screen.getByLabelText("Canvas tracking number placeholder");
+    expect(input).toHaveValue("");
+    expect(input).toHaveAttribute("placeholder", "please add order");
+
+    rerender(<ReadyToGoQueryEditor {...props} selected />);
+    expect(input).toHaveValue("please add order");
+    fireEvent.change(input, { target: { value: "Enter your tracking number" } });
+    expect(onPropsChange).toHaveBeenCalledExactlyOnceWith({ defaultTrackingNumber: "Enter your tracking number" });
+
+    rerender(<ReadyToGoQueryEditor {...props} defaultTrackingNumber="Enter your tracking number" selected={false} />);
+    expect(input).toHaveValue("");
+    expect(input).toHaveAttribute("placeholder", "Enter your tracking number");
+  });
+
+  it("switches canvas tabs locally and edits order copy without changing the tracking placeholder", () => {
+    const query = vi.fn<TrackingPageQuery>();
+    const onPropsChange = vi.fn();
+    const editor = (defaultOrderNumber = "Enter your order number") => (
+      <ReadyToGoRuntimeProvider query={query} autoQueryDemo>
+        <ReadyToGoQueryEditor blockId="query" selected defaultQueryMode="tracking" defaultTrackingNumber="Enter your tracking number" defaultOrderNumber={defaultOrderNumber} onPropsChange={onPropsChange} />
+      </ReadyToGoRuntimeProvider>
+    );
+    const { rerender } = render(editor());
+    expect(screen.getByRole("tab", { name: "Tracking Number" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.queryByLabelText("Canvas email placeholder")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("tab", { name: "Order Number" }));
+    expect(screen.getByRole("tabpanel", { name: "Order Number" })).toBeVisible();
+    expect(screen.getByLabelText("Canvas order number placeholder")).toHaveValue("Enter your order number");
+    expect(screen.getByLabelText("Canvas email placeholder")).not.toHaveAttribute("readonly");
+    expect(onPropsChange).not.toHaveBeenCalled();
+    expect(query).not.toHaveBeenCalled();
+
+    fireEvent.change(screen.getByLabelText("Canvas order number placeholder"), { target: { value: "Order ID" } });
+    expect(onPropsChange).toHaveBeenCalledExactlyOnceWith({ defaultOrderNumber: "Order ID" });
+    rerender(editor("Order ID"));
+    fireEvent.click(screen.getByRole("tab", { name: "Tracking Number" }));
+    expect(screen.getByLabelText("Canvas tracking number placeholder")).toHaveValue("Enter your tracking number");
+    expect(screen.queryByLabelText("Canvas email placeholder")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("tab", { name: "Order Number" }));
+    expect(screen.getByLabelText("Canvas order number placeholder")).toHaveValue("Order ID");
+    expect(onPropsChange).toHaveBeenCalledTimes(1);
+    expect(query).not.toHaveBeenCalled();
+  });
+
+  it("opens the configured order tab on the canvas with empty preview fields", () => {
+    render(<ReadyToGoQueryEditor blockId="query" selected={false} defaultQueryMode="order" defaultOrderNumber="Enter your order number" onPropsChange={vi.fn()} />);
+
+    expect(screen.getByRole("tab", { name: "Order Number" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("tabpanel", { name: "Order Number" })).toBeVisible();
+    expect(screen.getByLabelText("Canvas order number placeholder")).toHaveValue("");
+    expect(screen.getByLabelText("Canvas order number placeholder")).toHaveAttribute("placeholder", "Enter your order number");
+    expect(screen.getByLabelText("Canvas email placeholder")).toHaveValue("");
+    expect(screen.getByLabelText("Canvas email placeholder")).toHaveAttribute("placeholder", "Email");
+    expect(screen.getByLabelText("Canvas email placeholder")).toHaveAttribute("readonly");
+    expect(screen.queryByLabelText("Canvas tracking number placeholder")).not.toBeInTheDocument();
+  });
+
+  it("selects default canvas copy for editing and keeps an empty draft in its own tab", () => {
+    const query = vi.fn<TrackingPageQuery>();
+    const onPropsChange = vi.fn();
+    const editor = (defaultOrderNumber?: string) => (
+      <ReadyToGoRuntimeProvider query={query} autoQueryDemo>
+        <ReadyToGoQueryEditor blockId="query" selected defaultQueryMode="order" defaultOrderNumber={defaultOrderNumber} onPropsChange={onPropsChange} />
+      </ReadyToGoRuntimeProvider>
+    );
+    const { rerender } = render(editor());
+
+    for (const [label, copy] of [["Canvas order number placeholder", "Order Number"], ["Canvas email placeholder", "Email"]] as const) {
+      const input = screen.getByLabelText<HTMLInputElement>(label);
+      expect(input).not.toHaveAttribute("readonly");
+      expect(input).toHaveValue(copy);
+      fireEvent.focus(input);
+      expect([input.selectionStart, input.selectionEnd]).toEqual([0, copy.length]);
+      fireEvent.blur(input);
+      expect(input).toHaveValue(copy);
+    }
+    expect(onPropsChange).not.toHaveBeenCalled();
+    expect(query).not.toHaveBeenCalled();
+
+    const order = screen.getByLabelText("Canvas order number placeholder");
+    fireEvent.focus(order);
+    fireEvent.change(order, { target: { value: "" } });
+    rerender(editor(""));
+    expect(order).toHaveValue("");
+    expect(order).toHaveAttribute("placeholder", "");
+
+    fireEvent.click(screen.getByRole("tab", { name: "Tracking Number" }));
+    expect(screen.getByLabelText("Canvas tracking number placeholder")).toHaveValue("Tracking Number");
+    fireEvent.click(screen.getByRole("tab", { name: "Order Number" }));
+    expect(screen.getByLabelText("Canvas order number placeholder")).toHaveValue("Order Number");
+    expect(screen.getByLabelText("Canvas email placeholder")).toHaveValue("Email");
+    expect(onPropsChange).toHaveBeenCalledExactlyOnceWith({ defaultOrderNumber: "" });
+    expect(query).not.toHaveBeenCalled();
+  });
+
+  it("edits and clears the canvas email placeholder without querying", () => {
+    const query = vi.fn<TrackingPageQuery>();
+    const onPropsChange = vi.fn();
+    const editor = (selected: boolean, emailPlaceholder = "Email used at checkout") => (
+      <ReadyToGoRuntimeProvider query={query} autoQueryDemo>
+        <ReadyToGoQueryEditor blockId="query" defaultQueryMode="order" selected={selected} emailPlaceholder={emailPlaceholder} onPropsChange={onPropsChange} />
+      </ReadyToGoRuntimeProvider>
+    );
+    const { rerender } = render(editor(false));
+    const email = screen.getByLabelText("Canvas email placeholder");
+    expect(email).toHaveValue("");
+    expect(email).toHaveAttribute("readonly");
+    expect(email).toHaveAttribute("placeholder", "Email used at checkout");
+
+    rerender(editor(true));
+    expect(email).not.toHaveAttribute("readonly");
+    expect(email).toHaveValue("Email used at checkout");
+    fireEvent.change(email, { target: { value: "Your email address" } });
+    expect(onPropsChange).toHaveBeenNthCalledWith(1, { emailPlaceholder: "Your email address" });
+
+    rerender(editor(true, "Your email address"));
+    fireEvent.change(email, { target: { value: "" } });
+    expect(onPropsChange).toHaveBeenNthCalledWith(2, { emailPlaceholder: "" });
+    expect(email).toHaveValue("");
+    expect(email).toHaveAttribute("placeholder", "");
+    rerender(editor(true, ""));
+    expect(email).toHaveValue("");
+    expect(email).toHaveAttribute("placeholder", "");
+    fireEvent.blur(email);
+    expect(email).toHaveValue("Email");
+    expect(onPropsChange).toHaveBeenCalledTimes(2);
+    rerender(editor(false, ""));
+    expect(email).toHaveValue("");
+    expect(email).toHaveAttribute("placeholder", "Email");
+    expect(onPropsChange).toHaveBeenCalledTimes(2);
+    expect(query).not.toHaveBeenCalled();
+  });
+
+  it("supports keyboard tab switching while keeping active canvas labels editable", () => {
+    const onPropsChange = vi.fn();
+    render(<ReadyToGoQueryEditor blockId="query" selected onPropsChange={onPropsChange} />);
+    const trackingTab = screen.getByRole("tab", { name: "Tracking Number" });
+    const orderTab = screen.getByRole("tab", { name: "Order Number" });
+
+    fireEvent.keyDown(trackingTab, { key: "ArrowRight" });
+    expect(orderTab).toHaveFocus();
+    expect(orderTab).toHaveAttribute("aria-selected", "true");
+    const label = screen.getByLabelText("Canvas orderTabLabel");
+    fireEvent.keyDown(label, { key: "ArrowLeft" });
+    expect(orderTab).toHaveAttribute("aria-selected", "true");
+    fireEvent.change(label, { target: { value: "Order ID" } });
+    expect(onPropsChange).toHaveBeenCalledExactlyOnceWith({ orderTabLabel: "Order ID" });
+
+    fireEvent.keyDown(orderTab, { key: "Home" });
+    expect(trackingTab).toHaveFocus();
+    expect(screen.getByLabelText("Canvas trackingTabLabel")).toBeVisible();
+    fireEvent.keyDown(trackingTab, { key: "End" });
+    expect(orderTab).toHaveFocus();
+    fireEvent.keyDown(orderTab, { key: "ArrowLeft" });
+    expect(trackingTab).toHaveAttribute("aria-selected", "true");
+    expect(trackingTab).toHaveFocus();
+    expect(onPropsChange).toHaveBeenCalledTimes(1);
   });
 
   it("applies submitButtonColor to the query submit button", () => {
@@ -114,7 +356,7 @@ describe("V0.7.0 Ready-to-go", () => {
 
     const queryEditor = within(screen.getByLabelText("Ready-to-go query editor"));
     fireEvent.change(queryEditor.getByLabelText("Canvas submitLabel"), { target: { value: "Check delivery" } });
-    fireEvent.change(queryEditor.getByLabelText("Canvas default tracking number"), { target: { value: "BT-EDIT" } });
+    fireEvent.change(queryEditor.getByLabelText("Canvas tracking number placeholder"), { target: { value: "Enter a tracking number" } });
     fireEvent.change(queryEditor.getByLabelText("Canvas trackingTabLabel"), { target: { value: "Parcel ID" } });
     fireEvent.change(within(screen.getByLabelText("Ready-to-go delivery editor")).getByLabelText("Canvas heading"), { target: { value: "Shipment facts" } });
     fireEvent.change(screen.getByLabelText("Canvas contentsHeading"), { target: { value: "Inside the box" } });
@@ -139,7 +381,7 @@ describe("V0.7.0 Ready-to-go", () => {
     expect(screen.getByLabelText("Demo shipment item")).toBeVisible();
     expect(screen.getByText("Shipping protection")).toBeVisible();
     expect(onPropsChange).toHaveBeenCalledWith({ submitLabel: "Check delivery" });
-    expect(onPropsChange).toHaveBeenCalledWith({ defaultTrackingNumber: "BT-EDIT" });
+    expect(onPropsChange).toHaveBeenCalledWith({ defaultTrackingNumber: "Enter a tracking number" });
     expect(onPropsChange).toHaveBeenCalledWith({ trackingTabLabel: "Parcel ID" });
     expect(onPropsChange).not.toHaveBeenCalledWith({ heading: "Live progress" });
     expect(onPropsChange).not.toHaveBeenCalledWith({ estimatedDeliveryTitle: "Arrives by" });

@@ -77,6 +77,19 @@ describe("BestTrack template PRD compatibility metadata", () => {
     }
   });
 
+  it("accepts optional Ready-to-go email placeholder copy through client and server contracts", () => {
+    const registry = createExtensionRegistry([bestTrackPageExtension]);
+    const serverRegistry = createExtensionRegistry(bestTrackDocumentValidationExtensions);
+    const document = registry.getTemplate("besttrack.ready-to-go")!.create();
+    const query = document.blocks.find((block) => block.type === "besttrack.ready-to-go.query")!;
+    for (const placeholder of ["Enter your email address", "", undefined]) {
+      if (placeholder === undefined) delete query.props.emailPlaceholder;
+      else query.props.emailPlaceholder = placeholder;
+      expect(validatePageDocumentWithRegistry(document, registry)).toEqual([]);
+      expect(validatePageDocumentWithRegistry(document, serverRegistry)).toEqual([]);
+    }
+  });
+
   it("keeps query validation local and deterministic", () => {
     // 这里保留旧格式校验工具自身的契约；共用查询表单已改为 trim + 非空，不调用这些工具。
     expect(isValidTrackingNumber("BT-2048-DEMO")).toBe(true);

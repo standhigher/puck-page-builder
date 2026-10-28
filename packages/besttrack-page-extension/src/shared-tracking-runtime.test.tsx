@@ -199,7 +199,7 @@ describe.each(templates)("$name uses the Ready-to-go foundation", ({ Provider, Q
     const query = vi.fn<TrackingPageQuery>().mockResolvedValue(resultFor("DEMO", { estimatedDelivery: "Oct 12 - Oct 14" }));
     render(<Provider query={query} autoQueryDemo><Query submitLabel="Find parcel" /><ReadyDetails enabled={separateDetails} /></Provider>);
     await screen.findByText(/Status DEMO/);
-    expect(query).toHaveBeenCalledOnce();
+    expect(query).toHaveBeenCalledExactlyOnceWith({ mode: "tracking", trackingNumber: "BT-2048-DEMO" });
     expect(screen.queryByText(/Oct 12 - Oct 14/)).toBeNull();
   });
 

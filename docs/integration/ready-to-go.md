@@ -32,10 +32,14 @@ const document = registry.getTemplate("besttrack.ready-to-go")!.create();
 
 进度和配送区块只在查单成功后渲染。正式店铺页、已发布页和 `transport` 路径必须保持「用户点击查询才出订单内容」。
 
-仅 Mock / Studio 预览可以打开 `autoQueryDemo`：进入预览时用表单上的 demo 运单号自动查一笔订单，用来展示完整效果。预览 Demo 不显示 EDD（`Est. Delivery`），避免把占位日期当成真实预计送达。画布编辑器本身也不渲染 EDD。
+仅 Mock / Studio 预览可以打开 `autoQueryDemo`：进入预览时用内部固定演示号 `BT-2048-DEMO` 自动查一笔订单，用来展示完整效果；不读取提示文案，也不把演示号填入输入框。预览 Demo 不显示 EDD（`Est. Delivery`），避免把占位日期当成真实预计送达。画布编辑器本身也不渲染 EDD。
+
+Ready-to-go 的 `defaultTrackingNumber` / `defaultOrderNumber` 保留旧 JSON 字段名，编辑器将它们显示为 Tracking number placeholder / Order number placeholder。它们仅作为空输入框的提示文案，不再预填查询值或参与提交。旧文档里的自定义文案会继续显示，旧内置演示值 `BT-2048-DEMO` 则回退到默认提示。预览和正式 Web 共用此规则：空输入点击按钮只提示填写；用户输入、已启用的 URL 深链和历史记录回填仍可提供实际查询值。
+
+画布支持点击 Tracking Number / Order Number 标签切换表单布局，也支持左右方向键、Home 和 End。切换只改变当前画布预览，不写入 `defaultQueryMode` 或触发查询。选中区块后可直接编辑当前标签标题和对应的占位提示；Order Number 模式也可编辑邮箱提示文案，右侧属性中的 Email placeholder 对应 `emailPlaceholder`。预览和正式 Web 使用同一文案，未配置或清空时显示 `Email`；提示文案不会预填邮箱值或参与提交。高度随字段数量自适应。
 
 ```tsx
-// 表单每次挂载只查询初始演示编号一次，用于展示预览；这不会预填三条历史，也不会自动加载推荐。
+// 表单每次挂载只查询内部演示编号一次，用于展示预览；这不会预填三条历史，也不会自动加载推荐。
 <TrackingRuntimeProvider query={mockQuery} autoQueryDemo>
   <WebRenderer document={document} registry={registry} />
 </TrackingRuntimeProvider>

@@ -16,7 +16,7 @@ Ready-to-go 的进度、配送区块订阅查单 `RuntimeState`：`phase === "id
 
 `ReadyToGoRuntimeProvider` 新增可选布尔属性 `autoQueryDemo`，默认 `false`。
 
-- 预览宿主显式打开后，查询区块挂载时用表单上的 demo 运单号（缺省 `BT-2048-DEMO`，或区块 `defaultTrackingNumber`）自动发起一次 `mode: "tracking"` 查询。
+- 预览宿主显式打开后，查询区块挂载时只用内部固定演示号 `BT-2048-DEMO` 自动发起一次 `mode: "tracking"` 查询，不读取 `defaultTrackingNumber` 提示文案或用户当前输入，也不把演示号写回输入框。
 - 若 URL 深链已能自动查单（`autoQueryFromUrl` + 合法 query），仍走 URL，不重复用 demo 单号。
 - 线上 `transport` / 消费者页不要传这个属性。
 

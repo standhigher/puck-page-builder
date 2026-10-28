@@ -22,6 +22,7 @@ const readyToGoBlocks: BlockDefinition[] = withTemplatePolicy([
       submitButtonColor: "#111111",
       defaultTrackingNumber: "",
       defaultOrderNumber: "",
+      emailPlaceholder: "",
       defaultQueryMode: "tracking",
       trackingTabLabel: "Tracking Number",
       orderTabLabel: "Order Number"
@@ -31,8 +32,10 @@ const readyToGoBlocks: BlockDefinition[] = withTemplatePolicy([
     fields: {
       submitLabel: text("Button label", { validation: { maxLength: 52 } }),
       submitButtonColor: { field: "besttrack.ready-to-go.text", label: "Button color", control: "color" as const, group: "Style" },
-      defaultTrackingNumber: text("Default tracking number", { validation: { maxLength: 52 } }),
-      defaultOrderNumber: text("Default order number"),
+      // 保留已保存文档的字段名；这两项只配置输入框提示文案，不是查询初值。
+      defaultTrackingNumber: text("Tracking number placeholder", { description: "输入框为空时显示的提示文案，不会作为运单号提交。", group: "Tracking settings", validation: { maxLength: 52 } }),
+      defaultOrderNumber: text("Order number placeholder", { description: "输入框为空时显示的提示文案，不会作为订单号提交。", group: "Tracking settings" }),
+      emailPlaceholder: text("Email placeholder", { description: "邮箱输入框为空时显示的提示文案，不会作为邮箱提交。", group: "Tracking settings", validation: { maxLength: 52 } }),
       defaultQueryMode: text("Default query mode"),
       trackingTabLabel: text("Tracking tab label", { validation: { maxLength: 52 } }),
       orderTabLabel: text("Order tab label", { validation: { maxLength: 52 } })

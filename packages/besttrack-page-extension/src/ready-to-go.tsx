@@ -1,4 +1,4 @@
-import { type CSSProperties, type ReactNode } from "react";
+import { useEffect, useId, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { type BlockEditorProps, type FieldProps } from "@standhigher/puck-page-builder/runtime";
 import { scrollToTrackingResult } from "./shopify-track-query";
 import { useTrackingRuntime as useReadyToGoRuntime, type TrackingRecentQuery as ReadyToGoRecentQuery } from "./tracking-runtime";
@@ -46,7 +46,6 @@ function RuntimeWatermark({ watermark }: { watermark?: TrackingPageWatermark }) 
 const heroStyle: CSSProperties = {
   ...pageFont,
   position: "relative",
-  minHeight: 520,
   display: "grid",
   placeItems: "center",
   overflow: "hidden",
@@ -68,7 +67,6 @@ const formCardStyle: CSSProperties = {
   flexDirection: "column",
   width: "min(560px, 100%)",
   maxWidth: 560,
-  minHeight: 388,
   borderRadius: "var(--pb-radius, 8px)",
   background: "var(--pb-color-surface, #fff)",
   color: "var(--pb-color-text, #0f172a)",
@@ -124,6 +122,7 @@ function submitButtonStyle(props: Record<string, unknown>, loading = false): CSS
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
+    textAlign: "center",
     width: "100%",
     minHeight: 58,
     marginTop: 8,
@@ -141,10 +140,10 @@ export function ReadyToGoTextField({ value, onChange }: FieldProps) {
 
 type ReadyToGoEditorProps = BlockEditorProps<Record<string, unknown>>;
 
-/** 旧模板把这个演示号写进了 defaultProps，已发布文档里可能还留着。输入框留空，才能露出 placeholder。 */
+/** 兼容旧文档字段名，但只作为提示文案使用；旧模板演示号继续隐藏。 */
 const LEGACY_READY_TO_GO_DEMO_TRACKING_NUMBER = "BT-2048-DEMO";
 
-function readyToGoTrackingNumber(source: Record<string, unknown>) {
+function readyToGoTrackingPlaceholder(source: Record<string, unknown>) {
   const value = text(source, "defaultTrackingNumber", "");
   return value === LEGACY_READY_TO_GO_DEMO_TRACKING_NUMBER ? "" : value;
 }
@@ -160,6 +159,36 @@ function InlineText({ block, name, fallback }: { block: ReadyToGoEditorProps; na
     onClick={(event) => event.stopPropagation()}
     onChange={(event) => block.onPropsChange({ [name]: event.currentTarget.value })}
     style={{ display: "inline-block", width: "100%", minWidth: "5ch", boxSizing: "border-box", /* border: "1px dashed currentColor", */ border: "none", borderRadius: 3, padding: "2px 5px", background: "transparent", color: "inherit", font: "inherit", fontWeight: "inherit", lineHeight: "inherit", letterSpacing: "inherit", textAlign: "inherit" }}
+  />;
+}
+
+function CanvasPlaceholderInput({ block, name, value, fallback, label }: { block: ReadyToGoEditorProps; name: string; value: string; fallback: string; label: string }) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  // 默认提示在编辑态作为可选文字展示；清空时保留空草稿，失焦后恢复默认展示。
+  const [editing, setEditing] = useState({ value, selected: block.selected, draft: null as string | null });
+  if (editing.value !== value || editing.selected !== block.selected) {
+    setEditing({ value, selected: block.selected, draft: !block.selected || editing.draft === null ? null : value });
+  }
+  useEffect(() => {
+    const input = inputRef.current;
+    if (block.selected && input && input.ownerDocument.activeElement === input) input.select();
+  }, [block.selected]);
+  return <input
+    ref={inputRef}
+    aria-label={label}
+    readOnly={!block.selected}
+    value={block.selected ? editing.draft ?? (value || fallback) : ""}
+    placeholder={block.selected ? "" : value || fallback}
+    onFocus={(event) => { if (block.selected) event.currentTarget.select(); }}
+    onBlur={() => setEditing((current) => ({ ...current, draft: null }))}
+    onMouseDown={(event) => block.selected && event.stopPropagation()}
+    onClick={(event) => block.selected && event.stopPropagation()}
+    onChange={(event) => {
+      const next = event.currentTarget.value;
+      setEditing((current) => ({ ...current, draft: next }));
+      block.onPropsChange({ [name]: next });
+    }}
+    style={{ ...inputStyle, color: "#64748b" }}
   />;
 }
 
@@ -232,27 +261,67 @@ function DeliveryResult({ heading, contentsHeading, carrierHeading, result, edit
 }
 
 export function ReadyToGoQueryEditor(block: ReadyToGoEditorProps) {
+  // 画布切换仅用于编辑预览，不修改默认查询模式，也不接入查单 Runtime。
+  const [mode, setMode] = useState<"tracking" | "order">(text(block, "defaultQueryMode") === "order" ? "order" : "tracking");
+  const tabId = useId();
+  const tabRefs = useRef<Partial<Record<typeof mode, HTMLButtonElement | null>>>({});
+  const placeholder = mode === "tracking" ? readyToGoTrackingPlaceholder(block) : text(block, "defaultOrderNumber", "");
+  const placeholderField = mode === "tracking" ? "defaultTrackingNumber" : "defaultOrderNumber";
+  const emailPlaceholder = text(block, "emailPlaceholder", "");
   return <section aria-label="Ready-to-go query editor" style={editorHeroStyle}>
     <div role="region" aria-label="Ready-to-go tracking query" style={editorFormCardStyle}>
-      <div style={{ display: "flex", width: "100%", borderBottom: "1px solid #cbd5e1" }}>
-        <div style={{ ...tabStyle(true), display: "flex", alignItems: "center", justifyContent: "center", cursor: "default" }}>
-          <InlineText block={block} name="trackingTabLabel" fallback="Tracking Number" />
-        </div>
-        <div style={{ ...tabStyle(false), display: "flex", alignItems: "center", justifyContent: "center", cursor: "default" }}>
-          <InlineText block={block} name="orderTabLabel" fallback="Order Number" />
-        </div>
+      <div role="tablist" aria-label="Canvas tracking method" style={{ display: "flex", width: "100%", borderBottom: "1px solid #cbd5e1" }}>
+        {([
+          { mode: "tracking", name: "trackingTabLabel", fallback: "Tracking Number" },
+          { mode: "order", name: "orderTabLabel", fallback: "Order Number" }
+        ] as const).map((tab) => {
+          const active = mode === tab.mode;
+          const editingLabel = block.selected && active;
+          return <div key={tab.mode} style={{ position: "relative", display: "flex", flex: 1, minWidth: 0 }}>
+            <button
+              ref={(element) => { tabRefs.current[tab.mode] = element; }}
+              id={`${tabId}-${tab.mode}`}
+              type="button"
+              role="tab"
+              aria-label={text(block, tab.name, tab.fallback)}
+              aria-selected={active}
+              aria-controls={`${tabId}-panel`}
+              tabIndex={active ? 0 : -1}
+              onMouseDown={(event) => event.stopPropagation()}
+              onClick={(event) => { event.stopPropagation(); setMode(tab.mode); }}
+              onKeyDown={(event) => {
+                const next = event.key === "Home" ? "tracking" : event.key === "End" ? "order"
+                  : event.key === "ArrowLeft" || event.key === "ArrowRight" ? (mode === "tracking" ? "order" : "tracking") : undefined;
+                if (!next) return;
+                event.preventDefault();
+                event.stopPropagation();
+                setMode(next);
+                tabRefs.current[next]?.focus();
+              }}
+              style={tabStyle(active)}
+            ><span style={{ visibility: editingLabel ? "hidden" : undefined }}>{text(block, tab.name, tab.fallback)}</span></button>
+            {editingLabel ? <div style={{ ...tabStyle(active), position: "absolute", inset: 0, boxSizing: "border-box", display: "flex", alignItems: "center", borderBottom: 0, pointerEvents: "none" }}>
+              <span style={{ width: "100%", pointerEvents: "auto" }}><InlineText block={block} name={tab.name} fallback={tab.fallback} /></span>
+            </div> : null}
+          </div>;
+        })}
       </div>
-      <div style={{ marginTop: 24, display: "flex", flexDirection: "column", gap: 16, flex: 1 }}>
-        <input
-          aria-label="Canvas default tracking number"
-          readOnly={!block.selected}
-          value={readyToGoTrackingNumber(block)}
-          placeholder="Tracking Number"
-          onMouseDown={(event) => block.selected && event.stopPropagation()}
-          onClick={(event) => block.selected && event.stopPropagation()}
-          onChange={(event) => block.onPropsChange({ defaultTrackingNumber: event.currentTarget.value })}
-          style={{ ...inputStyle /* , border: block.selected ? "1px dashed #111" : inputStyle.border */ }}
+      <div id={`${tabId}-panel`} role="tabpanel" aria-labelledby={`${tabId}-${mode}`} style={{ marginTop: 24, display: "flex", flexDirection: "column", gap: 16, flex: 1 }}>
+        <CanvasPlaceholderInput
+          key={placeholderField}
+          block={block}
+          name={placeholderField}
+          value={placeholder}
+          fallback={mode === "tracking" ? "Tracking Number" : "Order Number"}
+          label={`Canvas ${mode === "tracking" ? "tracking" : "order"} number placeholder`}
         />
+        {mode === "order" ? <CanvasPlaceholderInput
+          block={block}
+          name="emailPlaceholder"
+          value={emailPlaceholder}
+          fallback="Email"
+          label="Canvas email placeholder"
+        /> : null}
         <div style={submitButtonStyle(block)}>
           <InlineText block={block} name="submitLabel" fallback="Track Your Order" />
         </div>
@@ -303,8 +372,9 @@ export function ReadyToGoQueryBlock(props: Record<string, unknown>) {
   // 三套模板共用输入保留、trim 后非空校验、URL 同步和历史回填规则。
   // Ready-to-go 仅指定查询完成后的页面滚动目标，表单布局和配色仍留在本组件。
   const { mode, setMode, trackingNumber, setTrackingNumber, orderNumber, setOrderNumber, email, setEmail, localError, loading, submit } = useTrackingQueryForm({
-    initialTrackingNumber: readyToGoTrackingNumber(props),
-    initialOrderNumber: text(props, "defaultOrderNumber", ""),
+    // 配置项仅作为 placeholder；实际查询值只来自用户输入、已启用的 URL 深链或历史回填。
+    initialTrackingNumber: "",
+    initialOrderNumber: "",
     initialMode: text(props, "defaultQueryMode", "tracking") === "order" ? "order" : "tracking",
     onComplete: scrollToTrackingResult
   });
@@ -320,12 +390,12 @@ export function ReadyToGoQueryBlock(props: Record<string, unknown>) {
       <form onSubmit={submit} style={{ marginTop: 24, display: "flex", flexDirection: "column", gap: 16, flex: 1 }}>
         {mode === "order" ? <>
           <label htmlFor="ready-to-go-order-number" style={{ position: "absolute", width: 1, height: 1, overflow: "hidden", clipPath: "inset(50%)" }}>Order number</label>
-          <input id="ready-to-go-order-number" aria-label="Order number" value={orderNumber} onChange={(event) => setOrderNumber(event.target.value)} placeholder="Order Number" style={inputStyle} />
+          <input id="ready-to-go-order-number" aria-label="Order number" value={orderNumber} onChange={(event) => setOrderNumber(event.target.value)} placeholder={text(props, "defaultOrderNumber", "") || "Order Number"} style={inputStyle} />
           <label htmlFor="ready-to-go-email" style={{ position: "absolute", width: 1, height: 1, overflow: "hidden", clipPath: "inset(50%)" }}>Email</label>
-          <input id="ready-to-go-email" aria-label="Email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="Email" style={inputStyle} />
+          <input id="ready-to-go-email" aria-label="Email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder={text(props, "emailPlaceholder", "") || "Email"} style={inputStyle} />
         </> : <>
           <label htmlFor="ready-to-go-tracking-number" style={{ position: "absolute", width: 1, height: 1, overflow: "hidden", clipPath: "inset(50%)" }}>Tracking number</label>
-          <input id="ready-to-go-tracking-number" aria-label="Tracking number" value={trackingNumber} onChange={(event) => setTrackingNumber(event.target.value)} placeholder="Tracking Number" style={inputStyle} />
+          <input id="ready-to-go-tracking-number" aria-label="Tracking number" value={trackingNumber} onChange={(event) => setTrackingNumber(event.target.value)} placeholder={readyToGoTrackingPlaceholder(props) || "Tracking Number"} style={inputStyle} />
         </>}
         {localError ? <p role="alert" style={{ margin: 0, textAlign: "center", fontSize: 12, color: "#f43f5e" }}>{localError}</p> : null}
         <button type="submit" disabled={loading} style={{ ...submitButtonStyle(props, loading), border: 0, font: "inherit", fontSize: 15, fontWeight: 600, cursor: loading ? "wait" : "pointer", opacity: loading ? 0.7 : 1 }}>{submitLabel}</button>

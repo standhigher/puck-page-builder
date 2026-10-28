@@ -116,7 +116,7 @@ export type TrackingRuntimeProviderProps = {
   /** 未显式指定时，仅 transport 存在且没有注入 query 的路径默认开启 URL 深链自动查询。 */
   autoQueryFromUrl?: boolean;
   /**
-   * 仅演示预览使用：挂载后查询表单初始演示运单号。
+   * 仅演示预览使用：挂载后查询内部固定演示号 BT-2048-DEMO，不读取输入框提示文案。
    * 正式宿主不能依靠演示编号自动查询；真实深链自动查询由 autoQueryFromUrl 单独控制。
    */
   autoQueryDemo?: boolean;

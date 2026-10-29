@@ -77,7 +77,7 @@ const document: PageDocument = {
 };
 
 function renderEditor(props: Partial<React.ComponentProps<typeof PageDocumentEditorShell>> = {}) {
-  return render(<AppProvider i18n={{}}><PageDocumentEditorShell initialDocument={document} iframe={false} {...props} /></AppProvider>);
+  return render(<AppProvider i18n={{}}><PageDocumentEditorShell initialDocument={document} iframe={false} adminLocale="zh-CN" {...props} /></AppProvider>);
 }
 
 describe("PageDocumentEditorShell V0.4", () => {
@@ -217,19 +217,19 @@ describe("PageDocumentEditorShell V0.4", () => {
   it("collapses and restores the blocks and properties sidebars from the package shell", () => {
     renderEditor();
     const editor = screen.getByTestId("page-document-editor");
-    expect(screen.getByLabelText("PageDocument 区块").querySelector(".pb-panel-header")).not.toBeNull();
+    expect(screen.getByRole("complementary", { name: "区块", hidden: true }).querySelector(".pb-panel-header")).not.toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "收起左侧面板" }));
     expect(editor).toHaveAttribute("data-left-panel", "closed");
-    expect(screen.getByLabelText("PageDocument 区块")).toHaveClass("pb-panel--closed");
+    expect(screen.getByRole("complementary", { name: "区块", hidden: true })).toHaveClass("pb-panel--closed");
     fireEvent.click(screen.getByRole("button", { name: "打开区块面板" }));
     expect(editor).toHaveAttribute("data-left-panel", "open");
     expect(screen.getByTestId("blocks-view")).toBeVisible();
     fireEvent.click(screen.getByRole("button", { name: "收起属性面板" }));
     expect(editor).toHaveAttribute("data-right-panel", "closed");
-    expect(screen.getByLabelText("PageDocument 属性")).toHaveClass("pb-panel--closed");
+    expect(screen.getByRole("complementary", { name: "属性", hidden: true })).toHaveClass("pb-panel--closed");
     fireEvent.click(screen.getByRole("button", { name: "打开属性面板" }));
     expect(editor).toHaveAttribute("data-right-panel", "open");
-    expect(screen.getByLabelText("PageDocument 属性")).not.toHaveClass("pb-panel--closed");
+    expect(screen.getByRole("complementary", { name: "属性", hidden: true })).not.toHaveClass("pb-panel--closed");
   });
 
   it("synchronizes selected canvas edits and Inspector edits in both directions", async () => {
@@ -259,7 +259,7 @@ describe("PageDocumentEditorShell V0.4", () => {
     const brandedDocument = registry.getTemplate("besttrack.branded")!.create();
     renderEditor({ initialDocument: brandedDocument, registry });
     fireEvent.click(screen.getByRole("group", { name: "Select Announcement in canvas" }));
-    await waitFor(() => expect(screen.getByText("Links", { exact: true })).toBeVisible());
+    await waitFor(() => expect(screen.getByText("链接", { exact: true })).toBeVisible());
     expect(screen.getByLabelText("Announcement").tagName).toBe("TEXTAREA");
     expect(screen.getByLabelText("Announcement URL")).toHaveAttribute("type", "url");
     expect(screen.getByTestId("document-inspector").querySelectorAll(".pb-inspector-section")).toHaveLength(2);
@@ -447,7 +447,7 @@ describe("PageDocumentEditorShell V0.4", () => {
   it("does not open an editable canvas when the host reports an existing editor lock", async () => {
     renderEditor({ sessionAdapter: { acquire: vi.fn().mockResolvedValue({ state: "locked", editorName: "Ada" }) } });
     await waitFor(() => expect(screen.getByTestId("page-document-editor-session-state")).toHaveAttribute("data-editor-session-state", "locked"));
-    expect(screen.getByText("Ada 正在编辑")).toBeVisible();
+    expect(screen.getByText("Ada正在编辑")).toBeVisible();
     expect(screen.queryByTestId("page-document-editor")).not.toBeInTheDocument();
   });
 
@@ -470,8 +470,8 @@ describe("PageDocumentEditorShell V0.4", () => {
     const changed: PageDocument[] = [];
     renderEditor({ initialDocument: { ...document, blocks: [{ id: "image-1", type: "core.image", version: 1, props: { src: "https://old.example/image.png", alt: "Old" }, variant: "default", style: {} }] }, onDocumentChange: (next) => changed.push(next), assetPicker: { selectAsset: vi.fn().mockResolvedValue({ id: "asset-2", url: "https://cdn.example/image.png", alt: "New" }) } });
     fireEvent.click(screen.getByRole("button", { name: "Select Image in canvas" }));
-    await waitFor(() => expect(screen.getByRole("button", { name: "选择素材" })).toBeVisible());
-    fireEvent.click(screen.getByRole("button", { name: "选择素材" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "选择图片" })).toBeVisible());
+    fireEvent.click(screen.getByRole("button", { name: "选择图片" }));
     await waitFor(() => expect(changed.at(-1)?.blocks[0]?.props).toMatchObject({ assetId: "asset-2", src: "https://cdn.example/image.png", alt: "New" }));
   });
 
@@ -503,6 +503,25 @@ describe("PageDocumentEditorShell V0.4", () => {
     expect(screen.getByRole("button", { name: "选择图片" })).toHaveAttribute("aria-disabled", "true");
   });
 
+  it.each([
+    ["es", "Seleccionar imagen", "No hay imagen seleccionada", "Seleccionar de la tienda", "No hay productos seleccionados"],
+    ["pt-PT", "Selecionar imagem", "Nenhuma imagem selecionada", "Selecionar na loja", "Nenhum produto selecionado"],
+    ["fr", "Sélectionner une image", "Aucune image sélectionnée", "Sélectionner dans la boutique", "Aucun produit sélectionné"]
+  ])("localizes image and product picker buttons and empty states for %s", async (adminLocale, imageButton, imageEmpty, productButton, productEmpty) => {
+    const registry = createExtensionRegistry([bestTrackPageExtension]);
+    renderEditor({ adminLocale, initialDocument: registry.getTemplate("besttrack.ready-to-go")!.create(), registry });
+    fireEvent.click(screen.getByRole("group", { name: "Select Delivery information in canvas" }));
+    const assetPicker = await screen.findByTestId("asset-picker");
+    expect(within(assetPicker).getByText(imageEmpty)).toBeVisible();
+    expect(within(assetPicker).getByRole("button", { name: imageButton })).toBeVisible();
+    expect(assetPicker.textContent).not.toMatch(/选择图片|未设置图片/);
+    fireEvent.click(screen.getByRole("group", { name: "Select Recommended products in canvas" }));
+    const productPicker = await screen.findByTestId("product-picker");
+    expect(within(productPicker).getByText(productEmpty)).toBeVisible();
+    expect(within(productPicker).getByRole("button", { name: productButton })).toBeVisible();
+    expect(productPicker.textContent).not.toMatch(/选择商品|未选择商品/);
+  });
+
   it("shows selected products in the inspector and delegates picking to the host", async () => {
     const selectProducts = vi.fn().mockResolvedValue([
       { id: "gid://shopify/Product/1", title: "Studio Wireless Headphones", imageUrl: "https://cdn.example/headphones.jpg" },
@@ -513,11 +532,11 @@ describe("PageDocumentEditorShell V0.4", () => {
     renderEditor({ initialDocument: registry.getTemplate("besttrack.ready-to-go")!.create(), registry, productPicker: { selectProducts }, onDocumentChange: (next) => changed.push(next) });
     fireEvent.click(screen.getByRole("group", { name: "Select Recommended products in canvas" }));
     const picker = await screen.findByTestId("product-picker");
-    expect(screen.getByText("推荐商品 (Shopify)")).toBeVisible();
+    expect(screen.getByText("推荐商品 (Store)")).toBeVisible();
     expect(within(picker).getByText("未选择商品")).toBeVisible();
-    expect(within(picker).getByRole("button", { name: "从 Shopify 选择商品" })).toBeVisible();
+    expect(within(picker).getByRole("button", { name: "从 Store 选择商品" })).toBeVisible();
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-    fireEvent.click(within(picker).getByRole("button", { name: "从 Shopify 选择商品" }));
+    fireEvent.click(within(picker).getByRole("button", { name: "从 Store 选择商品" }));
     await waitFor(() => expect(selectProducts).toHaveBeenCalledWith(expect.objectContaining({ multiple: true, current: [] })));
     await waitFor(() => expect(within(picker).getByText("2 件商品")).toBeVisible());
     expect(picker.querySelectorAll(".pb-product-picker__thumb img")).toHaveLength(2);

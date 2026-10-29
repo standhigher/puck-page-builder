@@ -4,7 +4,7 @@ export { EditorProvider, useEditorContext, type EditorActionState, type EditorLo
 export { PageStatusCard, type PageStatusCardProps } from "./editor/components/PageStatusCard";
 export type { AssetPickerAdapter, AssetReference, AssetStatus, DraftPersistenceAdapter, DraftSaveInput, DraftSaveResult, EditorSession, EditorSessionAcquireResult, EditorSessionAdapter, EditorSessionState, PagePublicationStatus, PageStatus, ProductPickerAdapter, PublishAction, PublishActionInput, PublishActionResult } from "./editor/contracts";
 export { type PageDocumentEditorPolicy } from "./editor/policy";
-export { createAdminI18n, type AdminLocale, type AdminMessageKey } from "./editor/i18n/admin";
+export { createAdminI18n, type AdminLocale, type AdminMessageValues, type AdminMessageKey } from "./editor/i18n/admin";
 export type { DemoBlock, Device, EditorState, PreviewMode, PublishState, SaveState, Zoom } from "./editor/state/types";
 export { createPageDocument, migratePageDocument, validatePageDocument } from "./core/schema/page-document";
 export type { BlockNode, DataBinding, JsonValue, PageDocument, PageDocumentIssue, PageDocumentMigration, PageSettings, RenderTarget } from "./core/schema/page-document";

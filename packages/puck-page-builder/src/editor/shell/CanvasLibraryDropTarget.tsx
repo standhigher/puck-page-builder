@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type CSSProperties, type DragEvent, type RefObject } from "react";
+import { createAdminI18n } from "../i18n/admin";
 import { nearestBlockIdAtY } from "./drop-position";
 
 export type CanvasLibraryDropTargetProps = {
@@ -61,7 +62,7 @@ export function CanvasLibraryDropTarget({ frameRef, blocks, label, onDrop, onCan
   useEffect(() => { callbacks.current = { onDrop, onCancel }; }, [onDrop, onCancel]);
   const orderedBlocks = uniqueBlocks(blocks);
   const [preview, setPreview] = useState<DropPreview | null>(null);
-  const english = adminLocale?.toLowerCase().startsWith("en") ?? false;
+  const i18n = createAdminI18n(adminLocale);
 
   const stopAutoScroll = () => {
     if (animationFrame.current !== null) window.cancelAnimationFrame(animationFrame.current);
@@ -175,10 +176,10 @@ export function CanvasLibraryDropTarget({ frameRef, blocks, label, onDrop, onCan
   };
 
   const position = preview?.beforeId ? orderedBlocks.findIndex((block) => block.id === preview.beforeId) + 1 : orderedBlocks.length + 1;
-  const hint = english ? `Release to add ${label}${preview ? ` · position ${position}` : ""}` : `松开以添加 ${label}${preview ? ` · 第 ${position} 个位置` : ""}`;
+  const hint = `${i18n.t("releaseToAdd", { label })}${preview ? ` · ${i18n.t("dropPosition", { position })}` : ""}`;
   const style: CSSProperties = { position: "absolute", inset: 0, zIndex: 2 };
-  const markerLabel = english ? `Position ${position}` : `第 ${position} 个位置`;
-  return <div ref={targetRef} className="pb-canvas-drop-target" data-testid="canvas-drop-target" role="region" aria-label={english ? "Block drop area" : "区块投放区"} style={style} onDragOver={handleDragOver} onDragLeave={handleDragLeave} onDrop={handleDrop}>
+  const markerLabel = i18n.t("dropPosition", { position });
+  return <div ref={targetRef} className="pb-canvas-drop-target" data-testid="canvas-drop-target" role="region" aria-label={i18n.t("blockDropArea")} style={style} onDragOver={handleDragOver} onDragLeave={handleDragLeave} onDrop={handleDrop}>
     <span className="pb-canvas-drop-target__hint" aria-live="polite">{hint}</span>
     {preview ? <span className="pb-canvas-drop-marker" aria-hidden="true" style={{ top: preview.markerTop, left: preview.markerLeft, width: preview.markerWidth }}><span className="pb-canvas-drop-marker__label">{markerLabel}</span></span> : null}
   </div>;

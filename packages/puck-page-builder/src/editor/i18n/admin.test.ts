@@ -1,59 +1,41 @@
 import { describe, expect, it } from "vitest";
 import { createAdminI18n } from "./admin";
+import { validateFieldValue } from "../../core/extensions/validation";
 
 describe("createAdminI18n", () => {
-  it("keeps the English catalog for en locales", () => {
-    expect(createAdminI18n("en").t("publish")).toBe("Publish");
-    expect(createAdminI18n("en-US").t("blocks")).toBe("Blocks");
-    expect(createAdminI18n("en-GB").t("preview")).toBe("Preview");
-    expect(createAdminI18n("en-GB").t("desktop")).toBe("Desktop");
-  });
-
-  it("keeps the Chinese catalog for zh locales, missing values, and unknown languages", () => {
-    expect(createAdminI18n().t("publish")).toBe("发布");
-    expect(createAdminI18n("zh-CN").t("blocks")).toBe("区块");
-    expect(createAdminI18n("zh-Hans").t("mobile")).toBe("手机");
-    expect(createAdminI18n("de-DE").t("preview")).toBe("正式预览");
-  });
-
-  it("uses European Portuguese chrome copy for pt-BR and pt-PT, and leaves other admin copy in Chinese", () => {
-    for (const locale of ["pt-BR", "pt-PT", "pt", "PT-BR"]) {
-      const i18n = createAdminI18n(locale);
-      expect(i18n.locale).toBe("pt");
-      expect(i18n.t("blocks")).toBe("Blocos");
-      expect(i18n.t("desktop")).toBe("Computador");
-      expect(i18n.t("tablet")).toBe("Tablet");
-      expect(i18n.t("mobile")).toBe("Telemóvel");
-      expect(i18n.t("preview")).toBe("Pré-visualização");
-      expect(i18n.t("publish")).toBe("Publicar");
-      expect(i18n.t("publishing")).toBe("A publicar…");
-      expect(i18n.t("undo")).toBe("撤销");
+  it.each([
+    ["en-US", "en", "Undo", "Style", "Select image"],
+    ["zh_Hans", "zh-CN", "撤销", "样式", "选择图片"],
+    ["es-ES", "es", "Deshacer", "Estilo", "Seleccionar imagen"],
+    ["pt-PT", "pt", "Anular", "Estilo", "Selecionar imagem"],
+    ["PT_BR", "pt", "Anular", "Estilo", "Selecionar imagem"],
+    ["fr-FR", "fr", "Annuler", "Style", "Sélectionner une image"]
+  ])("localizes the full editor UI for %s", (locale, normalized, undo, style, selectAsset) => {
+    const i18n = createAdminI18n(locale);
+    expect(i18n.locale).toBe(normalized);
+    expect(i18n.t("undo")).toBe(undo);
+    expect(i18n.t("style")).toBe(style);
+    expect(i18n.t("selectAsset")).toBe(selectAsset);
+    if (normalized !== "zh-CN") {
+      for (const key of ["confirmDeleteTitle", "selectProductsFailed", "collapseRight", "validationRequired", "readonly"] as const) {
+        expect(i18n.t(key)).not.toMatch(/\p{Script=Han}/u);
+      }
     }
   });
 
-  it("uses Spanish chrome copy for es locales, and leaves other admin copy in Chinese", () => {
-    const i18n = createAdminI18n("es-ES");
-    expect(i18n.locale).toBe("es");
-    expect(i18n.t("blocks")).toBe("Bloques");
-    expect(i18n.t("desktop")).toBe("Escritorio");
-    expect(i18n.t("tablet")).toBe("Tablet");
-    expect(i18n.t("mobile")).toBe("Móvil");
-    expect(i18n.t("preview")).toBe("Vista previa");
-    expect(i18n.t("publish")).toBe("Publicar");
-    expect(i18n.t("publishing")).toBe("Publicando…");
-    expect(i18n.t("undo")).toBe("撤销");
+  it.each([undefined, "", "de-DE"])("falls back to English for %s", (locale) => {
+    expect(createAdminI18n(locale).t("publish")).toBe("Publish");
+    expect(createAdminI18n(locale).locale).toBe("en");
   });
 
-  it("uses French chrome copy for fr locales, and leaves other admin copy in Chinese", () => {
-    const i18n = createAdminI18n("fr-FR");
-    expect(i18n.locale).toBe("fr");
-    expect(i18n.t("blocks")).toBe("Blocs");
-    expect(i18n.t("desktop")).toBe("Ordinateur");
-    expect(i18n.t("tablet")).toBe("Tablette");
-    expect(i18n.t("mobile")).toBe("Mobile");
-    expect(i18n.t("preview")).toBe("Aperçu");
-    expect(i18n.t("publish")).toBe("Publier");
-    expect(i18n.t("publishing")).toBe("Publication…");
-    expect(i18n.t("undo")).toBe("撤销");
+  it("interpolates values as literal text", () => {
+    expect(createAdminI18n("fr").t("limit", { max: 52 })).toBe("Limite 52");
+    expect(createAdminI18n("en").t("releaseToAdd", { label: "$& {name}" })).toBe("Release to add $& {name}");
+  });
+
+  it("localizes portable field validation only when requested by the UI", () => {
+    const field = { field: "text", control: "text" as const, validation: { maxLength: 3 } };
+    expect(validateFieldValue(field, "12345", createAdminI18n("fr").t)[0].message).toBe("Un maximum de 3 caractères est autorisé.");
+    expect(validateFieldValue(field, "12345")[0].message).toBe("最多允许 3 个字符。");
   });
 });

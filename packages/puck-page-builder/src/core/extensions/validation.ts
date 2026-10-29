@@ -20,25 +20,28 @@ function isSafeUrl(value: string, config: FieldConfig) {
   }
 }
 
+type FieldValidationMessageKey = "validationProducts" | "validationProductId" | "validationString" | "validationRequired" | "validationSingleLine" | "validationMinLength" | "validationMaxLength" | "validationUrl" | "validationColor";
+type FieldValidationTranslator = (key: FieldValidationMessageKey, values?: Readonly<Record<string, string | number>>) => string;
+
 /** Validates the portable built-in controls without relying on browser-only APIs. */
-export function validateFieldValue(config: FieldConfig, value: unknown): ValidationIssue[] {
+export function validateFieldValue(config: FieldConfig, value: unknown, translate?: FieldValidationTranslator): ValidationIssue[] {
   const control = config.control;
   if (!control && !config.required && !config.validation) return [];
   // Optional fields added after a document was created are absent rather than
   // malformed. Their renderer-level fallback keeps historical documents valid.
   if (value === undefined && !config.required) return [];
   if (control === "products") {
-    if (!Array.isArray(value)) return [{ path: "", message: "必须是商品列表。" }];
-    return value.flatMap((item, index) => isProductReference(item) ? [] : [{ path: String(index), message: "必须包含稳定的商品 ID。" }]);
+    if (!Array.isArray(value)) return [{ path: "", message: translate?.("validationProducts") ?? "必须是商品列表。" }];
+    return value.flatMap((item, index) => isProductReference(item) ? [] : [{ path: String(index), message: translate?.("validationProductId") ?? "必须包含稳定的商品 ID。" }]);
   }
-  if (typeof value !== "string") return [{ path: "", message: "必须是字符串。" }];
+  if (typeof value !== "string") return [{ path: "", message: translate?.("validationString") ?? "必须是字符串。" }];
   const issues: ValidationIssue[] = [];
-  if (config.required && value.trim().length === 0) issues.push({ path: "", message: "此字段为必填项。" });
-  if (control === "text" && /[\r\n]/.test(value)) issues.push({ path: "", message: "必须为单行文本。" });
-  if (config.validation?.minLength !== undefined && stringLength(value) < config.validation.minLength) issues.push({ path: "", message: `至少需要 ${config.validation.minLength} 个字符。` });
-  if (config.validation?.maxLength !== undefined && stringLength(value) > config.validation.maxLength) issues.push({ path: "", message: `最多允许 ${config.validation.maxLength} 个字符。` });
-  if (value && (control === "url" || control === "asset") && !isSafeUrl(value, config)) issues.push({ path: "", message: "必须是站内相对路径或允许的 HTTP(S) URL。" });
-  if (value && control === "color" && !hexColor.test(value)) issues.push({ path: "", message: "必须是十六进制颜色，例如 #005BD3。" });
+  if (config.required && value.trim().length === 0) issues.push({ path: "", message: translate?.("validationRequired") ?? "此字段为必填项。" });
+  if (control === "text" && /[\r\n]/.test(value)) issues.push({ path: "", message: translate?.("validationSingleLine") ?? "必须为单行文本。" });
+  if (config.validation?.minLength !== undefined && stringLength(value) < config.validation.minLength) issues.push({ path: "", message: translate?.("validationMinLength", { min: config.validation.minLength }) ?? `至少需要 ${config.validation.minLength} 个字符。` });
+  if (config.validation?.maxLength !== undefined && stringLength(value) > config.validation.maxLength) issues.push({ path: "", message: translate?.("validationMaxLength", { max: config.validation.maxLength }) ?? `最多允许 ${config.validation.maxLength} 个字符。` });
+  if (value && (control === "url" || control === "asset") && !isSafeUrl(value, config)) issues.push({ path: "", message: translate?.("validationUrl") ?? "必须是站内相对路径或允许的 HTTP(S) URL。" });
+  if (value && control === "color" && !hexColor.test(value)) issues.push({ path: "", message: translate?.("validationColor") ?? "必须是十六进制颜色，例如 #005BD3。" });
   return issues;
 }
 

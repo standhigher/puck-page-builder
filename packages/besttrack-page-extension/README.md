@@ -8,6 +8,32 @@ query/structure blocks now use the core `BlockDefinition.policy` contract
 (`required`, `singleton`, and `allowDelete: false`), which the editor enforces.
 Recommendation blocks stay singleton and can be deleted.
 
+## Editor interface language
+
+Editor copy is owned by the package's dependency-free `/admin` entry. Supply the
+same `adminLocale` used by `PageDocumentEditorShell`; the package supports English,
+Simplified Chinese, Spanish, European Portuguese, and French. Regional language
+tags such as `pt-PT` are normalized, and unknown or omitted languages use English.
+
+```ts
+import {
+  createBestTrackAdminI18n,
+  getReadyToGoEditorCopy,
+  getRecommendationEditorCopy,
+} from "@standhigher/besttrack-page-extension/admin";
+
+const { t } = createBestTrackAdminI18n(adminLocale);
+const { blockLabels, fieldLabels } = getReadyToGoEditorCopy(adminLocale);
+const pickerCopy = getRecommendationEditorCopy(adminLocale);
+const limit = t("editor.fields.style.limit", { max: 100 });
+```
+
+Use `blockLabels` and `fieldLabels` for editor registry metadata. Host-rendered
+branding, preview, upload, and product picker UI can use the typed `t` function
+or picker copy. Hosts retain their fetching, persistence, and selection adapters.
+Changing the interface language never changes `defaultProps`, a merchant's
+content, canvas text, or `PageDocument.settings.locale`.
+
 ## Query provider
 
 Branded and Sales still receive a host-owned `TrackingPageQuery` through `query`.

@@ -67,7 +67,7 @@ const formCardStyle: CSSProperties = {
   flexDirection: "column",
   width: "min(560px, 100%)",
   maxWidth: 560,
-  borderRadius: "var(--pb-radius, 8px)",
+  borderRadius: 16,
   background: "var(--pb-color-surface, #fff)",
   color: "var(--pb-color-text, #0f172a)",
   padding: "clamp(20px, 7%, 40px)",
@@ -367,16 +367,20 @@ export function ReadyToGoRecommendationsEditor(block: ReadyToGoEditorProps) {
 }
 
 
+function scrollToCurrentTrackingResult(isCurrent: () => boolean) {
+  scrollToTrackingResult(undefined, undefined, isCurrent);
+}
+
 export function ReadyToGoQueryBlock(props: Record<string, unknown>) {
   const runtime = useReadyToGoRuntime();
   // 三套模板共用输入保留、trim 后非空校验、URL 同步和历史回填规则。
-  // Ready-to-go 仅指定查询完成后的页面滚动目标，表单布局和配色仍留在本组件。
+  // Ready-to-go 仅指定有效查询结束后的页面滚动目标，表单布局和配色仍留在本组件。
   const { mode, setMode, trackingNumber, setTrackingNumber, orderNumber, setOrderNumber, email, setEmail, localError, loading, submit } = useTrackingQueryForm({
     // 配置项仅作为 placeholder；实际查询值只来自用户输入、已启用的 URL 深链或历史回填。
     initialTrackingNumber: "",
     initialOrderNumber: "",
     initialMode: text(props, "defaultQueryMode", "tracking") === "order" ? "order" : "tracking",
-    onComplete: scrollToTrackingResult
+    onComplete: scrollToCurrentTrackingResult
   });
   const submitLabel = text(props, "submitLabel", "Track Your Order");
   const trackingTabLabel = text(props, "trackingTabLabel", "Tracking Number");

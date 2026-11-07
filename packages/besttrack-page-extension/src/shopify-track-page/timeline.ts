@@ -721,19 +721,26 @@ const TRACKING_RESULT_SCROLL_GAP = 8
  * can override this through `--bt-tracking-scroll-offset`.
  */
 const TRACKING_RESULT_DEFAULT_SCROLL_OFFSET = 64
+const TRACKING_HEADER_SELECTOR = "header, nav, [role='banner'], [role='navigation']"
+const TRACKING_THEME_HEADER_SELECTOR = "sticky-header, .shopify-section-header-sticky, [data-sticky-header], [class*='header-sticky'], [class*='sticky-header']"
 
 function scrollingParent(node: HTMLElement): HTMLElement | null {
   let parent = node.parentElement
-  while (parent && parent !== document.body && parent !== document.documentElement) {
+  while (parent && parent !== document.documentElement) {
     const overflowY = getComputedStyle(parent).overflowY
-    if (overflowY === "auto" || overflowY === "scroll" || overflowY === "overlay") return parent
+    // The document scroller is handled by window.scrollTo. Body can also be
+    // a separate scroll container in fixed-height storefront themes.
+    if (parent !== document.scrollingElement &&
+      (overflowY === "auto" || overflowY === "scroll" || overflowY === "overlay") &&
+      parent.scrollHeight > parent.clientHeight) return parent
     parent = parent.parentElement
   }
   return null
 }
 
 function isTopPinned(style: CSSStyleDeclaration, rect: DOMRect, portTop: number, themeHeader = false) {
-  if (style.display === "none" || style.visibility === "hidden") return false
+  if (style.display === "none" || style.visibility === "hidden" || Number.parseFloat(style.opacity) === 0) return false
+  if (style.position === "fixed" && rect.bottom <= portTop) return false
   if (themeHeader) return rect.bottom > portTop && rect.top <= portTop + 1
   if (style.position !== "sticky" && style.position !== "fixed") return false
   const top = Number.parseFloat(style.top)
@@ -748,25 +755,30 @@ function isTopPinned(style: CSSStyleDeclaration, rect: DOMRect, portTop: number,
  * How far the result must sit below sticky or fixed bars.
  * Overlapping bars (several `top: 0` headers) use the lower edge, not a sum.
  */
-export function trackingResultScrollOffset(node: HTMLElement): number {
+export function trackingResultScrollOffset(node: HTMLElement, scrollPortOverride?: HTMLElement | null): number {
   if (typeof window === "undefined" || typeof document === "undefined") return 0
-  const scrollPort = scrollingParent(node)
+  const scrollPort = scrollPortOverride === undefined ? scrollingParent(node) : scrollPortOverride
   const portRect = scrollPort?.getBoundingClientRect()
   const portTop = portRect?.top ?? 0
   const portLeft = portRect?.left ?? 0
   const portRight = portRect?.right ?? window.innerWidth
+  const portHeight = portRect?.height ?? window.innerHeight
   const targetRect = node.getBoundingClientRect()
   let covered = 0
   const seen = new Set<Element>()
 
   const consider = (el: Element, themeHeader = false) => {
-    if (!(el instanceof HTMLElement) || seen.has(el) || el === node || node.contains(el)) return
+    if (!(el instanceof HTMLElement) || seen.has(el) || el === node || node.contains(el) || el.contains(node)) return
     const style = getComputedStyle(el)
     const rect = el.getBoundingClientRect()
     if (!isTopPinned(style, rect, portTop, themeHeader)) return
     seen.add(el)
     if (!themeHeader && style.position !== "fixed" && scrollingParent(el) !== scrollPort) return
     if (rect.width <= 0 || rect.height <= 0) return
+    // Full-height canvases, drawer backdrops and page wrappers are not top
+    // bars. Counting them would reserve the entire viewport and clamp the
+    // result's scroll destination to the top of the page.
+    if (portHeight > 0 && rect.height >= portHeight) return
     const overlapLeft = Math.max(rect.left, portLeft, targetRect.left)
     const overlapRight = Math.min(rect.right, portRight, Math.max(targetRect.right, targetRect.left))
     if (overlapRight - overlapLeft <= 8) return
@@ -778,18 +790,17 @@ export function trackingResultScrollOffset(node: HTMLElement): number {
     covered = Math.max(covered, pinTop + rect.height)
   }
 
-  if (typeof document.elementsFromPoint === "function") {
-    const x = targetRect.width > 0
-      ? Math.min(Math.max(targetRect.left + targetRect.width / 2, portLeft), portRight)
-      : portLeft + (portRight - portLeft) / 2
-    document.elementsFromPoint(x, portTop + 1).forEach((el) => consider(el))
-  }
-  // Shopify themes commonly put the sticky behavior on a custom element or a
-  // wrapper around the semantic header. Check common theme markers first, then
-  // fall back to all elements when no bar was found.
-  document.querySelectorAll("header, nav, [role='banner'], [role='navigation']").forEach((el) => consider(el))
-  document.querySelectorAll("sticky-header, .shopify-section-header-sticky, [data-sticky-header], [class*='header-sticky'], [class*='sticky-header']").forEach((el) => consider(el, true))
-  if (covered === 0) document.querySelectorAll("*").forEach((el) => consider(el))
+  // Only known headers and their wrappers can reserve navigation space.
+  // Arbitrary fixed elements from cart, popup or animation apps must not
+  // influence the destination, including transparent full-screen canvases.
+  document.querySelectorAll(`${TRACKING_HEADER_SELECTOR}, ${TRACKING_THEME_HEADER_SELECTOR}`).forEach((el) => {
+    consider(el, el.matches(TRACKING_THEME_HEADER_SELECTOR))
+    let parent = el.parentElement
+    while (parent && parent !== document.body && parent !== document.documentElement) {
+      consider(parent, parent.matches(TRACKING_THEME_HEADER_SELECTOR))
+      parent = parent.parentElement
+    }
+  })
 
   const rootStyle = getComputedStyle(document.documentElement)
   const bodyStyle = getComputedStyle(document.body)
@@ -798,27 +809,50 @@ export function trackingResultScrollOffset(node: HTMLElement): number {
     rootStyle.getPropertyValue("--bt-tracking-scroll-offset") || bodyStyle.getPropertyValue("--bt-tracking-scroll-offset") || nodeStyle.getPropertyValue("--bt-tracking-scroll-offset")
   )
   const minimum = Number.isFinite(configured) ? Math.max(0, configured) : TRACKING_RESULT_DEFAULT_SCROLL_OFFSET
-  return Math.max(minimum, covered > 0 ? Math.ceil(covered + TRACKING_RESULT_SCROLL_GAP) : 0)
+  // Even an expanded menu or a bad host override must leave room for the
+  // result. Reserve at most one third of the visible scroll port.
+  const maximum = portHeight > 0 ? portHeight / 3 : TRACKING_RESULT_DEFAULT_SCROLL_OFFSET
+  return Math.min(maximum, Math.max(minimum, covered > 0 ? Math.ceil(covered + TRACKING_RESULT_SCROLL_GAP) : 0))
 }
 
 /**
  * Smooth-scroll to the tracking result after a query, matching Home.tsx:
  * wait a frame, then retry until the result region is mounted.
- * `scroll-margin-top` keeps the tracking number below sticky or fixed bars.
+ * Explicit coordinates keep theme scroll-margin/scroll-padding rules from
+ * changing the destination. Only the result and bounded header offset count.
  */
 export function scrollToTrackingResult(
   root: ParentNode | Document | null = typeof document === "undefined" ? null : document,
   schedule: (callback: () => void) => void = typeof requestAnimationFrame === "function"
     ? (callback) => { requestAnimationFrame(callback); }
     : (callback) => { callback(); },
+  isCurrent: () => boolean = () => true,
 ) {
   const tryScroll = (attempts = 0) => {
+    if (!isCurrent()) return
     const node = root?.querySelector<HTMLElement>(TRACKING_RESULT_SELECTOR)
     if (node) {
-      if (typeof node.scrollIntoView === "function") {
-        const offset = trackingResultScrollOffset(node)
-        node.style.scrollMarginTop = offset > 0 ? `${offset}px` : ""
-        node.scrollIntoView({ behavior: "smooth", block: "start" })
+      let resultTop = node.getBoundingClientRect().top
+      let scrollPort = scrollingParent(node)
+      const hasInnerScrollPort = scrollPort !== null
+      // Project each inner scroll's clamped movement into the next ancestor's
+      // coordinates; smooth scrolls have not moved yet during this frame.
+      while (scrollPort) {
+        const offset = trackingResultScrollOffset(node, scrollPort)
+        const currentTop = scrollPort.scrollTop
+        const desiredTop = currentTop + resultTop - scrollPort.getBoundingClientRect().top - scrollPort.clientTop - offset
+        const top = Math.max(0, Math.min(desiredTop, scrollPort.scrollHeight - scrollPort.clientHeight))
+        if (typeof scrollPort.scrollTo === "function") scrollPort.scrollTo({ top, behavior: "smooth" })
+        else scrollPort.scrollTop = top
+        resultTop -= top - currentTop
+        scrollPort = scrollingParent(scrollPort)
+      }
+      const documentScroller = document.scrollingElement ?? document.documentElement
+      if (!hasInnerScrollPort || documentScroller.scrollHeight > documentScroller.clientHeight) {
+        const offset = trackingResultScrollOffset(node, null)
+        const top = Math.max(0, window.scrollY + resultTop - offset)
+        if (typeof window.scrollTo === "function") window.scrollTo({ top, behavior: "smooth" })
+        else documentScroller.scrollTop = top
       }
       return
     }

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { readTrackingQueryLocationState, syncTrackingQueryToUrl } from "./shopify-track-query";
-import type { TrackingPageQueryRequest, TrackingPageRuntimePhase } from "./tracking-page-runtime";
-import { useTrackingRuntime } from "./tracking-runtime";
+import type { TrackingPageRuntimePhase } from "./tracking-page-runtime";
+import { useTrackingRuntime, type TrackingRuntime } from "./tracking-runtime";
 
 type QueryMode = "tracking" | "order";
 type FieldName = "tracking" | "order" | "email";
@@ -12,8 +12,8 @@ export function useTrackingQueryForm({ initialTrackingNumber, initialOrderNumber
   initialTrackingNumber: string;
   initialOrderNumber?: string;
   initialMode?: QueryMode;
-  onComplete?: () => void;
-  onQuery?: (request: TrackingPageQueryRequest) => Promise<void>;
+  onComplete?: (isCurrent: () => boolean) => void;
+  onQuery?: TrackingRuntime["query"];
   phase?: TrackingPageRuntimePhase;
 }) {
   const runtime = useTrackingRuntime();
@@ -55,8 +55,7 @@ export function useTrackingQueryForm({ initialTrackingNumber, initialOrderNumber
       autoQueryStarted.current = true;
       void query(locationState.tab === "tracking"
         ? { mode: "tracking", trackingNumber: locationState.trackingNumber }
-        : { mode: "order", orderNumber: locationState.orderNumber, email: locationState.email })
-        .finally(onComplete);
+        : { mode: "order", orderNumber: locationState.orderNumber, email: locationState.email }, onComplete);
       return;
     }
     // 自动预览只查内部演示号，不使用配置文案或当前输入，也不把演示号写回输入框。
@@ -79,7 +78,7 @@ export function useTrackingQueryForm({ initialTrackingNumber, initialOrderNumber
     setLocalError("");
     setFirstInvalidField(undefined);
     // 基础交互只做 trim + 非空校验，不附加旧模板的编号/邮箱正则；服务端仍需自行校验与授权。
-    // firstInvalidField 让不同模板可把焦点移到对应输入，onComplete 则在查询结算后处理结果滚动。
+    // firstInvalidField 让不同模板可把焦点移到对应输入，onComplete 则在有效查询结束后处理结果滚动。
     if (mode === "order") {
       if (!orderNumber.trim() || !email.trim()) {
         setLocalError("Please enter your order number and email address");
@@ -88,7 +87,7 @@ export function useTrackingQueryForm({ initialTrackingNumber, initialOrderNumber
       }
       // 提交时同步 URL，历史恢复走 Runtime 缓存，不经过此处也不会再请求接口。
       syncTrackingQueryToUrl("order", orderNumber.trim(), email.trim());
-      void query({ mode: "order", orderNumber: orderNumber.trim(), email: email.trim() }).finally(onComplete);
+      void query({ mode: "order", orderNumber: orderNumber.trim(), email: email.trim() }, onComplete);
       return;
     }
     if (!trackingNumber.trim()) {
@@ -97,7 +96,7 @@ export function useTrackingQueryForm({ initialTrackingNumber, initialOrderNumber
       return;
     }
     syncTrackingQueryToUrl("tracking", trackingNumber.trim());
-    void query({ mode: "tracking", trackingNumber: trackingNumber.trim() }).finally(onComplete);
+    void query({ mode: "tracking", trackingNumber: trackingNumber.trim() }, onComplete);
   };
 
   return { mode, setMode, trackingNumber, setTrackingNumber, orderNumber, setOrderNumber, email, setEmail, localError, firstInvalidField, loading, submit };

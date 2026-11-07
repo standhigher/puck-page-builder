@@ -52,7 +52,7 @@ describe("TrackingQueryCard", () => {
     const { rerender } = render(<TrackingQueryCard {...sharedProps} onQuery={onQuery} phase="idle" />);
 
     fireEvent.click(screen.getByRole("button", { name: "Track" }));
-    expect(onQuery).toHaveBeenCalledWith({ mode: "tracking", trackingNumber: "BT-2048-DEMO" });
+    expect(onQuery).toHaveBeenCalledWith({ mode: "tracking", trackingNumber: "BT-2048-DEMO" }, undefined);
 
     rerender(<TrackingQueryCard {...sharedProps} onQuery={onQuery} phase="success" result={<p>Delivered</p>} />);
     expect(scrollTo).toHaveBeenCalledWith(expect.objectContaining({ behavior: "smooth" }));

@@ -313,10 +313,9 @@ describe("Shopify Track Page query helpers", () => {
   });
 
   it("scrolls to the tracking result after the result region mounts", () => {
-    const scrollIntoView = vi.fn();
+    const scrollTo = vi.spyOn(window, "scrollTo").mockImplementation(() => undefined);
     const target = document.createElement("section");
     target.setAttribute("data-tracking-result", "");
-    target.scrollIntoView = scrollIntoView;
     let present = false;
     const root = { querySelector: () => (present ? target : null) } as unknown as ParentNode;
     let frames = 0;
@@ -326,7 +325,24 @@ describe("Shopify Track Page query helpers", () => {
       callback();
     });
     expect(frames).toBe(3);
-    expect(scrollIntoView).toHaveBeenCalledWith({ behavior: "smooth", block: "start" });
+    expect(scrollTo).toHaveBeenCalledWith({ behavior: "smooth", top: 0 });
+    scrollTo.mockRestore();
+  });
+
+  it("skips a queued scroll when its query is no longer current", () => {
+    const target = document.createElement("section");
+    target.setAttribute("data-tracking-result", "");
+    document.body.append(target);
+    const callbacks: Array<() => void> = [];
+    const scrollTo = vi.spyOn(window, "scrollTo").mockImplementation(() => undefined);
+
+    let current = true;
+    scrollToTrackingResult(document, (callback) => callbacks.push(callback), () => current);
+    current = false;
+    callbacks[0]?.();
+    expect(scrollTo).not.toHaveBeenCalled();
+    target.remove();
+    scrollTo.mockRestore();
   });
 
   it("leaves the tracking number below overlapping sticky bars", () => {
@@ -350,11 +366,10 @@ describe("Shopify Track Page query helpers", () => {
     later.getBoundingClientRect = () => box(900, 40);
     document.body.append(nav, preview, target, later);
     expect(trackingResultScrollOffset(target)).toBe(64);
-    const scrollIntoView = vi.fn();
-    target.scrollIntoView = scrollIntoView;
+    const scrollTo = vi.spyOn(window, "scrollTo").mockImplementation(() => undefined);
     scrollToTrackingResult(document, (callback) => callback());
-    expect(target.style.scrollMarginTop).toBe("64px");
-    expect(scrollIntoView).toHaveBeenCalledWith({ behavior: "smooth", block: "start" });
+    expect(scrollTo).toHaveBeenCalledWith({ behavior: "smooth", top: 336 });
+    scrollTo.mockRestore();
     nav.remove();
     preview.remove();
     target.remove();

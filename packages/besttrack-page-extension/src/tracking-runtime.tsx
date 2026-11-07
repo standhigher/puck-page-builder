@@ -15,7 +15,8 @@ export type TrackingRecentQuery = {
 /** empty 由结果显式标记；error 表示查询回调抛错，不能仅凭缺少物流节点判断未找到。 */
 export type TrackingRuntimeState = { phase: "idle" | "loading" | "success" | "empty" | "error"; result?: TrackingPageQueryResult; error?: string };
 export type TrackingRuntime = TrackingRuntimeState & {
-  query(request: TrackingPageQueryRequest): Promise<void>;
+  /** 当前有效查询结束后触发，包括成功、未找到和失败；已失效请求不触发。 */
+  query(request: TrackingPageQueryRequest, onComplete?: (isCurrent: () => boolean) => void): Promise<void>;
   reset(): void;
   resourceResolution?: ShopifyResourceResolution;
   recentQueries: TrackingRecentQuery[];
@@ -183,7 +184,7 @@ export function TrackingRuntimeProvider({ children, query: injectedQuery, queryR
     return () => { active = false; };
   }, [resolvedRecommendations]);
 
-  const query = useCallback(async (request: TrackingPageQueryRequest) => {
+  const query = useCallback(async (request: TrackingPageQueryRequest, onComplete?: (isCurrent: () => boolean) => void) => {
     const currentRequestId = ++requestId.current;
     // loading 不携带上一笔结果，展示层据此隐藏旧进度/配送；历史缓存和独立推荐继续保留。
     setState({ phase: "loading" });
@@ -193,20 +194,22 @@ export function TrackingRuntimeProvider({ children, query: injectedQuery, queryR
       if (isEmptyTrackingPageResult(result)) {
         // 未找到仅更新本次展示状态，不加入最近查询，也不丢弃已有成功查询缓存。
         setState({ phase: "empty", result });
-        return;
+      } else {
+        const recent = recentQueryFromRequest(request, result);
+        if (recent) {
+          setRecentQueries((previous) => mergeRecentQueries(previous, recent));
+          setSelectedRecentIndex(0);
+          setSelectedShipmentIndex(0);
+        }
+        // 每笔成功结果默认展示首个包裹；是否有第二层切换入口由实际 shipments 数量决定。
+        setState({ phase: "success", result: resultWithShipment(result, 0) });
       }
-      const recent = recentQueryFromRequest(request, result);
-      if (recent) {
-        setRecentQueries((previous) => mergeRecentQueries(previous, recent));
-        setSelectedRecentIndex(0);
-        setSelectedShipmentIndex(0);
-      }
-      // 每笔成功结果默认展示首个包裹；是否有第二层切换入口由实际 shipments 数量决定。
-      setState({ phase: "success", result: resultWithShipment(result, 0) });
     } catch {
       if (currentRequestId !== requestId.current) return;
       setState({ phase: "error", error: "We couldn’t retrieve this order right now. Please try again later." });
     }
+    // 展示层的滚动等副作用不属于请求失败，不能让回调异常覆盖查询状态。
+    onComplete?.(() => currentRequestId === requestId.current);
   }, [live, resolvedQuery]);
   const selectRecentQuery = useCallback((index: number) => {
     const item = recentQueries[index];

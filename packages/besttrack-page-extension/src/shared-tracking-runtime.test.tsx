@@ -289,13 +289,15 @@ describe("shared TrackingRuntimeProvider", () => {
     const { result } = renderHook(useTrackingRuntime, { wrapper: ({ children }) => <TrackingRuntimeProvider query={query}>{children}</TrackingRuntimeProvider> });
     await act(async () => { await result.current.query({ mode: "tracking", trackingNumber: "AAA" }); });
     await act(async () => { await result.current.query({ mode: "tracking", trackingNumber: "BBB" }); });
+    const onStaleComplete = vi.fn();
     let pendingQuery!: Promise<void>;
-    act(() => { pendingQuery = result.current.query({ mode: "tracking", trackingNumber: "CCC" }); });
+    act(() => { pendingQuery = result.current.query({ mode: "tracking", trackingNumber: "CCC" }, onStaleComplete); });
     act(() => { result.current.selectRecentQuery(1); });
     await act(async () => { pending.resolve(resultFor("CCC")); await pendingQuery; });
     expect(result.current.result?.trackingNumber).toBe("AAA");
     expect(result.current.phase).toBe("success");
     expect(result.current.recentQueries.map((entry) => entry.value)).toEqual(["BBB", "AAA"]);
+    expect(onStaleComplete).not.toHaveBeenCalled();
   });
 
   it("ignores out-of-order requests and keeps failures out of recent history", async () => {
@@ -303,16 +305,31 @@ describe("shared TrackingRuntimeProvider", () => {
     const pending = deferred<TrackingPageQueryResult>();
     const query = vi.fn<TrackingPageQuery>().mockImplementationOnce(() => pending.promise).mockResolvedValueOnce(resultFor("BBB")).mockResolvedValueOnce({ outcome: "empty", trackingNumber: "", status: "" }).mockRejectedValueOnce(new Error("upstream"));
     const { result } = renderHook(useTrackingRuntime, { wrapper: ({ children }) => <TrackingRuntimeProvider query={query}>{children}</TrackingRuntimeProvider> });
+    const onComplete = vi.fn();
     let pendingQuery!: Promise<void>;
-    act(() => { pendingQuery = result.current.query({ mode: "tracking", trackingNumber: "AAA" }); });
-    await act(async () => { await result.current.query({ mode: "tracking", trackingNumber: "BBB" }); });
+    act(() => { pendingQuery = result.current.query({ mode: "tracking", trackingNumber: "AAA" }, onComplete); });
+    await act(async () => { await result.current.query({ mode: "tracking", trackingNumber: "BBB" }, onComplete); });
+    expect(onComplete).toHaveBeenCalledOnce();
     await act(async () => { pending.resolve(resultFor("AAA")); await pendingQuery; });
     expect(result.current.result?.trackingNumber).toBe("BBB");
-    await act(async () => { await result.current.query({ mode: "tracking", trackingNumber: "MISSING" }); });
+    await act(async () => { await result.current.query({ mode: "tracking", trackingNumber: "MISSING" }, onComplete); });
     expect(result.current.phase).toBe("empty");
-    await act(async () => { await result.current.query({ mode: "tracking", trackingNumber: "ERROR" }); });
+    await act(async () => { await result.current.query({ mode: "tracking", trackingNumber: "ERROR" }, onComplete); });
     expect(result.current.phase).toBe("error");
     expect(result.current.recentQueries.map((entry) => entry.value)).toEqual(["BBB"]);
+    expect(onComplete).toHaveBeenCalledTimes(3);
+  });
+
+  it("does not turn a completion callback failure into a failed query", async () => {
+    const query = vi.fn<TrackingPageQuery>().mockResolvedValue(resultFor("AAA"));
+    const { result } = renderHook(useTrackingRuntime, { wrapper: ({ children }) => <TrackingRuntimeProvider query={query}>{children}</TrackingRuntimeProvider> });
+    const callbackError = new Error("scroll callback failed");
+    await act(async () => {
+      await expect(result.current.query({ mode: "tracking", trackingNumber: "AAA" }, () => { throw callbackError; })).rejects.toBe(callbackError);
+    });
+    expect(result.current.phase).toBe("success");
+    expect(result.current.result?.trackingNumber).toBe("AAA");
+    expect(result.current.error).toBeUndefined();
   });
 
   it("separates order histories when the buyer email changes", async () => {

@@ -1,5 +1,6 @@
 "use client";
 
+import { useMemo, useRef } from "react";
 import { TrackingRuntimeProvider, type TrackingPageRecommendationsQuery, type TrackingPageQuery, type TrackingPageQueryResult } from "@standhigher/besttrack-page-extension";
 import { WebRenderer, type PageDocument } from "@standhigher/puck-page-builder/runtime";
 import { pageStudioRegistry } from "../lib/registry";
@@ -39,7 +40,7 @@ function demoShipments(request: Parameters<TrackingPageQuery>[0], trackingNumber
   return [{ id: `demo-shipment-${trackingNumber}`, label: trackingNumber, trackingNumber, status: lookup.status, carrier: lookup.carrier, latestEvent: lookup.latestEvent }];
 }
 
-const mockQuery: TrackingPageQuery = async (request) => {
+function demoResult(request: Parameters<TrackingPageQuery>[0]): TrackingPageQueryResult {
   // 同一演示入口支持两种请求形状；订单号在此用作模拟结果键，实际包裹编号由 demoShipments 构造。
   const trackingNumber = request.mode === "tracking" ? request.trackingNumber : request.orderNumber;
   // 未列入演示号码表的输入也返回演示结果，方便手动验证历史去重和第四条挤出最旧记录。
@@ -57,12 +58,22 @@ const mockQuery: TrackingPageQuery = async (request) => {
     updatedAt: "Sep 17, 10:00 AM",
     destination: "Shanghai",
     estimatedDelivery: "Sep 22 - Sep 24",
+    events: [
+      { id: `${trackingNumber}-event-1`, title: lookup.latestEvent, at: "Sep 17, 10:00 AM", state: "current" },
+      { id: `${trackingNumber}-event-2`, title: "Departed from the origin facility", at: "Sep 16, 8:40 PM", state: "complete" },
+      { id: `${trackingNumber}-event-3`, title: "Shipment accepted at the regional hub", at: "Sep 16, 2:10 PM", state: "complete" },
+      { id: `${trackingNumber}-event-4`, title: "The order has been placed and confirmed.", at: "Sep 15, 11:05 AM", state: "complete" }
+    ],
     shipments: demoShipments(request, trackingNumber, lookup),
     // 包裹没有单独提供商品或广告时，公共 Runtime 沿用本次结果级内容，便于检查区块联动。
     orderItems: [{ id: "demo-item", title: `Item for ${trackingNumber}`, quantity: 1, description: "Preview-only product information." }],
     ad: studioAdExample
   };
-};
+}
+
+function lookupKey(request: Parameters<TrackingPageQuery>[0]) {
+  return request.mode === "tracking" ? `t:${request.trackingNumber}` : `o:${request.orderNumber}:${request.email}`;
+}
 
 // 推荐由独立回调加载，预览页无需先查单即可展示；查单和包裹切换不重新加载推荐。
 const mockRecommendationsQuery: TrackingPageRecommendationsQuery = async () => [{ id: "demo-recommendation", title: "Delivery alerts", description: "Receive an update at every milestone.", price: { amount: 400, currencyCode: "USD" } }];
@@ -74,14 +85,31 @@ const mockRecommendationsQuery: TrackingPageRecommendationsQuery = async () => [
  */
 const hangingQuery: TrackingPageQuery = () => new Promise(() => undefined);
 
-export function StudioDocument({ document, previewAutoQuery = false, holdLoading = false }: { document: PageDocument; previewAutoQuery?: boolean; holdLoading?: boolean }) {
+export function StudioDocument({ document, previewAutoQuery = false, holdLoading = false }: {
+  document: PageDocument;
+  previewAutoQuery?: boolean;
+  holdLoading?: boolean;
+}) {
+  const lastLookupKey = useRef("");
+  const query = useMemo<TrackingPageQuery>(() => {
+    if (holdLoading) return hangingQuery;
+    return async (request) => {
+      const key = lookupKey(request);
+      // 同一单号再次查询即语言切换，延迟 1.6s 方便看到 Translating...
+      if (lastLookupKey.current === key) {
+        await new Promise((resolve) => setTimeout(resolve, 1600));
+      }
+      lastLookupKey.current = key;
+      return demoResult(request);
+    };
+  }, [holdLoading]);
   // 按实际区块命名空间判断，因此复制出的自定义模板也能看到操作提示；提示本身不执行查询。
   const showRecentQueryHint = document.blocks.some((block) => ["besttrack.ready-to-go", "besttrack.branded", "besttrack.sales"].some((templateId) => block.type.startsWith(`${templateId}.`)));
   return <>
     {showRecentQueryHint && !holdLoading ? <p style={{ margin: 0, padding: "10px 24px", background: "#f8fafc", color: "#475569", fontSize: 13, lineHeight: 1.5 }}>
       连续查询 {DEMO_QUERY_NUMBERS.join("、")}，结果区会留下最近 3 条，点击可切换。
     </p> : null}
-    <TrackingRuntimeProvider query={holdLoading ? hangingQuery : mockQuery} queryRecommendations={mockRecommendationsQuery} adPreview={studioAdExample} autoQueryDemo={previewAutoQuery || holdLoading}>
+    <TrackingRuntimeProvider query={query} queryRecommendations={mockRecommendationsQuery} adPreview={studioAdExample} autoQueryDemo={previewAutoQuery || holdLoading}>
       <WebRenderer document={document} registry={pageStudioRegistry} />
     </TrackingRuntimeProvider>
   </>;

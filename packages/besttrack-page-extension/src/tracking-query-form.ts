@@ -20,6 +20,8 @@ export function useTrackingQueryForm({ initialTrackingNumber, initialOrderNumber
   // 独立查询卡片可显式传入查询函数/阶段；放在页面 Provider 下时默认订阅共用状态。
   const query = onQuery ?? runtime.query;
   const loading = (phase ?? runtime.phase) === "loading";
+  // 语言重查也在打 query，提交按钮与 Translate updates 一样要等这次响应回来。
+  const submitDisabled = loading || runtime.localeRefreshing;
   // 深链仅在挂载时读取，且必须由 Runtime 开启；后续编辑输入不会被 URL 再次覆盖。
   const [locationState] = useState(() => runtime.autoQueryFromUrl ? readTrackingQueryLocationState() : undefined);
   const [mode, updateMode] = useState<QueryMode>(locationState?.tab ?? initialMode);
@@ -74,7 +76,7 @@ export function useTrackingQueryForm({ initialTrackingNumber, initialOrderNumber
 
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (loading) return;
+    if (submitDisabled) return;
     setLocalError("");
     setFirstInvalidField(undefined);
     // 基础交互只做 trim + 非空校验，不附加旧模板的编号/邮箱正则；服务端仍需自行校验与授权。
@@ -99,5 +101,5 @@ export function useTrackingQueryForm({ initialTrackingNumber, initialOrderNumber
     void query({ mode: "tracking", trackingNumber: trackingNumber.trim() }, onComplete);
   };
 
-  return { mode, setMode, trackingNumber, setTrackingNumber, orderNumber, setOrderNumber, email, setEmail, localError, firstInvalidField, loading, submit };
+  return { mode, setMode, trackingNumber, setTrackingNumber, orderNumber, setOrderNumber, email, setEmail, localError, firstInvalidField, loading, submitDisabled, submit };
 }

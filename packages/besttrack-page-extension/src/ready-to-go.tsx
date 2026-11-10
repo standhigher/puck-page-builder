@@ -492,7 +492,7 @@ export function ReadyToGoQueryBlock(props: Record<string, unknown>) {
   const runtime = useReadyToGoRuntime();
   // 三套模板共用输入保留、trim 后非空校验、URL 同步和历史回填规则。
   // Ready-to-go 仅指定有效查询结束后的页面滚动目标，表单布局和配色仍留在本组件。
-  const { mode, setMode, trackingNumber, setTrackingNumber, orderNumber, setOrderNumber, email, setEmail, localError, loading, submit } = useTrackingQueryForm({
+  const { mode, setMode, trackingNumber, setTrackingNumber, orderNumber, setOrderNumber, email, setEmail, localError, loading, submitDisabled, submit } = useTrackingQueryForm({
     // 配置项仅作为 placeholder；实际查询值只来自用户输入、已启用的 URL 深链或历史回填。
     initialTrackingNumber: "",
     initialOrderNumber: "",
@@ -519,7 +519,7 @@ export function ReadyToGoQueryBlock(props: Record<string, unknown>) {
           <input id="ready-to-go-tracking-number" aria-label="Tracking number" value={trackingNumber} onChange={(event) => setTrackingNumber(event.target.value)} placeholder={readyToGoTrackingPlaceholder(props) || "Tracking Number"} style={inputStyle} />
         </>}
         {localError ? <p role="alert" style={{ margin: 0, textAlign: "center", fontSize: 12, color: "#f43f5e" }}>{localError}</p> : null}
-        <button type="submit" disabled={loading} style={{ ...submitButtonStyle(props, loading), border: 0, font: "inherit", fontSize: 15, fontWeight: 600, cursor: loading ? "wait" : "pointer", opacity: loading ? 0.7 : 1 }}>{submitLabel}</button>
+        <button type="submit" disabled={submitDisabled} style={{ ...submitButtonStyle(props, submitDisabled), border: 0, font: "inherit", fontSize: 15, fontWeight: 600, cursor: submitDisabled ? "wait" : "pointer", opacity: submitDisabled ? 0.7 : 1 }}>{submitLabel}</button>
         {runtime.phase === "error" ? <p role="alert" style={{ margin: 0, textAlign: "center", fontSize: 12, color: "#f43f5e" }}>{runtime.error}</p> : null}
       </form>
       <RuntimeWatermark watermark={runtime.watermark} />

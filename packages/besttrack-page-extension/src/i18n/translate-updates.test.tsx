@@ -1,8 +1,9 @@
 import { act, fireEvent, render, renderHook, screen, waitFor, within } from "@testing-library/react";
 import "@testing-library/jest-dom/vitest";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { ReadyToGoDeliveryBlock, ReadyToGoDeliveryEditor, ReadyToGoProgressBlock, ReadyToGoProgressEditor, ReadyToGoRuntimeProvider, shouldStackProgressIdentity } from "../ready-to-go";
+import { ReadyToGoDeliveryBlock, ReadyToGoDeliveryEditor, ReadyToGoProgressBlock, ReadyToGoProgressEditor, ReadyToGoQueryBlock, ReadyToGoRuntimeProvider, shouldStackProgressIdentity } from "../ready-to-go";
 import { TrackingLoading } from "../tracking-loading";
+import { TranslatingEventLabel } from "../track-page-display";
 import { LOCALE_STORAGE_KEY, localeOptions } from "./locales";
 import type { ShopifyTrackPagePost } from "../shopify/track-query";
 import { TrackingRuntimeProvider, useTrackingRuntime } from "../tracking-runtime";
@@ -114,6 +115,101 @@ describe("Translate updates menu", () => {
     expect(window.location.search).toContain("lang=ZH-HANS");
   });
 
+  it("greys out the language menu until the locale refresh query returns", async () => {
+    const pending = deferred<TrackingPageQueryResult>();
+    const query = vi.fn<TrackingPageQuery>()
+      .mockResolvedValueOnce(resultFor("AAA"))
+      .mockImplementationOnce(() => pending.promise);
+    render(<ReadyToGoRuntimeProvider query={query}>
+      <ReadyToGoProgressBlock />
+      <QueryThenTranslate />
+    </ReadyToGoRuntimeProvider>);
+
+    fireEvent.click(await screen.findByLabelText("query-ready"));
+    expect(await screen.findByText("Status AAA")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Translate updates" }));
+    fireEvent.click(screen.getByRole("option", { name: "简体中文" }));
+
+    const trigger = screen.getByRole("button", { name: "翻译物流" });
+    expect(trigger).toBeDisabled();
+    expect(screen.queryByRole("listbox")).not.toBeInTheDocument();
+    fireEvent.click(trigger);
+    expect(screen.queryByRole("listbox")).not.toBeInTheDocument();
+
+    await act(async () => { pending.resolve(resultFor("AAA")); });
+    await waitFor(() => expect(screen.getByRole("button", { name: "翻译物流" })).toBeEnabled());
+  });
+
+  it("greys out Track Your Order until the locale refresh query returns", async () => {
+    const pending = deferred<TrackingPageQueryResult>();
+    const query = vi.fn<TrackingPageQuery>()
+      .mockResolvedValueOnce(resultFor("AAA"))
+      .mockImplementationOnce(() => pending.promise);
+    render(<ReadyToGoRuntimeProvider query={query}>
+      <ReadyToGoQueryBlock submitLabel="Track Your Order" />
+      <ReadyToGoProgressBlock />
+      <QueryThenTranslate />
+    </ReadyToGoRuntimeProvider>);
+
+    fireEvent.click(await screen.findByLabelText("query-ready"));
+    expect(await screen.findByText("Status AAA")).toBeInTheDocument();
+    const submit = screen.getByRole("button", { name: "Track Your Order" });
+    expect(submit).toBeEnabled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Translate updates" }));
+    fireEvent.click(screen.getByRole("option", { name: "简体中文" }));
+
+    expect(submit).toBeDisabled();
+    fireEvent.submit(submit.closest("form")!);
+    expect(query).toHaveBeenCalledTimes(2);
+
+    await act(async () => { pending.resolve(resultFor("AAA")); });
+    await waitFor(() => expect(screen.getByRole("button", { name: "Track Your Order" })).toBeEnabled());
+  });
+
+  it("shows Translating... with three sequential dots on shipping events until the locale refresh returns", async () => {
+    const pending = deferred<TrackingPageQueryResult>();
+    const query = vi.fn<TrackingPageQuery>()
+      .mockResolvedValueOnce(resultFor("AAA"))
+      .mockImplementationOnce(() => pending.promise);
+    render(<ReadyToGoRuntimeProvider query={query}>
+      <ReadyToGoProgressBlock />
+      <ReadyToGoDeliveryBlock />
+      <QueryThenTranslate />
+    </ReadyToGoRuntimeProvider>);
+
+    fireEvent.click(await screen.findByLabelText("query-ready"));
+    expect(await screen.findByText("Event AAA")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Translate updates" }));
+    fireEvent.click(screen.getByRole("option", { name: "简体中文" }));
+
+    expect(screen.getByText("翻译中...")).toBeInTheDocument();
+    expect(screen.queryByText("Event AAA")).not.toBeInTheDocument();
+    expect(document.querySelector(".bt-translating")).toHaveStyle({ verticalAlign: "top" });
+    expect(document.querySelectorAll(".bt-translating__dot")).toHaveLength(3);
+    for (const dot of document.querySelectorAll(".bt-translating__dot")) {
+      expect(dot).not.toBeEmptyDOMElement();
+      expect(dot).toHaveStyle({ display: "inline-block", width: "6px", height: "6px", backgroundColor: "rgb(100, 116, 139)" });
+    }
+
+    await act(async () => { pending.resolve(resultFor("AAA")); });
+    await waitFor(() => expect(screen.getByText("Event AAA")).toBeInTheDocument());
+    expect(screen.queryByText("翻译中...")).not.toBeInTheDocument();
+  });
+
+  it("animates translating dots with the Web Animations API so theme CSS cannot cancel them", () => {
+    const cancel = vi.fn();
+    const animate = vi.fn(() => ({ cancel }));
+    const previous = HTMLElement.prototype.animate;
+    HTMLElement.prototype.animate = animate as unknown as typeof HTMLElement.prototype.animate;
+    try {
+      render(<TrackingRuntimeProvider><TranslatingEventLabel /></TrackingRuntimeProvider>);
+      expect(animate).toHaveBeenCalledTimes(3);
+    } finally {
+      HTMLElement.prototype.animate = previous;
+    }
+  });
+
   it("localizes default delivery chrome in the editor canvas", () => {
     render(<TrackingRuntimeProvider>
       <ReadyToGoProgressEditor blockId="progress" selected={false} onPropsChange={() => undefined} />
@@ -177,10 +273,12 @@ describe("TrackingRuntime locale refresh", () => {
 
     act(() => { result.current.setLocale("FR"); });
     expect(result.current.locale).toBe("FR");
+    expect(result.current.localeRefreshing).toBe(true);
     expect(result.current.phase).toBe("success");
     expect(result.current.result?.trackingNumber).toBe("AAA");
 
     await act(async () => { pending.resolve(resultFor("AAA", { events: [{ id: "fr", title: "Colis accepté" }] })); });
+    expect(result.current.localeRefreshing).toBe(false);
     expect(result.current.phase).toBe("success");
     expect(result.current.result?.events?.[0]?.title).toBe("Colis accepté");
     expect(result.current.recentQueries.map((item) => item.value)).toEqual(["BBB", "AAA"]);

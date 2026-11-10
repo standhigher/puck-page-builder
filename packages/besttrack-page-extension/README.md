@@ -58,7 +58,11 @@ phrase.
 It sets Runtime `locale`, persists `bestrack_locale`, and syncs `?lang=`.
 A **successful** lookup is re-queried in place with `lang` on the Shopify
 `transport` path. Idle, empty, and error states are not retried. That
-in-place refresh does not enter loading, so Searching... does not appear.
+in-place refresh does not enter Searching.... Shipping event text becomes
+Translating... with three sequential dots in the same muted color as the label until the request returns.
+Dot size and color are inline; opacity uses the Web Animations API so an
+Online Store theme cannot hide empty spans or cancel the CSS animation. The
+Translate updates and Track Your Order are disabled while that refresh is in flight.
 A new Track Your Order submit does show Searching..., and that string
 follows the current Runtime locale.
 

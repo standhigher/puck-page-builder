@@ -6,6 +6,7 @@ export type StorefrontCopy = {
   translateUpdates: string;
   translateShort: string;
   searching: string;
+  translating: string;
   shippingDetails: string;
   packageContents: string;
   carrier: string;
@@ -41,6 +42,7 @@ const en: StorefrontCopy = {
   translateUpdates: "Translate updates",
   translateShort: "Translate",
   searching: "Searching...",
+  translating: "Translating...",
   shippingDetails: "Shipping Details",
   packageContents: "Package Contents",
   carrier: "Carrier",
@@ -78,6 +80,7 @@ const catalogs: Record<Locale, StorefrontCopy> = {
     translateUpdates: "翻译物流",
     translateShort: "翻译",
     searching: "正在查询...",
+    translating: "翻译中...",
     shippingDetails: "物流详情",
     packageContents: "包裹内容",
     carrier: "承运商",
@@ -112,6 +115,7 @@ const catalogs: Record<Locale, StorefrontCopy> = {
     translateUpdates: "Traduire le suivi",
     translateShort: "Traduire",
     searching: "Recherche...",
+    translating: "Traduction...",
     shippingDetails: "Détails d'expédition",
     packageContents: "Contenu du colis",
     carrier: "Transporteur",
@@ -146,6 +150,7 @@ const catalogs: Record<Locale, StorefrontCopy> = {
     translateUpdates: "Traducir actualizaciones",
     translateShort: "Traducir",
     searching: "Buscando...",
+    translating: "Traduciendo...",
     shippingDetails: "Detalles de envío",
     packageContents: "Contenido del paquete",
     carrier: "Transportista",
@@ -180,6 +185,7 @@ const catalogs: Record<Locale, StorefrontCopy> = {
     translateUpdates: "Updates übersetzen",
     translateShort: "Übersetzen",
     searching: "Suche...",
+    translating: "Wird übersetzt...",
     shippingDetails: "Versanddetails",
     packageContents: "Paketinhalt",
     carrier: "Versanddienst",
@@ -214,6 +220,7 @@ const catalogs: Record<Locale, StorefrontCopy> = {
     translateUpdates: "Traduzir atualizações",
     translateShort: "Traduzir",
     searching: "Buscando...",
+    translating: "Traduzindo...",
     shippingDetails: "Detalhes do envio",
     packageContents: "Conteúdo do pacote",
     carrier: "Transportadora",
@@ -248,6 +255,7 @@ const catalogs: Record<Locale, StorefrontCopy> = {
     translateUpdates: "Traduci aggiornamenti",
     translateShort: "Traduci",
     searching: "Ricerca...",
+    translating: "Traduzione...",
     shippingDetails: "Dettagli di spedizione",
     packageContents: "Contenuto del pacco",
     carrier: "Corriere",
@@ -282,6 +290,7 @@ const catalogs: Record<Locale, StorefrontCopy> = {
     translateUpdates: "Terjemahkan pembaruan",
     translateShort: "Terjemahkan",
     searching: "Mencari...",
+    translating: "Menerjemahkan...",
     shippingDetails: "Detail pengiriman",
     packageContents: "Isi paket",
     carrier: "Kurir",
@@ -316,6 +325,7 @@ const catalogs: Record<Locale, StorefrontCopy> = {
     translateUpdates: "Dịch cập nhật",
     translateShort: "Dịch",
     searching: "Đang tìm kiếm...",
+    translating: "Đang dịch...",
     shippingDetails: "Chi tiết vận chuyển",
     packageContents: "Nội dung kiện hàng",
     carrier: "Đơn vị vận chuyển",
@@ -350,6 +360,7 @@ const catalogs: Record<Locale, StorefrontCopy> = {
     translateUpdates: "แปลการอัปเดต",
     translateShort: "แปล",
     searching: "กำลังค้นหา...",
+    translating: "กำลังแปล...",
     shippingDetails: "รายละเอียดการจัดส่ง",
     packageContents: "สินค้าในพัสดุ",
     carrier: "ผู้ให้บริการขนส่ง",

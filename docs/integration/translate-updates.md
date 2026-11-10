@@ -53,7 +53,7 @@ Translate updates **不是只在画布里切换**。编辑器画布和已发布�
 
 1. 写入 `bestrack_locale`，并用 `history.replaceState` 把 `?lang=` 设为规范码。
 2. 更新 Provider 的 `locale`。
-3. **仅当当前结果是成功查单** 时，按当前选中的最近查询原地重查（`preserveResult: true`）。重查期间不进入 `loading`，物流时间线保持可见。历史记录顺序和选中包裹不变。
+3. **仅当当前结果是成功查单** 时，按当前选中的最近查询原地重查（`preserveResult: true`）。重查期间不进入整页 `loading`，进度条和承运商保持可见；物流节点文案换成三个与 Translating... 同色的点依次出现。点的尺寸和颜色写在行内样式上，透明度由 Web Animations 驱动，避免 Shopify 在线商店主题用 `:empty`、`span { display }` 或 `animation: none !important` 盖掉。Translate updates 入口和 Track Your Order 提交按钮都灰掉且不可点，直到这次请求返回。历史记录顺序和选中包裹不变。
 4. 未找到或请求失败时不自动换语言再查。
 
 `transport` 路径每次请求读当前 Runtime locale，请求体为 `{ order_number, email, tracking_number, lang }`。不要再给 `transport.locale` 传一份与入口脱节的快照。
@@ -66,7 +66,7 @@ Translate updates **不是只在画布里切换**。编辑器画布和已发布�
 
 - 区块默认标题：Shipping Details、Package Contents、Carrier、Tracking timeline 等
 - 进度五段：Ordered / Order Ready / In Transit / Out for Delivery / Delivered
-- 空态、查询中 Searching...、EDD、Reorder、运单号/订单号标签
+- 空态、查询中 Searching...、语言重查 Translating...、EDD、Reorder、运单号/订单号标签
 - 画布演示节点：`Shipment accepted at the regional hub`、`The order has been placed and confirmed.`
 
 **保持原样：**

@@ -1,5 +1,5 @@
 /* eslint-disable react-refresh/only-export-components -- Shared visual primitives intentionally export components and token-aware helpers. */
-import { useCallback, useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import Autoplay from "embla-carousel-autoplay";
 import useEmblaCarousel from "embla-carousel-react";
 import type { ReadyToGoOrderItem, ReadyToGoRecommendation, ReadyToGoTrackingEvent, ReadyToGoTrackingStep } from "./ready-to-go";
@@ -10,6 +10,139 @@ export { defaultProgress } from "./tracking-block-model";
 import { localizeKnownLabel, useTrackingCopy } from "./i18n/storefront-copy";
 import { resolveShopifyRecommendHref } from "./shopify/track-query";
 import { safeTrackingPageUrl } from "./tracking-page-url";
+import { useTrackingRuntime } from "./tracking-runtime";
+
+const translatingColor = "#64748b";
+
+export const translatingEventStyles = `
+@keyframes bt-translating-dot {
+  0%, 8% { opacity: 0.12; }
+  18%, 72% { opacity: 1; }
+  86%, 100% { opacity: 0.12; }
+}
+span.bt-translating {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  color: ${translatingColor} !important;
+  font-weight: 500 !important;
+  line-height: 1.5 !important;
+  vertical-align: top !important;
+}
+span.bt-translating .bt-translating__dots {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 4px !important;
+  flex: none !important;
+}
+span.bt-translating .bt-translating__dot {
+  display: inline-block !important;
+  width: 6px !important;
+  height: 6px !important;
+  min-width: 6px !important;
+  min-height: 6px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 50% !important;
+  background: ${translatingColor} !important;
+  background-color: ${translatingColor} !important;
+  font-size: 0 !important;
+  line-height: 0 !important;
+  overflow: hidden !important;
+  vertical-align: middle !important;
+  flex: none !important;
+  box-sizing: border-box !important;
+  animation: bt-translating-dot 1.2s ease-in-out infinite !important;
+}
+span.bt-translating .bt-translating__dot:nth-child(2) { animation-delay: 0.2s !important; }
+span.bt-translating .bt-translating__dot:nth-child(3) { animation-delay: 0.4s !important; }
+@media (prefers-reduced-motion: reduce) {
+  span.bt-translating .bt-translating__dot { animation: none !important; opacity: 0.8 !important; }
+}
+`;
+
+const translatingLabelBox = {
+  display: "inline-flex",
+  alignItems: "center",
+  gap: 8,
+  color: translatingColor,
+  font: "inherit",
+  fontWeight: 500,
+  lineHeight: 1.5,
+  verticalAlign: "top"
+} satisfies CSSProperties;
+
+const translatingDotsBox = {
+  display: "inline-flex",
+  alignItems: "center",
+  gap: 4,
+  flex: "none"
+} satisfies CSSProperties;
+
+const translatingDotBox = {
+  display: "inline-block",
+  width: 6,
+  height: 6,
+  minWidth: 6,
+  minHeight: 6,
+  margin: 0,
+  padding: 0,
+  border: 0,
+  borderRadius: "50%",
+  background: translatingColor,
+  backgroundColor: translatingColor,
+  flex: "none",
+  fontSize: 0,
+  lineHeight: 0,
+  overflow: "hidden",
+  verticalAlign: "middle",
+  boxSizing: "border-box",
+  opacity: 0.12
+} satisfies CSSProperties;
+
+function TranslatingDot({ delayMs }: { delayMs: number }) {
+  const ref = useRef<HTMLSpanElement>(null);
+  useEffect(() => {
+    const node = ref.current;
+    if (!node) return;
+    // 在线商店主题常用 animation: none !important；CSS 关键帧会被盖掉，改由 Web Animations 驱动透明度。
+    const reduce = typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (reduce) {
+      node.style.setProperty("opacity", "0.8", "important");
+      node.style.setProperty("animation", "none", "important");
+      return;
+    }
+    if (typeof node.animate !== "function") return;
+    node.style.setProperty("animation", "none", "important");
+    const animation = node.animate(
+      [
+        { opacity: 0.12 },
+        { opacity: 0.12, offset: 0.08 },
+        { opacity: 1, offset: 0.18 },
+        { opacity: 1, offset: 0.72 },
+        { opacity: 0.12, offset: 0.86 },
+        { opacity: 0.12 }
+      ],
+      { duration: 1200, delay: delayMs, iterations: Infinity, easing: "ease-in-out" }
+    );
+    return () => animation.cancel();
+  }, [delayMs]);
+  return <span ref={ref} className="bt-translating__dot" aria-hidden="true" style={translatingDotBox}>{"\u00a0"}</span>;
+}
+
+/** 语言重查尚未返回时，物流节点文案替换为三个与文案同色的点依次出现 + Translating... */
+export function TranslatingEventLabel() {
+  const copy = useTrackingCopy();
+  return <span className="bt-translating" style={translatingLabelBox}>
+    <span className="bt-translating__dots" aria-hidden="true" style={translatingDotsBox}>
+      <TranslatingDot delayMs={0} />
+      <TranslatingDot delayMs={200} />
+      <TranslatingDot delayMs={400} />
+    </span>
+    {copy.translating}
+  </span>;
+}
 
 export const pageFont = { fontFamily: "var(--pb-font-family, Inter, system-ui, sans-serif)" } satisfies CSSProperties;
 export const contentWidth = {
@@ -135,17 +268,19 @@ export function TrackingProgress({ steps, color }: { steps: ReadyToGoTrackingSte
 
 export function ShippingTimeline({ events }: { events: ReadyToGoTrackingEvent[] }) {
   const copy = useTrackingCopy();
+  const translating = useTrackingRuntime().localeRefreshing;
   if (!events.length) {
     return <p style={{ margin: "16px 0 0", color: "#475569", fontSize: 14 }}>{copy.shippingEventsEmpty}</p>;
   }
-  return <div aria-label={copy.shippingEvents} style={{ marginTop: 16, display: "flex", flexDirection: "column", gap: 20 }}>
+  return <div aria-label={copy.shippingEvents} aria-busy={translating || undefined} aria-live={translating ? "polite" : undefined} style={{ marginTop: 16, display: "flex", flexDirection: "column", gap: 20 }}>
+    {translating ? <style>{translatingEventStyles}</style> : null}
     {events.map((event, index) => {
       const latest = event.state === "current" || index === 0;
       return <div key={event.id} style={{ position: "relative", paddingLeft: 28, paddingBottom: index < events.length - 1 ? 20 : 0 }}>
         <span aria-hidden="true" style={{ position: "absolute", left: 0, top: 2, width: 16, height: 16, borderRadius: 9999, background: latest ? "#16a34a" : "#cbd5e1" }} />
         {index < events.length - 1 ? <span aria-hidden="true" style={{ position: "absolute", left: 7, top: 20, width: 1, height: "100%", background: "#e2e8f0" }} /> : null}
-        <p style={{ margin: 0, fontSize: 14, fontWeight: 500, lineHeight: 1.5, color: latest ? "#c01400" : "#64748b" }}>{localizeKnownLabel(event.title, copy)}{event.detail ? ", " + event.detail : ""}</p>
-        {event.at ? <p style={{ margin: "4px 0 0", fontSize: 12, lineHeight: 1.5, color: latest ? "rgba(192, 20, 0, 0.8)" : "#94a3b8" }}>{event.at}</p> : null}
+        <p style={{ margin: 0, fontSize: 14, fontWeight: 500, lineHeight: 1.5, color: translating ? "#64748b" : latest ? "#c01400" : "#64748b" }}>{translating ? <TranslatingEventLabel /> : <>{localizeKnownLabel(event.title, copy)}{event.detail ? ", " + event.detail : ""}</>}</p>
+        {!translating && event.at ? <p style={{ margin: "4px 0 0", fontSize: 12, lineHeight: 1.5, color: latest ? "rgba(192, 20, 0, 0.8)" : "#94a3b8" }}>{event.at}</p> : null}
       </div>;
     })}
   </div>;

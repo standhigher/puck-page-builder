@@ -23,6 +23,13 @@ const translateUpdatesStyles = `
   white-space: nowrap;
   cursor: pointer;
 }
+.bt-translate-updates__trigger:disabled {
+  cursor: not-allowed;
+  color: #94a3b8;
+  background: #f1f5f9;
+  border-color: #e2e8f0;
+  opacity: 0.65;
+}
 .bt-translate-updates__short { display: none; }
 .bt-translate-updates__full { display: inline; }
 .bt-translate-updates__chevron { display: inline-flex; }
@@ -117,6 +124,11 @@ export function TranslateUpdatesMenu() {
   const rootRef = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
   const locale = runtime.locale;
+  const busy = runtime.localeRefreshing || runtime.phase === "loading";
+
+  useEffect(() => {
+    if (busy) setOpen(false);
+  }, [busy]);
 
   useEffect(() => {
     if (!open) return;
@@ -135,6 +147,7 @@ export function TranslateUpdatesMenu() {
   }, [open]);
 
   const selectLocale = (next: Locale) => {
+    if (busy) return;
     runtime.setLocale(next);
     setOpen(false);
   };
@@ -160,15 +173,21 @@ export function TranslateUpdatesMenu() {
       aria-expanded={open}
       aria-controls={open ? menuId : undefined}
       aria-label={copy.translateUpdates}
+      aria-busy={busy || undefined}
+      disabled={busy}
       onMouseDown={stopEditorSelection}
-      onClick={(event) => { stopEditorSelection(event); setOpen((current) => !current); }}
+      onClick={(event) => {
+        stopEditorSelection(event);
+        if (busy) return;
+        setOpen((current) => !current);
+      }}
     >
       <GlobeIcon />
       <span className="bt-translate-updates__full">{copy.translateUpdates}</span>
       <span className="bt-translate-updates__short">{copy.translateShort}</span>
       <span className="bt-translate-updates__chevron"><ChevronIcon open={open} /></span>
     </button>
-    {open ? <ul id={menuId} role="listbox" aria-label={copy.translateUpdates} className="bt-translate-updates__menu" style={menuStyle}>
+    {open && !busy ? <ul id={menuId} role="listbox" aria-label={copy.translateUpdates} className="bt-translate-updates__menu" style={menuStyle}>
       {localeOptions.map((option, index) => {
         const selected = option.code === locale;
         return <li key={option.code} role="presentation">

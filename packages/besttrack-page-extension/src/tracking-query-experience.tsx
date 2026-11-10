@@ -3,7 +3,7 @@ import { formatTrackingPageMoney, type TrackingPageQueryRequest, type TrackingPa
 import { safeTrackingPageUrl } from "./tracking-page-url";
 import { TrackingLoading } from "./tracking-loading";
 import { TrackingNotFound } from "./tracking-not-found";
-import { TrackPageOrderBadges, TrackPageQueryNumber, TrackingPageAdSlot } from "./track-page-display";
+import { TrackPageOrderBadges, TrackPageQueryNumber, TrackingPageAdSlot, TranslatingEventLabel, translatingEventStyles } from "./track-page-display";
 import { TranslateUpdatesMenu } from "./i18n/translate-updates";
 import { localizeKnownLabel, useTrackingCopy } from "./i18n/storefront-copy";
 import { useTrackingRuntime } from "./tracking-runtime";
@@ -140,7 +140,7 @@ export function TrackingQueryCard({
   const tabPanelId = useId();
   const queryStatusId = useId();
   // 显式传入 onQuery/phase 兼容卡片单独使用；在模板中，它们就是同一公共 Runtime 的入口和状态。
-  const { mode, setMode, trackingNumber, setTrackingNumber, orderNumber, setOrderNumber, email, setEmail, localError, firstInvalidField, loading, submit } = useTrackingQueryForm({ initialTrackingNumber, initialOrderNumber, initialMode, onQuery, phase });
+  const { mode, setMode, trackingNumber, setTrackingNumber, orderNumber, setOrderNumber, email, setEmail, localError, firstInvalidField, loading, submitDisabled, submit } = useTrackingQueryForm({ initialTrackingNumber, initialOrderNumber, initialMode, onQuery, phase });
   const cardRef = useRef<HTMLDivElement>(null);
   const resultRef = useRef<HTMLDivElement>(null);
   const trackingInputRef = useRef<HTMLInputElement>(null);
@@ -222,7 +222,7 @@ export function TrackingQueryCard({
           {errorFor("email") ? <p id={emailInputId + "-error"} role="alert" style={{ margin: "6px 0 0", color: "#b42318", fontSize: 13 }}>{errorFor("email")}</p> : null}
         </div>
       </>}
-      <button type="submit" disabled={loading} style={submitStyle(loading)}>{submitLabel}</button>
+      <button type="submit" disabled={submitDisabled} style={submitStyle(submitDisabled)}>{submitLabel}</button>
     </form>
     </div>
     {message ? <p id={queryStatusId} role="alert" aria-live="assertive" style={{ margin: "16px 0 0", color: "#b42318", ...messageStyle }}>{message}</p> : null}
@@ -255,16 +255,20 @@ function TrackingProgressDetails({ steps }: { steps: TrackingPageTrackingStep[] 
 
 function TrackingEvents({ result }: { result: TrackingPageQueryResult }) {
   const copy = useTrackingCopy();
+  const translating = useTrackingRuntime().localeRefreshing;
   // 有完整事件时全部展示；事件列表为空或缺失时，由共用模型尝试使用 latestEvent 摘要。
   const events = trackingEvents(result);
   if (!events.length) return <p style={{ margin: "12px 0 0", color: "#64748b", fontSize: 14 }}>{copy.shippingEventsEmpty}</p>;
-  return <div aria-label={copy.shippingEvents} style={{ marginTop: 16 }}>
+  return <div aria-label={copy.shippingEvents} aria-busy={translating || undefined} aria-live={translating ? "polite" : undefined} style={{ marginTop: 16 }}>
+    {translating ? <style>{translatingEventStyles}</style> : null}
     <ol style={{ display: "grid", gap: 14, margin: 0, padding: 0, listStyle: "none" }}>
       {events.map((event, index) => <li key={event.id} style={{ position: "relative", minWidth: 0, paddingLeft: 22, overflowWrap: "anywhere" }}>
         <span aria-hidden="true" style={{ position: "absolute", left: 0, top: 4, width: 10, height: 10, borderRadius: "50%", background: event.state === "current" || index === 0 ? "#111827" : "#cbd5e1" }} />
-        <strong style={{ display: "block", fontSize: 14 }}>{localizeKnownLabel(event.title, copy)}</strong>
-        {event.detail ? <span style={{ display: "block", marginTop: 2, color: "#64748b", fontSize: 13 }}>{event.detail}</span> : null}
-        {event.at ? <time style={{ display: "block", marginTop: 3, color: "#94a3b8", fontSize: 12 }}>{event.at}</time> : null}
+        {translating ? <TranslatingEventLabel /> : <>
+          <strong style={{ display: "block", fontSize: 14 }}>{localizeKnownLabel(event.title, copy)}</strong>
+          {event.detail ? <span style={{ display: "block", marginTop: 2, color: "#64748b", fontSize: 13 }}>{event.detail}</span> : null}
+          {event.at ? <time style={{ display: "block", marginTop: 3, color: "#94a3b8", fontSize: 12 }}>{event.at}</time> : null}
+        </>}
       </li>)}
     </ol>
   </div>;

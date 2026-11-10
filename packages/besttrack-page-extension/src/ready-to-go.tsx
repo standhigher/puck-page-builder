@@ -355,25 +355,21 @@ function LocalizedInlineText({ block, name, englishDefault }: { block: ReadyToGo
 
 const deliveryColumnsStyle: CSSProperties = {
   ...contentWidth,
-  display: "flex",
-  flexWrap: "wrap",
-  flexDirection: "row-reverse",
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 280px), 500px))",
+  gap: 40,
   justifyContent: "center",
-  alignItems: "start",
-  gap: 40
-};
-const deliveryColumnStyle: CSSProperties = {
-  flex: "1 1 320px",
-  maxWidth: 500,
-  minWidth: 0,
-  boxSizing: "border-box"
+  alignItems: "start"
 };
 
 function DeliveryResult({ heading, contentsHeading, carrierHeading, result, editing }: { heading: ReactNode; contentsHeading: ReactNode; carrierHeading: ReactNode; result: ReadyToGoTrackingResult; editing?: boolean }) {
   const copy = useTrackingCopy();
-  // 两栏都放得下时，row-reverse 仍让物流详情在左、包裹内容在右；宽度不够时先收起左侧物流栏，保留右侧。
   return <div className="bt-delivery-columns" style={deliveryColumnsStyle}>
-    <div style={{ ...deliveryColumnStyle, display: "flex", flexDirection: "column", gap: 24 }}>
+    <div>
+      <ShippingDetailsHeading heading={heading} />
+      <ShippingTimeline events={eventsFrom(result)} />
+    </div>
+    <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
       <TrackingPageAdSlot ad={result.ad} disableLink={editing} />
       <div>
         <h3 style={{ margin: "0 0 12px", fontSize: 18, fontWeight: 700 }}>{contentsHeading}</h3>
@@ -384,10 +380,6 @@ function DeliveryResult({ heading, contentsHeading, carrierHeading, result, edit
         <p style={{ margin: 0, fontSize: 14, fontWeight: 600, color: "#1e293b" }}>{result.carrier ?? copy.notAvailable}</p>
         <p style={{ margin: "8px 0 0", fontSize: 14, color: "#64748b" }}>{result.destination ?? copy.destinationUnavailable}</p>
       </div>
-    </div>
-    <div style={deliveryColumnStyle}>
-      <ShippingDetailsHeading heading={heading} />
-      <ShippingTimeline events={eventsFrom(result)} />
     </div>
   </div>;
 }
@@ -581,7 +573,7 @@ export function ReadyToGoDeliveryBlock(props: Record<string, unknown>) {
   const result = runtime.result;
   return <SectionShell title={heading}>
     {visibility.showResult && result ? <DeliveryResult heading={heading} contentsHeading={contentsHeading} carrierHeading={carrierHeading} result={result} /> : <div className="bt-delivery-columns" style={deliveryColumnsStyle}>
-      <div style={deliveryColumnStyle}>
+      <div>
         <ShippingDetailsHeading heading={heading} />
         {visibility.showUnavailable ? <p style={{ margin: "16px 0 0", color: "#b42318" }}>{copy.deliveryUnavailable}</p> : null}
       </div>

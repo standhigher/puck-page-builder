@@ -70,13 +70,13 @@ describe("Translate updates menu", () => {
     expect(screen.queryByRole("button", { name: "Translate updates" })).not.toBeInTheDocument();
   });
 
-  it("keeps the right delivery column first in the wrap order", () => {
+  it("keeps shipping details first in the wrap order", () => {
     render(<ReadyToGoDeliveryEditor heading="Shipping Details" contentsHeading="Package Contents" carrierHeading="Carrier" blockId="delivery" selected={false} onPropsChange={() => undefined} />);
 
     const shipping = screen.getByRole("heading", { name: "Shipping Details" });
     const contents = screen.getByRole("heading", { name: "Package Contents" });
-    expect(contents.compareDocumentPosition(shipping) & Node.DOCUMENT_POSITION_FOLLOWING).toBeGreaterThan(0);
-    expect(contents.closest(".bt-delivery-columns")).toHaveStyle({ flexDirection: "row-reverse" });
+    expect(shipping.compareDocumentPosition(contents) & Node.DOCUMENT_POSITION_FOLLOWING).toBeGreaterThan(0);
+    expect(shipping.closest(".bt-delivery-columns")).toHaveStyle({ display: "grid" });
   });
 
   it("localizes Searching... with the storefront locale", () => {

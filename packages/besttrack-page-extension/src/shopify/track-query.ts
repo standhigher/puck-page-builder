@@ -1,12 +1,11 @@
-import type { Locale } from "./shopify-track-page/i18n/locales";
-import { resolveInitialLocale } from "./shopify-track-page/i18n/locales";
-import type { ApiResponse } from "./shopify-track-page/services/types";
+import { resolveInitialLocale, type Locale } from "../i18n/locales";
+import type { ApiResponse } from "./api-types";
 import type {
   AdConfig,
   PackageItem,
   TrackMilestone,
   TrackResponse
-} from "./shopify-track-page/pages/home/types";
+} from "./types";
 import {
   buildShippingDetailsFromMilestone,
   buildTrackingStepsFromMilestone,
@@ -14,7 +13,7 @@ import {
   normalizeExternalUrl,
   sanitizeMilestones,
   shouldShowEstimatedDelivery
-} from "./shopify-track-page/timeline";
+} from "./timeline";
 import type {
   TrackingPageAd,
   TrackingPageOrderItem,
@@ -26,7 +25,7 @@ import type {
   TrackingPageShipment,
   TrackingPageTrackingEvent,
   TrackingPageTrackingStep
-} from "./tracking-page-runtime";
+} from "../tracking-page-runtime";
 
 export const SHOPIFY_TRACK_QUERY_PATH = "/track/query";
 export const SHOPIFY_RECOMMEND_PATH = "/products/recommend";
@@ -332,6 +331,6 @@ export {
   syncTrackingQueryToUrl,
   TRACKING_RESULT_SELECTOR,
   withCacheBustParam
-} from "./shopify-track-page/timeline";
-export { shouldHidePoweredBy } from "./shopify-track-page/poweredBy";
-export { resolveInitialLocale, type Locale } from "./shopify-track-page/i18n/locales";
+} from "./timeline";
+export { shouldHidePoweredBy } from "./poweredBy";
+export { resolveInitialLocale, type Locale } from "../i18n/locales";

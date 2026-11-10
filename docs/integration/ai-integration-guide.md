@@ -30,6 +30,7 @@
 | 扩展 | 用 `createExtensionRegistry` 装配，ID 必须命名空间化。 |
 | DataSource | 可注册 `mock`、`live` 和参数校验，但不会被 `WebRenderer` 自动调用。 |
 | Runtime | 不是当前包 API；由业务宿主负责绑定解析、鉴权、缓存、容错。 |
+| 消费者物流语言 | Translate updates 控制 Runtime `locale` 与 `/track/query` 的 `lang`；与编辑器 `adminLocale`、`PageDocument.settings.locale` 相互独立。 |
 | Demo 存储 | 进程内存，仅用于演示，不能用于生产。 |
 
 ## Web 渲染任务模板
@@ -76,6 +77,9 @@
 | Registry | `packages/puck-page-builder/src/core/extensions/registry.ts` |
 | Web Renderer | `packages/puck-page-builder/src/renderer/web/WebRenderer.tsx` |
 | Shopify 扩展示例 | `demos/shopify-app/lib/besttrack-extension.tsx` |
+| 消费者物流语言 | `packages/besttrack-page-extension/src/i18n/translate-updates.tsx` |
+| 消费者写死文案 | `packages/besttrack-page-extension/src/i18n/storefront-copy.ts` |
+| Shopify 查询适配层 | `packages/besttrack-page-extension/src/shopify/track-query.ts` |
 | Demo 数据绑定示例 | `demos/shopify-app/lib/page-builder-data-binding.ts` |
 
 ## 交付前检查

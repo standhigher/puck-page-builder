@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { TrackMilestone } from './pages/home/types'
+import type { TrackMilestone } from './types'
 import {
   buildShippingDetailsFromMilestone,
   buildTrackingStepsFromMilestone,

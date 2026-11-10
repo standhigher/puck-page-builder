@@ -4,6 +4,8 @@ import { safeTrackingPageUrl } from "./tracking-page-url";
 import { TrackingLoading } from "./tracking-loading";
 import { TrackingNotFound } from "./tracking-not-found";
 import { TrackPageOrderBadges, TrackPageQueryNumber, TrackingPageAdSlot } from "./track-page-display";
+import { TranslateUpdatesMenu } from "./i18n/translate-updates";
+import { localizeKnownLabel, useTrackingCopy } from "./i18n/storefront-copy";
 import { useTrackingRuntime } from "./tracking-runtime";
 import { useTrackingQueryForm } from "./tracking-query-form";
 import { trackingEvents, trackingSelection, trackingSteps, trackingBlockState } from "./tracking-block-model";
@@ -225,32 +227,42 @@ export function TrackingQueryCard({
     </div>
     {message ? <p id={queryStatusId} role="alert" aria-live="assertive" style={{ margin: "16px 0 0", color: "#b42318", ...messageStyle }}>{message}</p> : null}
     {visibility.showResult ? <p id={queryStatusId} role="status" aria-live="polite" style={srOnly}>Tracking details loaded.</p> : null}
-    {terminalPhase ? <div ref={resultRef} role="region" aria-label={resultLabel} aria-describedby={queryStatusId} data-tracking-query-result {...resultData} data-testid={resultTestId} tabIndex={-1} style={{ minWidth: 0, overflowWrap: "anywhere", marginTop: visibility.showResult ? 20 : 0, ...resultStyle }}>{visibility.showResult ? result : visibility.showNotFound ? <div id={queryStatusId}><TrackingNotFound /></div> : <><section aria-label="Shipment progress"><p style={{ color: "#b42318" }}>Shipment progress is temporarily unavailable.</p></section><section aria-label="Shipping Details"><p style={{ color: "#b42318" }}>Delivery details are temporarily unavailable.</p></section></>}</div> : null}
+    {terminalPhase ? <div ref={resultRef} role="region" aria-label={resultLabel} aria-describedby={queryStatusId} data-tracking-query-result {...resultData} data-testid={resultTestId} tabIndex={-1} style={{ minWidth: 0, overflowWrap: "anywhere", marginTop: visibility.showResult ? 20 : 0, ...resultStyle }}>{visibility.showResult ? result : visibility.showNotFound ? <div id={queryStatusId}><TrackingNotFound /></div> : <QueryUnavailableCopy />}</div> : null}
     {watermark}
     {loading ? <TrackingLoading /> : null}
   </div>;
 }
 
+function QueryUnavailableCopy() {
+  const copy = useTrackingCopy();
+  return <><section aria-label={copy.shipmentProgress}><p style={{ color: "#b42318" }}>{copy.shipmentProgressUnavailable}</p></section><section aria-label={copy.shippingDetails}><p style={{ color: "#b42318" }}>{copy.deliveryUnavailable}</p></section></>;
+}
+
 // 节点数量由共用模型/接口结果决定，卡片完整展示，不再固定截取五个节点。
 function TrackingProgressDetails({ steps }: { steps: TrackingPageTrackingStep[] }) {
+  const copy = useTrackingCopy();
   return <ol aria-label="Delivery progress" style={{ display: "grid", gridTemplateColumns: `repeat(${steps.length}, minmax(0, 1fr))`, gap: 4, margin: "20px 0 0", padding: 0, listStyle: "none" }}>
-    {steps.map((step, index) => <li key={step.id} style={{ minWidth: 0, textAlign: "center", color: step.state === "upcoming" ? "#64748b" : "#0f172a" }}>
-      <span aria-label={step.label + " " + step.state} style={{ display: "grid", placeItems: "center", width: 28, height: 28, margin: "0 auto", border: "1px solid " + (step.state === "upcoming" ? "#94a3b8" : "#0f172a"), borderRadius: "50%", background: step.state === "current" ? "#0f172a" : "#fff", color: step.state === "current" ? "#fff" : "#0f172a", fontSize: 13, fontWeight: 700 }}>{step.state === "complete" || step.state === "current" ? "✓" : index + 1}</span>
-      <span style={{ display: "block", marginTop: 6, overflowWrap: "anywhere", fontSize: 11, lineHeight: 1.25 }}>{step.label}</span>
+    {steps.map((step, index) => {
+      const label = localizeKnownLabel(step.label, copy);
+      return <li key={step.id} style={{ minWidth: 0, textAlign: "center", color: step.state === "upcoming" ? "#64748b" : "#0f172a" }}>
+      <span aria-label={label + " " + step.state} style={{ display: "grid", placeItems: "center", width: 28, height: 28, margin: "0 auto", border: "1px solid " + (step.state === "upcoming" ? "#94a3b8" : "#0f172a"), borderRadius: "50%", background: step.state === "current" ? "#0f172a" : "#fff", color: step.state === "current" ? "#fff" : "#0f172a", fontSize: 13, fontWeight: 700 }}>{step.state === "complete" || step.state === "current" ? "✓" : index + 1}</span>
+      <span style={{ display: "block", marginTop: 6, overflowWrap: "anywhere", fontSize: 11, lineHeight: 1.25 }}>{label}</span>
       {step.date ? <span style={{ display: "block", marginTop: 3, color: "#94a3b8", fontSize: 10, lineHeight: 1.2 }}>{step.date}</span> : null}
-    </li>)}
+    </li>;
+    })}
   </ol>;
 }
 
 function TrackingEvents({ result }: { result: TrackingPageQueryResult }) {
+  const copy = useTrackingCopy();
   // 有完整事件时全部展示；事件列表为空或缺失时，由共用模型尝试使用 latestEvent 摘要。
   const events = trackingEvents(result);
-  if (!events.length) return <p style={{ margin: "12px 0 0", color: "#64748b", fontSize: 14 }}>Tracking events are not available yet. Please try again later.</p>;
-  return <div aria-label="Shipping events" style={{ marginTop: 16 }}>
+  if (!events.length) return <p style={{ margin: "12px 0 0", color: "#64748b", fontSize: 14 }}>{copy.shippingEventsEmpty}</p>;
+  return <div aria-label={copy.shippingEvents} style={{ marginTop: 16 }}>
     <ol style={{ display: "grid", gap: 14, margin: 0, padding: 0, listStyle: "none" }}>
       {events.map((event, index) => <li key={event.id} style={{ position: "relative", minWidth: 0, paddingLeft: 22, overflowWrap: "anywhere" }}>
         <span aria-hidden="true" style={{ position: "absolute", left: 0, top: 4, width: 10, height: 10, borderRadius: "50%", background: event.state === "current" || index === 0 ? "#111827" : "#cbd5e1" }} />
-        <strong style={{ display: "block", fontSize: 14 }}>{event.title}</strong>
+        <strong style={{ display: "block", fontSize: 14 }}>{localizeKnownLabel(event.title, copy)}</strong>
         {event.detail ? <span style={{ display: "block", marginTop: 2, color: "#64748b", fontSize: 13 }}>{event.detail}</span> : null}
         {event.at ? <time style={{ display: "block", marginTop: 3, color: "#94a3b8", fontSize: 12 }}>{event.at}</time> : null}
       </li>)}
@@ -267,10 +279,11 @@ function TrackingOrderItemImage({ src, title }: { src?: string; title: string })
 
 // 商品明细属于必要配送能力；成功结果缺少商品时保留标题与说明，避免误以为区块被移除。
 function TrackingOrderItems({ items }: { items: NonNullable<TrackingPageQueryResult["orderItems"]> }) {
+  const copy = useTrackingCopy();
   return <section aria-label="Order items" style={{ marginTop: 24, borderTop: "1px solid #e2e8f0", paddingTop: 18 }}>
-    <h2 style={{ margin: 0, fontSize: 16 }}>Items in your order</h2>
+    <h2 style={{ margin: 0, fontSize: 16 }}>{copy.packageContents}</h2>
     <div style={{ display: "grid", gap: 12, marginTop: 12 }}>
-      {!items.length ? <p style={{ margin: 0, color: "#64748b", fontSize: 14 }}>Package contents are not available for this shipment.</p> : null}
+      {!items.length ? <p style={{ margin: 0, color: "#64748b", fontSize: 14 }}>{copy.packageContentsUnavailable}</p> : null}
       {items.map((item) => {
         const price = item.price ? formatTrackingPageMoney(item.price) : undefined;
         // Reorder 与商品标题共用这个安全链接，仅提供跳转，不会直接创建订单或执行加购。
@@ -281,7 +294,7 @@ function TrackingOrderItems({ items }: { items: NonNullable<TrackingPageQueryRes
             {href ? <a href={href} style={{ color: "inherit", fontWeight: 700, overflowWrap: "anywhere" }}>{item.title}</a> : <strong style={{ overflowWrap: "anywhere" }}>{item.title}</strong>}
             {item.description ? <p style={{ margin: "3px 0 0", color: "#64748b", fontSize: 13 }}>{item.description}</p> : null}
             <p style={{ display: "flex", flexWrap: "wrap", gap: 8, margin: "4px 0 0", color: "#475569", fontSize: 13 }}><span>Qty {item.quantity}</span>{price?.amount ? <span>{price.amount}{price.startsAt ? " and up" : ""}</span> : null}{price?.compareAt ? <s style={{ color: "#94a3b8" }}>{price.compareAt}</s> : null}</p>
-            {href ? <a href={href} style={{ display: "inline-flex", alignItems: "center", minHeight: 32, marginTop: 6, padding: "6px 12px", border: "1px solid #cbd5e1", borderRadius: 6, color: "inherit", fontSize: 13 }}>Reorder</a> : null}
+            {href ? <a href={href} style={{ display: "inline-flex", alignItems: "center", minHeight: 32, marginTop: 6, padding: "6px 12px", border: "1px solid #cbd5e1", borderRadius: 6, color: "inherit", fontSize: 13 }}>{copy.reorder}</a> : null}
           </div>
         </article>;
       })}
@@ -300,6 +313,7 @@ function TrackingOrderItems({ items }: { items: NonNullable<TrackingPageQueryRes
 export function TrackingQueryResultDetails({ result, onTrackAnother, trackAnotherLabel = "Track another", showShipments = true }: { result: TrackingPageQueryResult; onTrackAnother?: () => void; trackAnotherLabel?: string; showShipments?: boolean }) {
   const [copied, setCopied] = useState(false);
   const runtime = useTrackingRuntime();
+  const copy = useTrackingCopy();
   // 预计送达沿用共用预览规则：autoQueryDemo 时隐藏，正式结果也必须实际包含日期才展示。
   const visibility = trackingBlockState(runtime);
   // 不要求接口恰好返回五个节点：只要节点列表非空就完整展示，缺失时才生成共用默认进度。
@@ -316,18 +330,24 @@ export function TrackingQueryResultDetails({ result, onTrackAnother, trackAnothe
       : identity.values[0] ? <div style={{ marginBottom: 16 }}><TrackPageQueryNumber mode={identity.mode} value={identity.values[0]} /></div> : null}
     {showShipments && shipmentValues.length > 1 ? <TrackPageOrderBadges values={shipmentValues} selectedIndex={runtime.selectedShipmentIndex} onSelect={runtime.selectShipment} style={{ marginBottom: 16 }} /> : null}
     <div style={{ display: "flex", flexWrap: "wrap", alignItems: "start", justifyContent: "space-between", gap: 12 }}>
-      <div style={{ minWidth: 0, flex: "1 1 180px" }}><strong style={{ fontSize: 17 }}>Your order is {result.status || "being updated"}</strong>{visibility.showEstimatedDelivery && result.estimatedDelivery ? <p style={{ margin: "5px 0 0", color: "#475569", fontSize: 14 }}>Estimated delivery: {result.estimatedDelivery}</p> : null}</div>
+      <div style={{ minWidth: 0, flex: "1 1 180px" }}><strong style={{ fontSize: 17 }}>Your order is {result.status || "being updated"}</strong>{visibility.showEstimatedDelivery && result.estimatedDelivery ? <p style={{ margin: "5px 0 0", color: "#475569", fontSize: 14 }}>{copy.estimatedDelivery}: {result.estimatedDelivery}</p> : null}</div>
       {onTrackAnother ? <button type="button" onClick={onTrackAnother} style={{ minWidth: 44, minHeight: 44, flex: "0 0 auto", padding: "6px 10px", border: "1px solid #cbd5e1", borderRadius: 6, background: "#fff", color: "#0f172a", font: "inherit", fontSize: 12, cursor: "pointer" }}>{trackAnotherLabel}</button> : null}
     </div>
     <TrackingProgressDetails steps={progress} />
     <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 140px), 1fr))", gap: 10, marginTop: 22, padding: 12, borderRadius: 8, background: "#f8fafc", color: "#334155", fontSize: 13 }}>
-      <span style={{ minWidth: 0, overflowWrap: "anywhere" }}><strong>Carrier</strong><br />{result.carrier ?? "Not available"}</span>
-      <span style={{ minWidth: 0, overflowWrap: "anywhere" }}><strong>Tracking number</strong><br /><span>{result.trackingNumber}</span> <button type="button" onClick={copyTrackingNumber} style={{ minWidth: 44, minHeight: 44, border: 0, background: "transparent", color: "#0f172a", font: "inherit", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>{copied ? "Copied" : "Copy"}</button></span>
-      <span style={{ minWidth: 0, overflowWrap: "anywhere" }}><strong>Destination</strong><br />{result.destination ?? "Destination details are not available."}</span>
-      <span style={{ minWidth: 0, overflowWrap: "anywhere" }}><strong>Transit time</strong><br />{result.transitDuration || "—"}</span>
-      {result.orderNumber ? <span style={{ minWidth: 0, overflowWrap: "anywhere" }}><strong>Order number</strong><br />{result.orderNumber}</span> : null}
+      <span style={{ minWidth: 0, overflowWrap: "anywhere" }}><strong>{copy.carrier}</strong><br />{result.carrier ?? copy.notAvailable}</span>
+      <span style={{ minWidth: 0, overflowWrap: "anywhere" }}><strong>{copy.trackingNumber}</strong><br /><span>{result.trackingNumber}</span> <button type="button" onClick={copyTrackingNumber} style={{ minWidth: 44, minHeight: 44, border: 0, background: "transparent", color: "#0f172a", font: "inherit", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>{copied ? "Copied" : "Copy"}</button></span>
+      <span style={{ minWidth: 0, overflowWrap: "anywhere" }}><strong>{copy.destination}</strong><br />{result.destination ?? copy.destinationUnavailable}</span>
+      <span style={{ minWidth: 0, overflowWrap: "anywhere" }}><strong>{copy.transitTime}</strong><br />{result.transitDuration || "—"}</span>
+      {result.orderNumber ? <span style={{ minWidth: 0, overflowWrap: "anywhere" }}><strong>{copy.orderNumber}</strong><br />{result.orderNumber}</span> : null}
     </div>
-    <section aria-label="Tracking timeline" style={{ marginTop: 24, borderTop: "1px solid #e2e8f0", paddingTop: 18 }}><h2 style={{ margin: 0, fontSize: 16 }}>Tracking timeline</h2><TrackingEvents result={result} /></section>
+    <section aria-label={copy.trackingTimeline} style={{ marginTop: 24, borderTop: "1px solid #e2e8f0", paddingTop: 18 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, flexWrap: "nowrap" }}>
+        <h2 style={{ margin: 0, flex: "1 1 auto", minWidth: 0, fontSize: 16 }}>{copy.trackingTimeline}</h2>
+        <TranslateUpdatesMenu />
+      </div>
+      <TrackingEvents result={result} />
+    </section>
     <TrackingPageAdSlot ad={result.ad} />
     <TrackingOrderItems items={result.orderItems ?? []} />
   </section>;

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { scrollToTrackingResult, trackingResultScrollOffset } from "./shopify-track-page/timeline";
+import { scrollToTrackingResult, trackingResultScrollOffset } from "./shopify/timeline";
 
 function element(tag: string, top: number, height: number, css = "") {
   const node = document.createElement(tag);

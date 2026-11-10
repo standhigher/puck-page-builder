@@ -1,4 +1,5 @@
 import { useId } from "react";
+import { useTrackingCopy } from "./i18n/storefront-copy";
 
 const loadingStyles = `
 @keyframes bt-tracking-pin-float {
@@ -18,10 +19,11 @@ const loadingStyles = `
 /** Query feedback stays local to the form and disappears with its loading state. */
 export function TrackingLoading() {
   const id = useId();
+  const copy = useTrackingCopy();
   return <>
     <style>{loadingStyles}</style>
-    <div role="status" aria-label="Searching..." aria-live="polite" aria-atomic="true" style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 16, marginTop: 45, paddingBottom: 8, textAlign: "center" }}>
-      <p style={{ margin: 0, color: "var(--pb-color-muted, #64748b)", fontSize: 14, fontWeight: 400, lineHeight: "20px" }}>Searching...</p>
+    <div role="status" aria-label={copy.searching} aria-live="polite" aria-atomic="true" style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 16, marginTop: 45, paddingBottom: 8, textAlign: "center" }}>
+      <p style={{ margin: 0, color: "var(--pb-color-muted, #64748b)", fontSize: 14, fontWeight: 400, lineHeight: "20px" }}>{copy.searching}</p>
       <svg width="56" height="64" viewBox="0 0 56 64" fill="none" aria-hidden="true" focusable="false" style={{ display: "block", flexShrink: 0, overflow: "visible" }}>
       <defs>
         <linearGradient id={`${id}-top`} x1="10" y1="28" x2="44" y2="40" gradientUnits="userSpaceOnUse">

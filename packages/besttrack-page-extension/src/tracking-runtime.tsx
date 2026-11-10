@@ -1,6 +1,7 @@
 /* eslint-disable react-refresh/only-export-components -- Shared runtime intentionally exports its context hook. */
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { createShopifyRecommendationsQuery, createShopifyTrackQuery, mergeDisplayValues, shouldHidePoweredBy, type ShopifyTrackPageTransport } from "./shopify-track-query";
+import { persistLocale, resolveInitialLocale, syncLocaleToUrl, type Locale } from "./i18n/locales";
+import { createShopifyRecommendationsQuery, createShopifyTrackQuery, mergeDisplayValues, shouldHidePoweredBy, type ShopifyTrackPageTransport } from "./shopify/track-query";
 import { previewTrackingPageResult } from "./tracking-block-model";
 import { isEmptyTrackingPageResult, type TrackingPageAd, type TrackingPageQuery, type TrackingPageQueryRequest, type TrackingPageQueryResult, type TrackingPageRecommendationsQuery, type TrackingPageRecommendationsState, type TrackingPageWatermark } from "./tracking-page-runtime";
 import type { ShopifyResourceResolution } from "./shopify-resource-contract";
@@ -33,6 +34,9 @@ export type TrackingRuntime = TrackingRuntimeState & {
   watermark?: TrackingPageWatermark;
   /** 编辑态广告预览；正式页面的广告仍来自当前查询结果 result.ad。 */
   adPreview?: TrackingPageAd | null;
+  /** 物流节点翻译语言；默认英文，可由 URL `lang` 或 `bestrack_locale` 覆盖。 */
+  locale: Locale;
+  setLocale: (locale: Locale) => void;
 };
 
 function recentQueryFromRequest(request: TrackingPageQueryRequest, result: TrackingPageQueryResult): TrackingRecentQuery | null {
@@ -58,6 +62,16 @@ function mergeRecentQueries(previous: TrackingRecentQuery[], next: TrackingRecen
     const item = byValue.get(value);
     return item ? [item] : [];
   });
+}
+
+function requestFromRecentQuery(item: TrackingRecentQuery): TrackingPageQueryRequest {
+  if (item.mode === "order") return { mode: "order", orderNumber: item.value, email: item.email ?? "" };
+  return { mode: "tracking", trackingNumber: item.value };
+}
+
+function clampedShipmentIndex(result: TrackingPageQueryResult, index: number) {
+  const lastIndex = Math.max(0, (result.shipments?.length ?? 1) - 1);
+  return Math.min(Math.max(index, 0), lastIndex);
 }
 
 function resultWithShipment(result: TrackingPageQueryResult, index: number): TrackingPageQueryResult {
@@ -96,6 +110,8 @@ const initialRuntime: TrackingRuntime = {
   recommendations: { phase: "idle", items: [] },
   autoQueryFromUrl: false,
   autoQueryDemo: false,
+  locale: "EN",
+  setLocale() { return undefined; },
   reset() { return undefined; },
   async query() { return undefined; }
 };
@@ -141,11 +157,24 @@ export function TrackingRuntimeProvider({ children, query: injectedQuery, queryR
   const [selectedRecentIndex, setSelectedRecentIndex] = useState(0);
   const [selectionRevision, setSelectionRevision] = useState(0);
   const [selectedShipmentIndex, setSelectedShipmentIndex] = useState(0);
+  const [locale, setLocaleState] = useState<Locale>(resolveInitialLocale);
   // 单调递增的版本号只使旧响应失效，不取消网络请求；成功与异常分支都必须核对版本。
   const requestId = useRef(0);
+  const localeRef = useRef(locale);
+  const stateRef = useRef(state);
+  const recentQueriesRef = useRef(recentQueries);
+  const selectedRecentIndexRef = useRef(selectedRecentIndex);
+  const selectedShipmentIndexRef = useRef(selectedShipmentIndex);
+  const lastQueryRef = useRef<TrackingPageQueryRequest | null>(null);
+  localeRef.current = locale;
+  stateRef.current = state;
+  recentQueriesRef.current = recentQueries;
+  selectedRecentIndexRef.current = selectedRecentIndex;
+  selectedShipmentIndexRef.current = selectedShipmentIndex;
   const resolvedQuery = useMemo(() => {
     if (injectedQuery) return injectedQuery;
-    if (transport) return createShopifyTrackQuery(transport);
+    // 语言入口接管 lang：查询时读当前 Runtime locale，而不是宿主传入的快照值。
+    if (transport) return createShopifyTrackQuery({ ...transport, locale: () => localeRef.current });
     return undefined;
   }, [injectedQuery, transport]);
   const resolvedRecommendations = useMemo(() => {
@@ -184,10 +213,12 @@ export function TrackingRuntimeProvider({ children, query: injectedQuery, queryR
     return () => { active = false; };
   }, [resolvedRecommendations]);
 
-  const query = useCallback(async (request: TrackingPageQueryRequest, onComplete?: (isCurrent: () => boolean) => void) => {
+  const query = useCallback(async (request: TrackingPageQueryRequest, onComplete?: (isCurrent: () => boolean) => void, options?: { preserveResult?: boolean }) => {
     const currentRequestId = ++requestId.current;
-    // loading 不携带上一笔结果，展示层据此隐藏旧进度/配送；历史缓存和独立推荐继续保留。
-    setState({ phase: "loading" });
+    const preserveResult = options?.preserveResult === true;
+    lastQueryRef.current = request;
+    // 普通查询进入 loading 以隐藏旧结果；语言切换保留当前物流节点，避免时间线闪没。
+    if (!preserveResult) setState({ phase: "loading" });
     try {
       const result = live ? await resolvedQuery!(request) : await queryMockTracking(request);
       if (currentRequestId !== requestId.current) return;
@@ -196,13 +227,22 @@ export function TrackingRuntimeProvider({ children, query: injectedQuery, queryR
         setState({ phase: "empty", result });
       } else {
         const recent = recentQueryFromRequest(request, result);
-        if (recent) {
-          setRecentQueries((previous) => mergeRecentQueries(previous, recent));
-          setSelectedRecentIndex(0);
-          setSelectedShipmentIndex(0);
+        if (preserveResult) {
+          if (recent) {
+            const selectedIndex = selectedRecentIndexRef.current;
+            setRecentQueries((previous) => previous.map((item, index) => index === selectedIndex ? recent : item));
+          }
+          const shipmentIndex = clampedShipmentIndex(result, selectedShipmentIndexRef.current);
+          setState({ phase: "success", result: resultWithShipment(result, shipmentIndex) });
+        } else {
+          if (recent) {
+            setRecentQueries((previous) => mergeRecentQueries(previous, recent));
+            setSelectedRecentIndex(0);
+            setSelectedShipmentIndex(0);
+          }
+          // 每笔成功结果默认展示首个包裹；是否有第二层切换入口由实际 shipments 数量决定。
+          setState({ phase: "success", result: resultWithShipment(result, 0) });
         }
-        // 每笔成功结果默认展示首个包裹；是否有第二层切换入口由实际 shipments 数量决定。
-        setState({ phase: "success", result: resultWithShipment(result, 0) });
       }
     } catch {
       if (currentRequestId !== requestId.current) return;
@@ -211,11 +251,27 @@ export function TrackingRuntimeProvider({ children, query: injectedQuery, queryR
     // 展示层的滚动等副作用不属于请求失败，不能让回调异常覆盖查询状态。
     onComplete?.(() => currentRequestId === requestId.current);
   }, [live, resolvedQuery]);
+  const queryRef = useRef(query);
+  queryRef.current = query;
+  const setLocale = useCallback((next: Locale) => {
+    if (next === localeRef.current) return;
+    persistLocale(next);
+    syncLocaleToUrl(next);
+    localeRef.current = next;
+    setLocaleState(next);
+    // 只重查当前成功结果，并原地更新缓存；未找到或失败不自动换语言再试。
+    if (stateRef.current.phase !== "success") return;
+    const selected = recentQueriesRef.current[selectedRecentIndexRef.current];
+    const last = selected ? requestFromRecentQuery(selected) : lastQueryRef.current;
+    if (!last) return;
+    void queryRef.current(last, undefined, { preserveResult: true });
+  }, []);
   const selectRecentQuery = useCallback((index: number) => {
     const item = recentQueries[index];
     if (!item) return;
     // 直接恢复完整缓存并使在途查询失效，不重发请求，也不调整历史排序。
     requestId.current += 1;
+    lastQueryRef.current = requestFromRecentQuery(item);
     // 即使点击的还是同一索引，也表示要求表单恢复该历史项，因此不能只依赖索引变化。
     setSelectionRevision((revision) => revision + 1);
     setSelectedRecentIndex(index);
@@ -235,6 +291,7 @@ export function TrackingRuntimeProvider({ children, query: injectedQuery, queryR
     // 重置查单也使旧响应失效；表单输入由各表单管理，不随此处重置。
     // 推荐是页面级独立状态，不在此清空或重新加载。
     requestId.current += 1;
+    lastQueryRef.current = null;
     setState({ phase: "idle" });
     setRecentQueries([]);
     setSelectedRecentIndex(0);
@@ -260,8 +317,10 @@ export function TrackingRuntimeProvider({ children, query: injectedQuery, queryR
     recommendations,
     autoQueryFromUrl: resolveAutoQuery,
     autoQueryDemo,
-    watermark: resolvedWatermark
-  }), [adPreview, resourceResolution, reset, autoQueryDemo, query, recentQueries, recommendations, resolveAutoQuery, resolvedWatermark, selectRecentQuery, selectShipment, selectedRecentIndex, selectionRevision, selectedShipmentIndex, state]);
+    watermark: resolvedWatermark,
+    locale,
+    setLocale
+  }), [adPreview, resourceResolution, reset, autoQueryDemo, locale, query, recentQueries, recommendations, resolveAutoQuery, resolvedWatermark, selectRecentQuery, selectShipment, selectedRecentIndex, selectionRevision, selectedShipmentIndex, setLocale, state]);
   return <TrackingRuntimeContext.Provider value={value}>{children}</TrackingRuntimeContext.Provider>;
 }
 

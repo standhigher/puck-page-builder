@@ -1,6 +1,6 @@
-import { useEffect, useId, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { type BlockEditorProps, type FieldProps } from "@standhigher/puck-page-builder/runtime";
-import { scrollToTrackingResult } from "./shopify-track-query";
+import { scrollToTrackingResult } from "./shopify/track-query";
 import { useTrackingRuntime as useReadyToGoRuntime, type TrackingRecentQuery as ReadyToGoRecentQuery } from "./tracking-runtime";
 import { useTrackingQueryForm } from "./tracking-query-form";
 import { configuredRecommendations, recommendationItems, previewTrackingPageResult as previewReadyToGoTracking, trackingEvents as eventsFrom, trackingSteps, trackingSelection, trackingBlockState } from "./tracking-block-model";
@@ -22,6 +22,8 @@ import {
   TrackingPageAdSlot,
   TrackingProgress
 } from "./track-page-display";
+import { TranslateUpdatesMenu } from "./i18n/translate-updates";
+import { localizeKnownLabel, localizedConfiguredText, useTrackingCopy } from "./i18n/storefront-copy";
 import { TrackingNotFound } from "./tracking-not-found";
 import { TrackingLoading } from "./tracking-loading";
 import type {
@@ -70,7 +72,7 @@ const formCardStyle: CSSProperties = {
   borderRadius: 16,
   background: "var(--pb-color-surface, #fff)",
   color: "var(--pb-color-text, #0f172a)",
-  padding: "clamp(20px, 7%, 40px)",
+  padding: "28px clamp(20px, 7%, 40px) clamp(20px, 7%, 40px)",
   boxSizing: "border-box",
   boxShadow: "0 8px 24px rgba(0, 0, 0, 0.12)"
 };
@@ -192,6 +194,61 @@ function CanvasPlaceholderInput({ block, name, value, fallback, label }: { block
   />;
 }
 
+const progressIdentityGap = 12;
+
+const progressIdentityStackRules = `
+  .bt-progress-identity {
+    display: flex;
+    flex-direction: column;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 8px;
+  }
+  .bt-progress-identity__menu { order: -1; }
+  .bt-progress-identity__label,
+  .bt-progress-identity__label * { white-space: normal; overflow-wrap: anywhere; }
+`;
+
+const progressIdentityStyles = `
+.bt-progress-result { container-type: inline-size; width: 100%; }
+.bt-progress-identity {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  column-gap: ${progressIdentityGap}px;
+  width: 100%;
+  min-width: 0;
+}
+.bt-progress-identity__label { grid-column: 2; min-width: 0; text-align: center; }
+.bt-progress-identity__menu { grid-column: 3; justify-self: end; }
+.bt-progress-identity--stack {
+  display: flex;
+  flex-direction: column;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 8px;
+}
+.bt-progress-identity--stack .bt-progress-identity__menu { order: -1; }
+.bt-progress-identity--stack .bt-progress-identity__label,
+.bt-progress-identity--stack .bt-progress-identity__label * { white-space: normal; overflow-wrap: anywhere; }
+@media (max-width: 640px) { ${progressIdentityStackRules} }
+@container (max-width: 640px) { ${progressIdentityStackRules} }
+`;
+
+/** 整卡居中要左右各留一列给语言按钮；左右列不够宽就改成上下布局，避免挡住单号。 */
+export function shouldStackProgressIdentity(labelWidth: number, menuWidth: number, availableWidth: number, gap = progressIdentityGap) {
+  if (availableWidth <= 0) return false;
+  return labelWidth + 2 * menuWidth + 2 * gap > availableWidth;
+}
+
+function nowrapScrollWidth(el: HTMLElement) {
+  const previous = el.style.whiteSpace;
+  el.style.whiteSpace = "nowrap";
+  const width = el.scrollWidth;
+  el.style.whiteSpace = previous;
+  return width;
+}
+
 /**
  * 结果区有两个独立的选择层级：第一层是最近最多三条成功查询，点击恢复缓存；
  * 第二层是当前查询结果中的包裹，点击只切换该结果内的包裹，不占用历史查询名额。
@@ -218,34 +275,90 @@ function ProgressResult({
   onSelectShipment?: (index: number) => void;
 }) {
   // 接口有进度节点就完整使用，只有缺失/空数组才由共用模型按状态生成默认节点。
+  const copy = useTrackingCopy();
   const steps = trackingSteps(result);
   const { identity, shipmentValues } = trackingSelection(result, recentQueries);
-  return <>
-    {identity.values.length > 1 && onSelectRecent
-      ? <TrackPageOrderBadges values={identity.values.slice(0, 3)} selectedIndex={selectedRecentIndex} onSelect={onSelectRecent} />
-      : identity.values[0]
-        ? <TrackPageQueryNumber mode={identity.mode} value={identity.values[0]} />
-        : null}
+  const identityRef = useRef<HTMLDivElement>(null);
+  const [stackIdentity, setStackIdentity] = useState(false);
+  // 桌面：运单号整卡居中，语言入口同一行右侧。单号或语言文案过长、左右留白不够时，换成和移动端一样的上下布局。
+  useLayoutEffect(() => {
+    const root = identityRef.current;
+    if (!root || typeof ResizeObserver === "undefined") return;
+    const label = root.querySelector<HTMLElement>(".bt-progress-identity__label");
+    const menu = root.querySelector<HTMLElement>(".bt-progress-identity__menu");
+    if (!label || !menu) return;
+    const update = () => {
+      setStackIdentity(shouldStackProgressIdentity(nowrapScrollWidth(label), nowrapScrollWidth(menu), root.clientWidth));
+    };
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(root);
+    observer.observe(label);
+    observer.observe(menu);
+    return () => observer.disconnect();
+  }, [copy.translateUpdates, identity.mode, identity.values]);
+  const identityLabel = identity.values.length > 1 && onSelectRecent
+    ? <TrackPageOrderBadges values={identity.values.slice(0, 3)} selectedIndex={selectedRecentIndex} onSelect={onSelectRecent} />
+    : identity.values[0]
+      ? <TrackPageQueryNumber mode={identity.mode} value={identity.values[0]} />
+      : <span />;
+  return <div className="bt-progress-result">
+    <style>{progressIdentityStyles}</style>
+    <div ref={identityRef} className={stackIdentity ? "bt-progress-identity bt-progress-identity--stack" : "bt-progress-identity"}>
+      <div className="bt-progress-identity__label">{identityLabel}</div>
+      <div className="bt-progress-identity__menu"><TranslateUpdatesMenu /></div>
+    </div>
     {shipmentValues.length > 1 && onSelectShipment
       ? <TrackPageOrderBadges values={shipmentValues} selectedIndex={selectedShipmentIndex} onSelect={onSelectShipment} style={{ marginTop: 8 }} />
       : null}
-    <h2 style={{ margin: "clamp(24px, 8%, 48px) 0 0", fontSize: 32, lineHeight: 1.25, fontWeight: 700, color: "#303030", overflowWrap: "anywhere" }}>{result.status}</h2>
+    <h2 style={{ margin: "clamp(24px, 8%, 48px) 0 0", fontSize: 32, lineHeight: 1.25, fontWeight: 700, color: "#303030", overflowWrap: "anywhere" }}>{localizeKnownLabel(result.status, copy)}</h2>
     <div className="bt-progress-band">
       {showEstimatedDelivery && result.estimatedDelivery ? <EstimatedDeliveryCard dateText={result.estimatedDelivery} steps={steps.length} /> : null}
       <TrackingProgress steps={steps} color={color} />
     </div>
-  </>;
+  </div>;
 }
 
 // eventsFrom 是公共 trackingEvents 的本地别名：优先完整事件列表，其次取 latestEvent 摘要。
 // 本组件只保留左右栏外观；不自行截断事件，也不按模板生成另一份物流数据。
+function ShippingDetailsHeading({ heading }: { heading: ReactNode }) {
+  return <h3 style={{ margin: 0, fontSize: 20, lineHeight: 1.2, fontWeight: 700 }}>{heading}</h3>;
+}
+
+function LocalizedInlineText({ block, name, englishDefault }: { block: ReadyToGoEditorProps; name: string; englishDefault: string }) {
+  const runtime = useReadyToGoRuntime();
+  const copy = useTrackingCopy();
+  const stored = text(block, name, englishDefault);
+  const localized = localizedConfiguredText(stored, englishDefault, copy);
+  const usesDefault = !stored.trim() || stored === englishDefault;
+  // 非英文预览默认标题时不把译本写进文档；商家改过的标题仍可在画布编辑。
+  if (block.selected && (!usesDefault || runtime.locale === "EN")) {
+    return <InlineText block={block} name={name} fallback={englishDefault} />;
+  }
+  return <span data-ready-to-go-editor-field={name}>{localized}</span>;
+}
+
+const deliveryColumnsStyle: CSSProperties = {
+  ...contentWidth,
+  display: "flex",
+  flexWrap: "wrap",
+  flexDirection: "row-reverse",
+  justifyContent: "center",
+  alignItems: "start",
+  gap: 40
+};
+const deliveryColumnStyle: CSSProperties = {
+  flex: "1 1 320px",
+  maxWidth: 500,
+  minWidth: 0,
+  boxSizing: "border-box"
+};
+
 function DeliveryResult({ heading, contentsHeading, carrierHeading, result, editing }: { heading: ReactNode; contentsHeading: ReactNode; carrierHeading: ReactNode; result: ReadyToGoTrackingResult; editing?: boolean }) {
-  return <div style={{ ...contentWidth, display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 280px), 500px))", gap: 40, justifyContent: "center", alignItems: "start" }}>
-    <div>
-      <h3 style={{ margin: 0, fontSize: 20, lineHeight: "20px", fontWeight: 700 }}>{heading}</h3>
-      <ShippingTimeline events={eventsFrom(result)} />
-    </div>
-    <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+  const copy = useTrackingCopy();
+  // 两栏都放得下时，row-reverse 仍让物流详情在左、包裹内容在右；宽度不够时先收起左侧物流栏，保留右侧。
+  return <div className="bt-delivery-columns" style={deliveryColumnsStyle}>
+    <div style={{ ...deliveryColumnStyle, display: "flex", flexDirection: "column", gap: 24 }}>
       <TrackingPageAdSlot ad={result.ad} disableLink={editing} />
       <div>
         <h3 style={{ margin: "0 0 12px", fontSize: 18, fontWeight: 700 }}>{contentsHeading}</h3>
@@ -253,9 +366,13 @@ function DeliveryResult({ heading, contentsHeading, carrierHeading, result, edit
       </div>
       <div>
         <h3 style={{ margin: "0 0 12px", fontSize: 18, fontWeight: 700 }}>{carrierHeading}</h3>
-        <p style={{ margin: 0, fontSize: 14, fontWeight: 600, color: "#1e293b" }}>{result.carrier ?? "Not available"}</p>
-        <p style={{ margin: "8px 0 0", fontSize: 14, color: "#64748b" }}>{result.destination ?? "Destination details are not available."}</p>
+        <p style={{ margin: 0, fontSize: 14, fontWeight: 600, color: "#1e293b" }}>{result.carrier ?? copy.notAvailable}</p>
+        <p style={{ margin: "8px 0 0", fontSize: 14, color: "#64748b" }}>{result.destination ?? copy.destinationUnavailable}</p>
       </div>
+    </div>
+    <div style={deliveryColumnStyle}>
+      <ShippingDetailsHeading heading={heading} />
+      <ShippingTimeline events={eventsFrom(result)} />
     </div>
   </div>;
 }
@@ -345,9 +462,9 @@ export function ReadyToGoDeliveryEditor(block: ReadyToGoEditorProps) {
   const { adPreview } = useReadyToGoRuntime();
   return <section aria-label="Ready-to-go delivery editor" style={{ ...pageFont, background: "var(--pb-color-background, #fff)", color: "var(--pb-color-text, #0f172a)", borderBottom: "1px solid #f1f5f9" }}>
     <DeliveryResult
-      heading={<InlineText block={block} name="heading" fallback="Shipping Details" />}
-      contentsHeading={<InlineText block={block} name="contentsHeading" fallback="Package Contents" />}
-      carrierHeading={<InlineText block={block} name="carrierHeading" fallback="Carrier" />}
+      heading={<LocalizedInlineText block={block} name="heading" englishDefault="Shipping Details" />}
+      contentsHeading={<LocalizedInlineText block={block} name="contentsHeading" englishDefault="Package Contents" />}
+      carrierHeading={<LocalizedInlineText block={block} name="carrierHeading" englishDefault="Carrier" />}
       editing
       result={{ ...previewReadyToGoTracking(), ad: adPreview ?? undefined }}
     />
@@ -413,15 +530,16 @@ export function ReadyToGoQueryBlock(props: Record<string, unknown>) {
 
 export function ReadyToGoProgressBlock(props: Record<string, unknown>) {
   const runtime = useReadyToGoRuntime();
+  const copy = useTrackingCopy();
   // 必需区块可以暂时不输出内容：idle/loading 隐藏，empty 显示未找到，error 显示不可用。
   // 显隐与演示预览隐藏预计送达日期的规则由共用模型决定，不在模板中另设业务分支。
   const visibility = trackingBlockState(runtime);
   const result = runtime.result;
   if (!visibility.showProgress) return null;
   if (visibility.showNotFound) return <TrackingNotFound resultAnchor />;
-  return <SectionShell title="Shipment progress" resultAnchor>
+  return <SectionShell title={copy.shipmentProgress} resultAnchor>
     <div style={{ ...contentWidth, textAlign: "center", width: "min(1248px, 100%)" }}>
-      {visibility.showUnavailable ? <p style={{ margin: 0, color: "#b42318" }}>Shipment progress is temporarily unavailable.</p> : null}
+      {visibility.showUnavailable ? <p style={{ margin: 0, color: "#b42318" }}>{copy.shipmentProgressUnavailable}</p> : null}
       {visibility.showResult && result ? <ProgressResult
         result={result}
         showEstimatedDelivery={visibility.showEstimatedDelivery}
@@ -438,18 +556,19 @@ export function ReadyToGoProgressBlock(props: Record<string, unknown>) {
 
 export function ReadyToGoDeliveryBlock(props: Record<string, unknown>) {
   const runtime = useReadyToGoRuntime();
+  const copy = useTrackingCopy();
   const visibility = trackingBlockState(runtime);
   if (!visibility.showDelivery) return null;
-  const heading = text(props, "heading", "Shipping Details");
-  const contentsHeading = text(props, "contentsHeading", "Package Contents");
-  const carrierHeading = text(props, "carrierHeading", "Carrier");
+  const heading = localizedConfiguredText(text(props, "heading", "Shipping Details"), "Shipping Details", copy);
+  const contentsHeading = localizedConfiguredText(text(props, "contentsHeading", "Package Contents"), "Package Contents", copy);
+  const carrierHeading = localizedConfiguredText(text(props, "carrierHeading", "Carrier"), "Carrier", copy);
   // Runtime 已将选中包裹投影到 result；与进度区读取同一份结果，避免切换后各区块不同步。
   const result = runtime.result;
   return <SectionShell title={heading}>
-    {visibility.showResult && result ? <DeliveryResult heading={heading} contentsHeading={contentsHeading} carrierHeading={carrierHeading} result={result} /> : <div style={{ ...contentWidth, display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 280px), 500px))", gap: 40, justifyContent: "center", alignItems: "start" }}>
-      <div>
-        <h3 style={{ margin: 0, fontSize: 20, lineHeight: "20px", fontWeight: 700 }}>{heading}</h3>
-        {visibility.showUnavailable ? <p style={{ margin: "16px 0 0", color: "#b42318" }}>Delivery details are temporarily unavailable.</p> : null}
+    {visibility.showResult && result ? <DeliveryResult heading={heading} contentsHeading={contentsHeading} carrierHeading={carrierHeading} result={result} /> : <div className="bt-delivery-columns" style={deliveryColumnsStyle}>
+      <div style={deliveryColumnStyle}>
+        <ShippingDetailsHeading heading={heading} />
+        {visibility.showUnavailable ? <p style={{ margin: "16px 0 0", color: "#b42318" }}>{copy.deliveryUnavailable}</p> : null}
       </div>
     </div>}
   </SectionShell>;

@@ -99,6 +99,11 @@ Do not persist arbitrary CSS or untrusted style strings.
 `autoQueryDemo` is restricted to explicit Mock previews and hides estimated
 delivery. Production hosts leave it off; URL auto-query has its own flag.
 
+The tracking timeline heading shares the Ready-to-go **Translate updates**
+control. It uses the same Runtime `locale`, persistence, and in-place
+`lang` refresh. Default chrome follows the selected language; merchant-edited
+copy does not. See [Translate updates](./translate-updates.md).
+
 ## Storefront acceptance
 
 Before merging a release, validate in a real Shopify development store:
@@ -111,5 +116,7 @@ Before merging a release, validate in a real Shopify development store:
   together while independent recommendations remain stable.
 - At 320px, the in-card result has no horizontal scrolling, tabs and result
   actions have 44px touch targets, and only the card scrolls vertically.
+- Translate updates lists the ten supported languages, keeps a short
+  **Translate** pill at ≤640px, and does not overwrite merchant-edited titles.
 - Invalid or empty query results and bad resource links show controlled states.
 - The surface has no visible collision with the active Shopify Theme.

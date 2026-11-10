@@ -13,9 +13,9 @@ import {
   syncTrackingQueryToUrl,
   withShopifyAppProxyPrefix,
   withShopifyTrackCacheBust
-} from "./shopify-track-query";
-import { formatEstimatedDelivery, shouldShowEstimatedDelivery, trackingResultScrollOffset } from "./shopify-track-page/timeline";
-import type { TrackMilestone } from "./shopify-track-page/pages/home/types";
+} from "./track-query";
+import { formatEstimatedDelivery, shouldShowEstimatedDelivery, trackingResultScrollOffset } from "./timeline";
+import type { TrackMilestone } from "./types";
 
 const transitMilestone: TrackMilestone = {
   tracking_number: "BT-2048",

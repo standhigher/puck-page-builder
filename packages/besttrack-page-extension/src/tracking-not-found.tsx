@@ -1,4 +1,4 @@
-import notFoundImage from "./shopify-track-page/assets/not-found.png";
+import notFoundImage from "./shopify/assets/not-found.png";
 
 /** Empty-state illustration and copy reused from the Shopify Track Page. */
 export function TrackingNotFound({ resultAnchor = false }: { resultAnchor?: boolean } = {}) {

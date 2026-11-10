@@ -1,5 +1,5 @@
 import { parseProductReferences } from "@standhigher/puck-page-builder/runtime";
-import { resolveShopifyRecommendHref } from "./shopify-track-query";
+import { resolveShopifyRecommendHref } from "./shopify/track-query";
 import type { TrackingPageMoney, TrackingPageQueryResult, TrackingPageRecommendation, TrackingPageRecommendationsState, TrackingPageRuntimePhase, TrackingPageTrackingEvent, TrackingPageTrackingStep } from "./tracking-page-runtime";
 
 /** 未提供进度节点时，按状态文本推导五个基础阶段；不为真实订单补造演示日期。 */

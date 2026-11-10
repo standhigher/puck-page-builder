@@ -1,6 +1,6 @@
-import { formatTrackingDateLabel, formatTrackingDateTime } from "./i18n/dateTime";
-import type { Locale } from "./i18n/locales";
-import { asText } from "./pages/home/asText";
+import { formatTrackingDateLabel, formatTrackingDateTime } from "../i18n/dateTime";
+import type { Locale } from "../i18n/locales";
+import { asText } from "./asText";
 import type {
   EstimatedDelivery,
   EstimatedDeliveryDisplay,
@@ -16,7 +16,7 @@ import type {
   TrackingStatusRecord,
   TrackingStep,
   TrackingStepKey,
-} from "./pages/home/types";
+} from "./types";
 import type { TrackingPageQueryRequest } from "../tracking-page-runtime";
 
 const DEFAULT_INFO_NODE: TrackingNode = {

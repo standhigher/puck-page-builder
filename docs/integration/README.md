@@ -20,6 +20,7 @@
 | 接入 Ready-to-go 模板 | [Ready-to-go 模板](./ready-to-go.md) |
 | Ready-to-go 预览自动查 demo / 隐藏 EDD | [预览 Demo 自动查单](./ready-to-go-preview-demo.md) |
 | Track Page 动态广告与推荐商品 | [动态内容改动说明](./track-page-dynamic-content.md) |
+| 消费者物流语言 / Translate updates | [Translate updates](./translate-updates.md) |
 | 接入 Branded 模板 | [Branded 模板](./branded-template.md) |
 | 接入 Sales 模板 | [Sales 模板](./sales-template.md) |
 | 设计服务端页面加载、数据绑定与降级 | [Runtime 接入](./runtime.md) |

@@ -34,6 +34,52 @@ or picker copy. Hosts retain their fetching, persistence, and selection adapters
 Changing the interface language never changes `defaultProps`, a merchant's
 content, canvas text, or `PageDocument.settings.locale`.
 
+## Storefront tracking language
+
+**Translate updates** is a consumer-page control. It works on the published
+tracking page and in the editor canvas. Both surfaces share
+`TrackingRuntimeProvider` `locale`; switching language in the canvas is a
+preview of the same runtime, not an editor-only toggle.
+
+Default is **`EN`**. Resolution order is `?lang=`, then `bestrack_locale`,
+then English. Browser `navigator.language` is not read. The menu lists the
+original Track Page locales: `EN`, `ZH-HANS`, `FR`, `ES`, `DE`, `PT-BR`,
+`IT`, `ID`, `VI`, `TH`.
+
+The menu sits in the top-right of the shipment progress card (Ready-to-go)
+or next to the tracking timeline (Branded / Sales). Ready-to-go keeps the
+tracking number centered when it fits on one row with the control. On
+viewports or progress-card containers ≤640px, or when they cannot share one
+row, the control moves above the tracking number. Desktop shows globe +
+**Translate updates** + chevron. Viewport widths ≤640px show a short
+**Translate** pill without a chevron; the accessible name stays the full
+phrase.
+
+It sets Runtime `locale`, persists `bestrack_locale`, and syncs `?lang=`.
+A **successful** lookup is re-queried in place with `lang` on the Shopify
+`transport` path. Idle, empty, and error states are not retried. That
+in-place refresh does not enter loading, so Searching... does not appear.
+A new Track Your Order submit does show Searching..., and that string
+follows the current Runtime locale.
+
+English default chrome is translated **at render time** from the package
+dictionary. That includes default headings such as Shipping Details,
+Package Contents, and Carrier, plus progress labels, Searching..., empty
+states, Reorder, tracking/order labels, and known demo event titles. The
+translated string is displayed only. It is never written back into
+`PageDocument`, `defaultProps`, or `settings.locale`.
+
+Merchant-edited headings (any stored value other than the English default)
+render exactly as saved in every language. Carrier-authored event text,
+carrier names, destinations, and product titles also stay as returned.
+
+This locale is not `adminLocale`. Do not pass a static `transport.locale`
+snapshot; the runtime reads locale at request time. Custom `query`
+callbacks do not receive `locale` on the request object; read `?lang=` or
+`bestrack_locale` at call time if the host must translate carrier events.
+Hosts that already inject `transport` or `query` only need to upgrade this
+package. See `docs/integration/translate-updates.md`.
+
 ## Query provider
 
 Branded and Sales still receive a host-owned `TrackingPageQuery` through `query`.

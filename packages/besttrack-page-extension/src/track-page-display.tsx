@@ -159,7 +159,7 @@ const trackingProgressStyles = `
 .bt-progress__icon { width: 44px; height: 44px; }
 .bt-progress__line { top: 19px; }
 .bt-progress__copy { margin-top: 16px; }
-.bt-progress__label { font-size: 16px; line-height: 20px; }
+.bt-progress__label { width: max-content; max-width: 100%; margin-inline: auto; font-size: 16px; line-height: 20px; }
 @container (max-width: 640px) {
   .bt-edd-card { --bt-progress-icon: 32px; }
   .bt-progress__icon { width: 32px; height: 32px; }
@@ -257,7 +257,7 @@ export function TrackingProgress({ steps, color }: { steps: ReadyToGoTrackingSte
             <StepIcon name={step.icon ?? (index === 0 || index === steps.length - 1 ? "check" : index === 1 ? "bag" : index === 2 ? "truck" : "box")} done={done} />
           </span>
           <div className="bt-progress__copy" style={{ width: "100%", maxWidth: "100%", boxSizing: "border-box", textAlign: "center", padding: "0 2px" }}>
-            <p className="bt-progress__label" style={{ margin: 0, fontWeight: 500, color: "#334155", overflowWrap: "anywhere", wordBreak: "break-word" }}>{label}</p>
+            <p className="bt-progress__label" style={{ margin: "0 auto", width: "max-content", maxWidth: "100%", fontWeight: 500, color: "#334155", overflowWrap: "anywhere", wordBreak: "break-word" }}>{label}</p>
             {step.date ? <p style={{ margin: "6px 0 0", fontSize: 12, lineHeight: "16px", color: "#94a3b8", overflowWrap: "anywhere" }}>{step.date}</p> : null}
           </div>
         </div>;

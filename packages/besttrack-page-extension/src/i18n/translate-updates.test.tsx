@@ -48,6 +48,7 @@ describe("Translate updates menu", () => {
     expect(progress.querySelector(".bt-progress-identity")).toBeInTheDocument();
     expect(translate.closest(".bt-progress-identity__menu")).toBeInTheDocument();
     expect(progress.querySelector("style")?.textContent).toContain("minmax(0, 1fr) auto minmax(0, 1fr)");
+    expect(progress.querySelector("style")?.textContent).toContain("--bt-translate-menu-inset");
     expect(progress.querySelector("style")?.textContent).toContain("order: -1");
   });
 
@@ -55,6 +56,11 @@ describe("Translate updates menu", () => {
     expect(shouldStackProgressIdentity(280, 180, 900)).toBe(false);
     expect(shouldStackProgressIdentity(280, 180, 500)).toBe(true);
     expect(shouldStackProgressIdentity(280, 180, 0)).toBe(false);
+  });
+
+  it("stacks sooner when the language control is inset to the last progress label", () => {
+    expect(shouldStackProgressIdentity(280, 180, 900, 12, 0)).toBe(false);
+    expect(shouldStackProgressIdentity(280, 180, 900, 12, 150)).toBe(true);
   });
 
   it("does not sit next to Shipping Details in the delivery editor preview", () => {

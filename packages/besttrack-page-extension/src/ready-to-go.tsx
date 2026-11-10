@@ -204,7 +204,7 @@ const progressIdentityStackRules = `
     align-items: center;
     gap: 8px;
   }
-  .bt-progress-identity__menu { order: -1; }
+  .bt-progress-identity__menu { order: -1; margin-right: 0; }
   .bt-progress-identity__label,
   .bt-progress-identity__label * { white-space: normal; overflow-wrap: anywhere; }
 `;
@@ -218,9 +218,10 @@ const progressIdentityStyles = `
   column-gap: ${progressIdentityGap}px;
   width: 100%;
   min-width: 0;
+  --bt-translate-menu-inset: 0px;
 }
 .bt-progress-identity__label { grid-column: 2; min-width: 0; text-align: center; }
-.bt-progress-identity__menu { grid-column: 3; justify-self: end; }
+.bt-progress-identity__menu { grid-column: 3; justify-self: end; margin-right: var(--bt-translate-menu-inset); }
 .bt-progress-identity--stack {
   display: flex;
   flex-direction: column;
@@ -228,17 +229,24 @@ const progressIdentityStyles = `
   align-items: center;
   gap: 8px;
 }
-.bt-progress-identity--stack .bt-progress-identity__menu { order: -1; }
+.bt-progress-identity--stack .bt-progress-identity__menu { order: -1; margin-right: 0; }
 .bt-progress-identity--stack .bt-progress-identity__label,
 .bt-progress-identity--stack .bt-progress-identity__label * { white-space: normal; overflow-wrap: anywhere; }
 @media (max-width: 640px) { ${progressIdentityStackRules} }
 @container (max-width: 640px) { ${progressIdentityStackRules} }
 `;
 
-/** 整卡居中要左右各留一列给语言按钮；左右列不够宽就改成上下布局，避免挡住单号。 */
-export function shouldStackProgressIdentity(labelWidth: number, menuWidth: number, availableWidth: number, gap = progressIdentityGap) {
+/** 整卡居中要左右各留一列给语言按钮；按钮相对最后一档进度文案内缩后，左右列不够宽就改成上下布局。 */
+export function shouldStackProgressIdentity(labelWidth: number, menuWidth: number, availableWidth: number, gap = progressIdentityGap, menuInset = 0) {
   if (availableWidth <= 0) return false;
-  return labelWidth + 2 * menuWidth + 2 * gap > availableWidth;
+  return labelWidth + 2 * (menuWidth + Math.max(0, menuInset)) + 2 * gap > availableWidth;
+}
+
+function lastProgressLabelInset(identity: HTMLElement) {
+  const labels = identity.closest(".bt-progress-result")?.querySelectorAll<HTMLElement>(".bt-progress__label");
+  const last = labels?.[labels.length - 1];
+  if (!last) return 0;
+  return Math.max(0, identity.getBoundingClientRect().right - last.getBoundingClientRect().right);
 }
 
 function nowrapScrollWidth(el: HTMLElement) {
@@ -280,7 +288,7 @@ function ProgressResult({
   const { identity, shipmentValues } = trackingSelection(result, recentQueries);
   const identityRef = useRef<HTMLDivElement>(null);
   const [stackIdentity, setStackIdentity] = useState(false);
-  // 桌面：运单号整卡居中，语言入口同一行右侧。单号或语言文案过长、左右留白不够时，换成和移动端一样的上下布局。
+  // 桌面：运单号整卡居中，语言入口与最后一档进度文案右对齐。单号或语言文案过长、左右留白不够时，换成和移动端一样的上下布局。
   useLayoutEffect(() => {
     const root = identityRef.current;
     if (!root || typeof ResizeObserver === "undefined") return;
@@ -288,15 +296,22 @@ function ProgressResult({
     const menu = root.querySelector<HTMLElement>(".bt-progress-identity__menu");
     if (!label || !menu) return;
     const update = () => {
-      setStackIdentity(shouldStackProgressIdentity(nowrapScrollWidth(label), nowrapScrollWidth(menu), root.clientWidth));
+      const inset = lastProgressLabelInset(root);
+      const stacked = shouldStackProgressIdentity(nowrapScrollWidth(label), nowrapScrollWidth(menu), root.clientWidth, progressIdentityGap, inset);
+      setStackIdentity(stacked);
+      const nextInset = stacked ? "0px" : `${Math.round(inset)}px`;
+      if (root.style.getPropertyValue("--bt-translate-menu-inset") !== nextInset) {
+        root.style.setProperty("--bt-translate-menu-inset", nextInset);
+      }
     };
     update();
     const observer = new ResizeObserver(update);
     observer.observe(root);
     observer.observe(label);
     observer.observe(menu);
+    root.closest(".bt-progress-result")?.querySelectorAll(".bt-progress__label").forEach((stepLabel) => observer.observe(stepLabel));
     return () => observer.disconnect();
-  }, [copy.translateUpdates, identity.mode, identity.values]);
+  }, [copy.delivered, copy.translateUpdates, identity.mode, identity.values, result.progress, result.status]);
   const identityLabel = identity.values.length > 1 && onSelectRecent
     ? <TrackPageOrderBadges values={identity.values.slice(0, 3)} selectedIndex={selectedRecentIndex} onSelect={onSelectRecent} />
     : identity.values[0]

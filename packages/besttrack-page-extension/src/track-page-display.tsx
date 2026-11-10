@@ -7,7 +7,8 @@ import type { TrackingPageAd } from "./tracking-page-runtime";
 import { formatRecommendationPrice } from "./tracking-block-model";
 // 默认进度算法已归到三模板共用模型；保留这个旧导出路径兼容现有引用。
 export { defaultProgress } from "./tracking-block-model";
-import { resolveShopifyRecommendHref } from "./shopify-track-query";
+import { localizeKnownLabel, useTrackingCopy } from "./i18n/storefront-copy";
+import { resolveShopifyRecommendHref } from "./shopify/track-query";
 import { safeTrackingPageUrl } from "./tracking-page-url";
 
 export const pageFont = { fontFamily: "var(--pb-font-family, Inter, system-ui, sans-serif)" } satisfies CSSProperties;
@@ -102,6 +103,7 @@ function progressColor(value?: string) {
 }
 
 export function TrackingProgress({ steps, color }: { steps: ReadyToGoTrackingStep[]; color?: string }) {
+  const copy = useTrackingCopy();
   const active = progressColor(color);
   const cells = Math.max(steps.length, 1);
   return <div className="bt-progress" role="region" aria-label="Delivery progress" style={{ marginTop: 32, width: "100%", maxWidth: 1200, marginLeft: "auto", marginRight: "auto", overflow: "visible" }}>
@@ -116,12 +118,13 @@ export function TrackingProgress({ steps, color }: { steps: ReadyToGoTrackingSte
       </div> : null}
       {steps.map((step, index) => {
         const done = step.state === "complete" || step.state === "current";
+        const label = localizeKnownLabel(step.label, copy);
         return <div key={step.id} style={{ minWidth: 0, display: "flex", flexDirection: "column", alignItems: "center", position: "relative", zIndex: 1 }}>
-          <span className="bt-progress__icon" aria-label={step.label + " " + step.state} style={{ display: "flex", flexShrink: 0, alignItems: "center", justifyContent: "center", borderRadius: 9999, border: `1px solid ${active}`, background: done ? active : "#fff", color: active }}>
+          <span className="bt-progress__icon" aria-label={label + " " + step.state} style={{ display: "flex", flexShrink: 0, alignItems: "center", justifyContent: "center", borderRadius: 9999, border: `1px solid ${active}`, background: done ? active : "#fff", color: active }}>
             <StepIcon name={step.icon ?? (index === 0 || index === steps.length - 1 ? "check" : index === 1 ? "bag" : index === 2 ? "truck" : "box")} done={done} />
           </span>
           <div className="bt-progress__copy" style={{ width: "100%", maxWidth: "100%", boxSizing: "border-box", textAlign: "center", padding: "0 2px" }}>
-            <p className="bt-progress__label" style={{ margin: 0, fontWeight: 500, color: "#334155", overflowWrap: "anywhere", wordBreak: "break-word" }}>{step.label}</p>
+            <p className="bt-progress__label" style={{ margin: 0, fontWeight: 500, color: "#334155", overflowWrap: "anywhere", wordBreak: "break-word" }}>{label}</p>
             {step.date ? <p style={{ margin: "6px 0 0", fontSize: 12, lineHeight: "16px", color: "#94a3b8", overflowWrap: "anywhere" }}>{step.date}</p> : null}
           </div>
         </div>;
@@ -131,16 +134,17 @@ export function TrackingProgress({ steps, color }: { steps: ReadyToGoTrackingSte
 }
 
 export function ShippingTimeline({ events }: { events: ReadyToGoTrackingEvent[] }) {
+  const copy = useTrackingCopy();
   if (!events.length) {
-    return <p style={{ margin: "16px 0 0", color: "#475569", fontSize: 14 }}>Shipping events will appear when the carrier publishes them.</p>;
+    return <p style={{ margin: "16px 0 0", color: "#475569", fontSize: 14 }}>{copy.shippingEventsEmpty}</p>;
   }
-  return <div aria-label="Shipping events" style={{ marginTop: 16, display: "flex", flexDirection: "column", gap: 20 }}>
+  return <div aria-label={copy.shippingEvents} style={{ marginTop: 16, display: "flex", flexDirection: "column", gap: 20 }}>
     {events.map((event, index) => {
       const latest = event.state === "current" || index === 0;
       return <div key={event.id} style={{ position: "relative", paddingLeft: 28, paddingBottom: index < events.length - 1 ? 20 : 0 }}>
         <span aria-hidden="true" style={{ position: "absolute", left: 0, top: 2, width: 16, height: 16, borderRadius: 9999, background: latest ? "#16a34a" : "#cbd5e1" }} />
         {index < events.length - 1 ? <span aria-hidden="true" style={{ position: "absolute", left: 7, top: 20, width: 1, height: "100%", background: "#e2e8f0" }} /> : null}
-        <p style={{ margin: 0, fontSize: 14, fontWeight: 500, lineHeight: 1.5, color: latest ? "#c01400" : "#64748b" }}>{event.title}{event.detail ? ", " + event.detail : ""}</p>
+        <p style={{ margin: 0, fontSize: 14, fontWeight: 500, lineHeight: 1.5, color: latest ? "#c01400" : "#64748b" }}>{localizeKnownLabel(event.title, copy)}{event.detail ? ", " + event.detail : ""}</p>
         {event.at ? <p style={{ margin: "4px 0 0", fontSize: 12, lineHeight: 1.5, color: latest ? "rgba(192, 20, 0, 0.8)" : "#94a3b8" }}>{event.at}</p> : null}
       </div>;
     })}
@@ -148,7 +152,8 @@ export function ShippingTimeline({ events }: { events: ReadyToGoTrackingEvent[] 
 }
 
 export function PackageContents({ items }: { items: ReadyToGoOrderItem[] }) {
-  if (!items.length) return <p style={{ margin: 0, color: "#64748b", fontSize: 14 }}>Package contents are not available for this shipment.</p>;
+  const copy = useTrackingCopy();
+  if (!items.length) return <p style={{ margin: 0, color: "#64748b", fontSize: 14 }}>{copy.packageContentsUnavailable}</p>;
   return <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
     <style>{packageNameStyles}</style>
     {items.map((item) => {
@@ -163,7 +168,7 @@ export function PackageContents({ items }: { items: ReadyToGoOrderItem[] }) {
           {item.description ? <p style={{ margin: "4px 0 0", fontSize: 13, color: "#64748b" }}>{item.description}</p> : null}
           <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8, marginTop: 4 }}>
             <p style={{ margin: 0, fontSize: 13, color: "#64748b" }}>x{item.quantity}</p>
-            <a href={packageReorderHref(item.href)} className="bt-package-reorder">Reorder</a>
+            <a href={packageReorderHref(item.href)} className="bt-package-reorder">{copy.reorder}</a>
           </div>
         </div>
       </article>;
@@ -308,11 +313,12 @@ export function TrackingPageAdSlot({ ad, disableLink = false }: { ad?: TrackingP
 
 /** Original Track Page `bst-edd-card`. Width matches the progress icons, from the outer edge of the first step to the outer edge of the last. */
 export function EstimatedDeliveryCard({ dateText, steps = 5 }: { dateText: string; steps?: number }) {
+  const copy = useTrackingCopy();
   const trackInset = `max(0px, calc(50% / ${Math.max(steps, 1)} - var(--bt-progress-icon, 44px) / 2))`;
-  return <div aria-label="Est. Delivery" className="bt-edd-card" style={{ margin: `16px ${trackInset} 0`, width: "auto", boxSizing: "border-box", border: "1px solid transparent", borderRadius: 10, backgroundColor: "#eaf4ff", padding: "20px 22px 18px", textAlign: "left" }}>
-    <p style={{ margin: 0, color: "#202124", fontSize: 13, fontWeight: 700, lineHeight: 1.3 }}>Est. Delivery</p>
+  return <div aria-label={copy.estDelivery} className="bt-edd-card" style={{ margin: `16px ${trackInset} 0`, width: "auto", boxSizing: "border-box", border: "1px solid transparent", borderRadius: 10, backgroundColor: "#eaf4ff", padding: "20px 22px 18px", textAlign: "left" }}>
+    <p style={{ margin: 0, color: "#202124", fontSize: 13, fontWeight: 700, lineHeight: 1.3 }}>{copy.estDelivery}</p>
     <p style={{ margin: "6px 0 0", color: "#202124", fontSize: 22, fontWeight: 700, lineHeight: 1.15, letterSpacing: 0, overflowWrap: "anywhere", wordBreak: "break-word" }}>{dateText}</p>
-    <p style={{ margin: "6px 0 0", color: "#5f6368", fontSize: 13, fontWeight: 400, lineHeight: 1.35 }}>Estimated time may update as tracking progresses.</p>
+    <p style={{ margin: "6px 0 0", color: "#5f6368", fontSize: 13, fontWeight: 400, lineHeight: 1.35 }}>{copy.estDeliveryHint}</p>
   </div>;
 }
 
@@ -372,8 +378,9 @@ export function TrackPageOrderBadges({
 
 /** 第一层只有一个查询标识时显示文本；mode 用于区分订单号/运单号文案，不控制包裹拆分。 */
 export function TrackPageQueryNumber({ mode, value }: { mode: "tracking" | "order"; value: string }) {
+  const copy = useTrackingCopy();
   return <p style={{ margin: 0, fontSize: 20, fontWeight: 400, lineHeight: 1.4, color: "#000", overflowWrap: "anywhere" }}>
-    {mode === "order" ? "Order" : "Tracking"}: {value}
+    {mode === "order" ? copy.orderLabel : copy.trackingLabel}: {value}
   </p>;
 }
 

@@ -69,7 +69,7 @@ import {
 Ready-to-go 只换了 PageDocument + WebRenderer 渲染链路。`transport` 路径完整复用原 Track Page 逻辑：
 
 - `POST /track/query?_t=Date.now()`，请求体 `{ order_number, email, tracking_number, lang }`
-- `lang` 来自 `?lang=`、`bestrack_locale` 或宿主传入的 locale
+- `lang` 由 Runtime 当前语言写入：`?lang=` 优先，其次 `bestrack_locale`，默认 `EN`。消费者用进度卡右上角的 Translate updates 切换；不要再给 `transport` 传一份与入口脱节的 locale 快照。详见 [Translate updates](./translate-updates.md)
 - 网络失败重试一次；`code !== 0` 或重试耗尽都显示未找到订单
 - 进度、物流时间、预计送达、`ad_config` 按原页面规则映射
 - 表单只校验非空，文案与原页面一致
@@ -90,6 +90,10 @@ Shopify Demo 的 `/page-builder` 已包含该模板的编辑器和 Consumer WebR
 原 Track Page 把业务失败和请求失败都显示为未找到订单。`transport` 路径与此一致：`code !== 0` 或重试耗尽后，Ready-to-go 在进度区块显示原插图和 `Can not find order`，配送详情和广告收起。独立加载的推荐商品继续显示。插图随包内联，无需宿主额外复制静态资源。
 
 若宿主注入自定义 `query` 并抛错，Ready-to-go 仍显示受控错误提示，以便新的 Consumer Runtime 区分不可用与未找到。不要把 Mock 结果当作失败回退。
+
+## 物流语言
+
+进度卡运单号右侧的 Translate updates 与 Branded / Sales 共用同一份 Runtime `locale`；移动端，或单号与语言入口同一行放不下时，改到运单号正上方。画布预览和正式查单页都走这套 Runtime，不是只在画布里切换。默认英文；列表为原 Track Page 的 10 种语言。切换后会持久化、同步 URL，并在已有成功结果时按新 `lang` 原地重查，不把时间线切到 loading。英文默认标题显示时走词典、不写回文档；商家改过的标题保持原文。编辑器 `adminLocale` 与 `PageDocument.settings.locale` 不参与这次切换。规则与宿主注意项见 [Translate updates](./translate-updates.md)。
 
 ## 响应式与样式隔离
 

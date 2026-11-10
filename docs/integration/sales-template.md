@@ -93,7 +93,9 @@ No products means no rendered recommendation content; errors, query switching
 and shipment switching do not alter independently loaded recommendations.
 Prices follow Ready-to-go's `$ 0.00` recommendation display; Sales retains its
 grid layout. `autoQueryDemo` is only for explicit Mock previews and suppresses
-estimated delivery; production hosts omit it.
+estimated delivery; production hosts omit it. The tracking timeline uses the
+shared **Translate updates** control; see
+[Translate updates](./translate-updates.md).
 
 The query, order-items and other-tracking blocks cannot be deleted or
 duplicated in the editor. Recommendations stay singleton and can be deleted,
@@ -131,5 +133,7 @@ Runtime API or another trusted host service.
 - All customer-facing query results use controlled loading, empty and generic
   error states; raw host errors are never displayed.
 - Merchant-authored links allow only public HTTPS destinations.
+- Translate updates switches storefront locale without changing merchant-edited
+  headings or `PageDocument.settings.locale`.
 - The host manually tests the published page in its production storefront
   theme at mobile and desktop widths.

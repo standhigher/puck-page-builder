@@ -89,7 +89,8 @@ Ready-to-go 使用 Embla 轮播，3 秒自动播放、悬停暂停，并提供�
 - 滚动：Ready-to-go 提交完成后滚动页面到结果区域；Branded/Sales 可保留卡片内部滚动，由展示层指定滚动目标。
 - 水印：宿主明确传入时优先使用，否则沿用原 powered-by 隐藏规则。公共层共享显隐结果，各模板决定位置。
 - URL 安全与图片失败处理：继续使用公共校验能力。
-- 文档：只保存商家配置和 JSON；订单数据、邮箱和结果均不写入文档。外部文档仍在读取和发布边界经过 `migratePageDocument` 和相应 Registry 校验。
+- 物流语言：Ready-to-go 进度卡 / Tracking timeline 旁的 Translate updates 写入 Runtime `locale`。画布和正式查单页共用这一份状态。默认 `EN`，来源是 `?lang=` 再 `bestrack_locale`，不读浏览器语言。切换成功结果时原地重查并带上 `lang`，时间线不进入 loading。写死店面文案和已知演示节点在渲染时走词典，不写回 `PageDocument`；商家改过的标题、承运商自有节点描述保持原样。与编辑器 `adminLocale`、`PageDocument.settings.locale` 相互独立。详见 [Translate updates](./translate-updates.md)。
+- 文档：只保存商家配置和 JSON；订单数据、邮箱、所选语言和结果均不写入文档。外部文档仍在读取和发布边界经过 `migratePageDocument` 和相应 Registry 校验。
 
 ## 7. 共用层结构
 
@@ -100,7 +101,7 @@ Ready-to-go 使用 Embla 轮播，3 秒自动播放、悬停暂停，并提供�
                   ↓
 公共 Tracking Runtime
   查询状态、最近查询、选中包裹、当前展示结果
-  独立推荐状态、水印、预览配置
+  独立推荐状态、水印、预览配置、物流语言
                   ↓
 四项必要能力：查询 / 进度 / 配送 / 推荐
                   ↓
@@ -132,4 +133,4 @@ import { TrackingRuntimeProvider } from "@standhigher/besttrack-page-extension";
 
 一份 Provider 的查询结果与历史记录属于同一访问上下文。切换店铺、访客授权身份或 Mock/Live 查询环境时，宿主应通过 React `key` 或重新挂载建立新的 Provider，避免跨上下文保留查单记录；仅更换查询函数不会自动清空查询历史。
 
-验收应覆盖两种查询、非空校验、深链、最近三条、包裹联动、响应乱序、empty/error、推荐独立加载、商家选品优先、预览边界以及必要区块不可删除。移动端布局和真实 Shopify Theme 兼容性仍由宿主在店铺中验证。
+验收应覆盖两种查询、非空校验、深链、最近三条、包裹联动、响应乱序、empty/error、推荐独立加载、商家选品优先、预览边界、必要区块不可删除，以及 Translate updates 的默认英文、语言切换后的 `lang` 重查与商家自定义标题保留。移动端布局和真实 Shopify Theme 兼容性仍由宿主在店铺中验证。

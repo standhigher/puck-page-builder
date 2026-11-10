@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import { readTrackingQueryLocationState, syncTrackingQueryToUrl } from "./shopify-track-query";
+import { readTrackingQueryLocationState, syncTrackingQueryToUrl } from "./shopify/track-query";
 import type { TrackingPageRuntimePhase } from "./tracking-page-runtime";
 import { useTrackingRuntime, type TrackingRuntime } from "./tracking-runtime";
 

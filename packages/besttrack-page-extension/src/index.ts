@@ -91,4 +91,4 @@ export {
   withShopifyTrackCacheBust,
   type Locale,
   type ShopifyTrackPageTransport
-} from "./shopify-track-query";
+} from "./shopify/track-query";

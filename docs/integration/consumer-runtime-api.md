@@ -39,8 +39,13 @@ legacy endpoint: `buildShopifyTrackQueryPayload`, `withShopifyTrackCacheBust`,
 live pages should pass `transport.post` rather than rebuilding the request.
 They preserve the old snake_case body, `_t=Date.now()` cache-bust, one retry,
 English locale fallback, and the original progress / shipping /
-estimated-delivery mapping. `code !== 0` and exhausted throws become
-`outcome: "empty"`, matching the original page. `createShopifyTrackQuery` only
+estimated-delivery mapping. `lang` is the Runtime storefront locale from
+Translate updates (`?lang=` then `bestrack_locale`, default `EN`), not
+`PageDocument.settings.locale`. The discriminated `TrackingPageQueryRequest`
+still has no locale field; a custom `query` that needs translated carrier
+events must read the current `?lang=` or `bestrack_locale` when it runs.
+`code !== 0` and exhausted throws become `outcome: "empty"`, matching the
+original page. `createShopifyTrackQuery` only
 calls the host-supplied `post`; it does not know the App Proxy prefix, token,
 or endpoint host. The storefront still owns authorization and the actual fetch.
 

@@ -119,12 +119,22 @@ describe("Ready-to-go Carrier inspector toggle", () => {
     expect(onDocumentChange.mock.lastCall?.[0]).toEqual(deliveryDocument());
   });
 
-  it("renders the switch as a sibling of the Show carrier heading", async () => {
+  it("renders the switch in the Carrier heading card with the help text under its label", async () => {
     render(editor());
     const toggle = await carrierToggle();
     expect(toggle.previousElementSibling).toHaveClass("pb-inspector-field__heading");
-    expect(toggle.previousElementSibling).toHaveTextContent("Show carrier");
+    expect(toggle.previousElementSibling).toHaveTextContent("Carrier heading");
     expect(toggle.previousElementSibling).toHaveTextContent("When off, hide the carrier.");
+    expect(toggle.closest(".pb-inspector-field")).toContainElement(screen.getByLabelText("Carrier heading"));
+    expect(screen.getAllByRole("switch")).toHaveLength(1);
+  });
+
+  it("disables the Carrier heading input while the carrier is hidden", async () => {
+    render(editor({ initialDocument: deliveryDocument(false) }));
+    const toggle = await carrierToggle();
+    expect(screen.getByLabelText("Carrier heading")).toBeDisabled();
+    fireEvent.click(toggle);
+    expect(screen.getByLabelText("Carrier heading")).not.toBeDisabled();
   });
 
   it("keeps the clickable area on the switch track instead of the whole inspector row", () => {

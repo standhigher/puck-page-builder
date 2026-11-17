@@ -1,7 +1,6 @@
 import { DeliveryIcon, ProductIcon, SearchIcon, StatusIcon } from "@shopify/polaris-icons";
 import { createPageDocument, type BlockDefinition, type FieldConfig, type JsonValue, type PageBuilderExtension, type TemplateDefinition } from "@standhigher/puck-page-builder/runtime";
 import { ReadyToGoDeliveryBlock, ReadyToGoDeliveryEditor, ReadyToGoProgressBlock, ReadyToGoProgressEditor, ReadyToGoQueryBlock, ReadyToGoQueryEditor, ReadyToGoRecommendationsBlock, ReadyToGoRecommendationsEditor, ReadyToGoTextField, ReadyToGoToggleField } from "./ready-to-go";
-import { validateReadyToGoDeliveryProps } from "./ready-to-go-delivery-props";
 import { defineTemplatePolicy } from "./template-policy";
 
 const text = (label: string, options: Partial<FieldConfig> = {}) => ({ field: "besttrack.ready-to-go.text", label, control: "text" as const, ...options });
@@ -73,12 +72,10 @@ const readyToGoBlocks: BlockDefinition[] = withTemplatePolicy([
     fields: {
       heading: text("Heading", { validation: { maxLength: 52 } }),
       contentsHeading: text("Package contents heading", { validation: { maxLength: 52 } }),
-      carrierHeading: text("Carrier heading", { validation: { maxLength: 52 } }),
-      showCarrier: { field: "besttrack.ready-to-go.toggle", label: "Show carrier", description: "When off, hide the carrier.", group: "Content" },
+      carrierHeading: text("Carrier heading", { description: "When off, hide the carrier.", validation: { maxLength: 52 }, toggle: { prop: "showCarrier", label: "Show carrier", disablesField: true } }),
       adImageUrl: { field: "besttrack.ready-to-go.asset", label: "Advertisement image", control: "asset", persist: false, group: "Advertisement" },
       adLinkUrl: { field: "besttrack.ready-to-go.url", label: "Advertisement link", control: "url", persist: false, group: "Advertisement", validation: { allowRelativeUrl: true, allowedUrlProtocols: ["https:", "http:"] } }
     },
-    validate: validateReadyToGoDeliveryProps,
     render: { web: ReadyToGoDeliveryBlock, editor: ReadyToGoDeliveryEditor }
   },
   {

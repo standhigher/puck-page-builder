@@ -27,9 +27,9 @@ describe("BestTrack template PRD compatibility metadata", () => {
     expect(bestTrackPageExtension.blocks?.find((block) => block.type === "besttrack.ready-to-go.delivery")?.fields).toMatchObject({
       heading: { validation: { maxLength: 52 } },
       contentsHeading: { validation: { maxLength: 52 } },
-      carrierHeading: { validation: { maxLength: 52 } },
-      showCarrier: { field: "besttrack.ready-to-go.toggle" }
+      carrierHeading: { validation: { maxLength: 52 }, toggle: { prop: "showCarrier", disablesField: true } }
     });
+    expect(bestTrackPageExtension.blocks?.find((block) => block.type === "besttrack.ready-to-go.delivery")?.fields).not.toHaveProperty("showCarrier");
     expect(bestTrackPageExtension.blocks?.find((block) => block.type === "besttrack.ready-to-go.recommendations")?.policy).toEqual({ singleton: true });
     expect(bestTrackBrandedExtension.blocks?.find((block) => block.type === "besttrack.branded.recommendations")?.policy).toEqual({ singleton: true });
     expect(bestTrackSalesExtension.blocks?.find((block) => block.type === "besttrack.sales.recommendations")?.policy).toEqual({ singleton: true });

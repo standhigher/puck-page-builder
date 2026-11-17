@@ -560,13 +560,22 @@ function InspectorProductsControl({ value, disabled, picker, pageId, blockId, i1
   </div>;
 }
 
-function InspectorField({ name, field, value, registry, disabled, assetPicker, productPicker, pageId, blockId, i18n, onChange }: { name: string; field: FieldConfig; value: unknown; registry?: ExtensionRegistry; disabled: boolean; assetPicker?: AssetPickerAdapter; productPicker?: ProductPickerAdapter; pageId: string; blockId: string; i18n: ReturnType<typeof createAdminI18n>; onChange: (value: JsonValue) => void }) {
+function InspectorToggle({ label, checked, disabled, onChange }: { label: string; checked: boolean; disabled: boolean; onChange: (checked: boolean) => void }) {
+  return <button type="button" role="switch" className="pb-inspector-field__toggle" aria-label={label} aria-checked={checked} disabled={disabled} onClick={() => onChange(!checked)}>
+    <span className="pb-inspector-field__toggle-track" aria-hidden="true"><span className="pb-inspector-field__toggle-thumb" /></span>
+  </button>;
+}
+
+function InspectorField({ name, field, value, toggleValue, registry, disabled, assetPicker, productPicker, pageId, blockId, i18n, onChange, onToggleChange }: { name: string; field: FieldConfig; value: unknown; toggleValue?: unknown; registry?: ExtensionRegistry; disabled: boolean; assetPicker?: AssetPickerAdapter; productPicker?: ProductPickerAdapter; pageId: string; blockId: string; i18n: ReturnType<typeof createAdminI18n>; onChange: (value: JsonValue) => void; onToggleChange?: (checked: boolean) => void }) {
   const label = field.label ?? name;
   const issues = validateFieldValue(field, value, i18n.t);
   const Field = registry?.getField(field.field)?.component;
+  const toggleOn = toggleValue !== false;
+  const controlDisabled = disabled || Boolean(field.toggle?.disablesField && !toggleOn);
   return <div className="pb-inspector-field" data-control={field.control ?? "custom"}>
     <div className="pb-inspector-field__heading"><Text as="p" variant="bodySm" fontWeight="semibold">{label}</Text>{field.description ? <Text as="p" variant="bodySm" tone="subdued">{field.description}</Text> : null}</div>
-    {field.control === "products" ? <InspectorProductsControl value={value} disabled={disabled} picker={productPicker} pageId={pageId} blockId={blockId} i18n={i18n} onChange={onChange} /> : field.control === "asset" ? <InspectorAssetControl value={value} disabled={disabled} picker={assetPicker} pageId={pageId} blockId={blockId} i18n={i18n} onChange={onChange} /> : field.control ? <InspectorTextControl i18n={i18n} label={label} value={value} control={field.control} maxLength={field.validation?.maxLength} disabled={disabled} onChange={(next) => onChange(next)} /> : Field ? <Field value={value} onChange={onChange} label={label} disabled={disabled} /> : null}
+    {field.toggle && onToggleChange ? <InspectorToggle label={field.toggle.label} checked={toggleOn} disabled={disabled} onChange={onToggleChange} /> : null}
+    {field.control === "products" ? <InspectorProductsControl value={value} disabled={controlDisabled} picker={productPicker} pageId={pageId} blockId={blockId} i18n={i18n} onChange={onChange} /> : field.control === "asset" ? <InspectorAssetControl value={value} disabled={controlDisabled} picker={assetPicker} pageId={pageId} blockId={blockId} i18n={i18n} onChange={onChange} /> : field.control ? <InspectorTextControl i18n={i18n} label={label} value={value} control={field.control} maxLength={field.validation?.maxLength} disabled={controlDisabled} onChange={(next) => onChange(next)} /> : Field ? <Field value={value} onChange={onChange} label={label} disabled={controlDisabled} /> : null}
     {issues.map((issue) => <Text key={issue.message} as="p" variant="bodySm" tone="critical">{issue.message}</Text>)}
   </div>;
 }
@@ -637,7 +646,7 @@ function DocumentInspector({ settings, pageId, assetPicker, productPicker, i18n,
         setSelectingAsset(false);
       }
     })()}>{selectingAsset ? i18n.t("selectingAsset") : i18n.t("selectAsset")}</Button>{assetError ? <Text as="p" variant="bodySm" tone="critical">{assetError}</Text> : null}</> : null}</InspectorSection> : null}
-    {Object.entries(groupedFields).map(([group, fields]) => <InspectorSection key={group} title={inspectorGroupLabel(group, i18n)} defaultOpen={group !== "Advanced"}>{fields.map(([name, field]) => <InspectorField key={name} name={name} field={field} value={field.persist === false ? settings?.values[name] : block.props[name]} registry={registry} disabled={disabled || (field.persist === false && (!settings || Boolean(settings.disabled)))} assetPicker={assetPicker} productPicker={productPicker} pageId={pageId} blockId={block.id} i18n={i18n} onChange={(value) => field.persist === false ? settings?.onChange(name, value) : onChange({ [name]: value })} />)}</InspectorSection>)}
+    {Object.entries(groupedFields).map(([group, fields]) => <InspectorSection key={group} title={inspectorGroupLabel(group, i18n)} defaultOpen={group !== "Advanced"}>{fields.map(([name, field]) => <InspectorField key={name} name={name} field={field} value={field.persist === false ? settings?.values[name] : block.props[name]} toggleValue={field.toggle ? block.props[field.toggle.prop] : undefined} onToggleChange={field.toggle ? (checked) => onChange({ [field.toggle!.prop]: checked }) : undefined} registry={registry} disabled={disabled || (field.persist === false && (!settings || Boolean(settings.disabled)))} assetPicker={assetPicker} productPicker={productPicker} pageId={pageId} blockId={block.id} i18n={i18n} onChange={(value) => field.persist === false ? settings?.onChange(name, value) : onChange({ [name]: value })} />)}</InspectorSection>)}
     {Object.values(definition?.fields ?? {}).some((field) => field.persist === false) ? settings?.footer : null}
     {appearanceControls && definition?.variants?.length ? <InspectorSection title={i18n.t("appearance")}><Select label={i18n.t("variant")} options={definition.variants.map((variant) => ({ label: variant.label, value: variant.id }))} value={block.variant} disabled={disabled} onChange={(variant) => onPresentationChange({ variant, style: block.style })} /></InspectorSection> : null}
     {appearanceControls && definition ? <InspectorSection title={i18n.t("styleOverrides")} defaultOpen={false}>{appearanceTokens.map(([token, label]) => <TextField key={token} label={i18n.t(label)} value={block.style[token] ?? ""} placeholder={i18n.t("inheritStyle")} autoComplete="off" disabled={disabled} onChange={(value) => {

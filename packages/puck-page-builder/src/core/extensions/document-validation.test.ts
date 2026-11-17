@@ -45,6 +45,31 @@ describe("registry document validation", () => {
     ]));
   });
 
+  it("accepts boolean field toggle props and rejects other values", () => {
+    const registry = createExtensionRegistry([{
+      name: "acme.toggle",
+      version: "1.0.0",
+      blocks: [{
+        type: "acme.toggle.section",
+        version: 1,
+        label: "Section",
+        category: "Acme",
+        targets: ["web"],
+        defaultProps: { heading: "Carrier" },
+        fields: { heading: { field: "acme.text", control: "text", toggle: { prop: "showSection", label: "Show section" } } },
+        render: { web: () => null }
+      }]
+    }]);
+    const document = (showSection?: unknown) => createPageDocument({
+      pageId: "toggle-page",
+      blocks: [{ id: "section", type: "acme.toggle.section", version: 1, props: { heading: "Carrier", ...(showSection === undefined ? {} : { showSection: showSection as boolean }) } }]
+    });
+    for (const value of [undefined, true, false]) expect(validatePageDocumentWithRegistry(document(value), registry)).toEqual([]);
+    for (const value of ["false", 0, null]) {
+      expect(validatePageDocumentWithRegistry(document(value), registry)).toEqual([expect.objectContaining({ path: "blocks[0].props.showSection" })]);
+    }
+  });
+
   it("rejects unknown blocks, invalid URLs, and unauthorized data bindings", () => {
     const registry = createRegistry();
     const unknownDocument = createDocument();

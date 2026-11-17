@@ -53,6 +53,20 @@ export type FieldConfig = {
   /** Kept for compatibility; it participates in the built-in validation. */
   required?: boolean;
   validation?: FieldValidation;
+  /** Switch rendered in this field's heading row. */
+  toggle?: FieldToggle;
+};
+
+/**
+ * A boolean block prop edited from another field's heading, such as whether a
+ * section is shown. An unset prop counts as on so existing documents keep
+ * their current output.
+ */
+export type FieldToggle = {
+  prop: string;
+  label: string;
+  /** Disables the owning field's control while the switch is off. */
+  disablesField?: boolean;
 };
 
 export type FieldProps<T = unknown> = {

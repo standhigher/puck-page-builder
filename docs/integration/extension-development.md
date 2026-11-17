@@ -46,6 +46,8 @@ export const deliveryExtension: PageBuilderExtension = {
 
 当前包不会为扩展自动提供通用文本字段。需要在编辑器属性面板编辑业务 props 时，扩展应先注册自己的 `FieldDefinition`，再在区块的 `fields` 中引用它。
 
+区块可在 `BlockDefinition.icon` 中提供 SVG React 组件（如 Polaris 图标），用于编辑器收起后的图标侧栏；未提供时使用通用区块图标。图标属于 Registry 的编辑器元数据，不写入 `PageDocument`，也不影响 Web 渲染。展开、收起侧栏只改变编辑器布局，收起后仍可选择和拖拽区块，悬停或聚焦图标可查看名称。
+
 ## 画布内编辑
 
 需要所见即所得编辑时，可额外声明 `render.editor`。它接收区块的静态

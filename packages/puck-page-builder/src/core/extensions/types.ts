@@ -1,4 +1,4 @@
-import type { ComponentType, ReactNode } from "react";
+import type { ComponentType, FunctionComponent, ReactNode, SVGProps } from "react";
 import type { JsonValue, PageDocument, RenderTarget } from "../schema/page-document";
 import type { ThemeTokens } from "../theme";
 
@@ -58,6 +58,9 @@ export type FieldConfig = {
 export type FieldProps<T = unknown> = {
   value: T;
   onChange(value: T): void;
+  /** Inspector context for accessible custom controls and read-only sessions. */
+  label?: string;
+  disabled?: boolean;
 };
 
 /**
@@ -75,6 +78,8 @@ export interface BlockDefinition<P = Record<string, unknown>> {
   type: string;
   version: number;
   label: string;
+  /** Editor library icon, including the collapsed sidebar. Never persisted in PageDocument. */
+  icon?: FunctionComponent<SVGProps<SVGSVGElement>>;
   category: string;
   targets: ExtensionTarget[];
   defaultProps: P;

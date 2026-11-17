@@ -31,6 +31,8 @@
   "editor.fields.delivery.heading": "标题",
   "editor.fields.delivery.contentsHeading": "包裹内容标题",
   "editor.fields.delivery.carrierHeading": "承运商标题",
+  "editor.fields.delivery.showCarrier": "显示承运商",
+  "editor.fields.delivery.showCarrierHelp": "关闭时，隐藏承运商。",
   "editor.fields.recommendations.heading": "标题",
   "editor.fields.recommendations.products": "推荐商品 (Store)",
   "editor.fields.style.backgroundColor": "模块背景颜色",

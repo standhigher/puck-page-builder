@@ -31,6 +31,8 @@
   "editor.fields.delivery.heading": "Heading",
   "editor.fields.delivery.contentsHeading": "Package contents heading",
   "editor.fields.delivery.carrierHeading": "Carrier heading",
+  "editor.fields.delivery.showCarrier": "Show carrier",
+  "editor.fields.delivery.showCarrierHelp": "When off, hide the carrier.",
   "editor.fields.recommendations.heading": "Heading",
   "editor.fields.recommendations.products": "Recommended products (Store)",
   "editor.fields.style.backgroundColor": "Module background color",

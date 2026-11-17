@@ -140,6 +140,16 @@ export function ReadyToGoTextField({ value, onChange }: FieldProps) {
   return <input aria-label="Ready-to-go text" value={typeof value === "string" ? value : ""} onChange={(event) => onChange(event.target.value)} />;
 }
 
+/** Boolean inspector field for optional delivery presentation settings. */
+export function ReadyToGoToggleField({ value, onChange, label, disabled }: FieldProps) {
+  const checked = value !== false;
+  return <button type="button" role="switch" aria-label={label} aria-checked={checked} disabled={disabled} onClick={() => onChange(!checked)} style={{ display: "inline-flex", alignItems: "center", justifySelf: "end", width: 32, height: 16, padding: 0, border: 0, background: "transparent", cursor: disabled ? "default" : "pointer", opacity: disabled ? 0.5 : 1 }}>
+    <span aria-hidden="true" style={{ display: "block", width: 32, height: 16, borderRadius: 8, background: checked ? "var(--p-color-bg-fill-brand, #303030)" : "var(--p-color-bg-fill-disabled, #b5b5b5)" }}>
+      <span style={{ display: "block", width: 12, height: 12, margin: 2, borderRadius: "50%", background: "var(--p-color-bg-surface, #fff)", transform: checked ? "translateX(16px)" : undefined }} />
+    </span>
+  </button>;
+}
+
 type ReadyToGoEditorProps = BlockEditorProps<Record<string, unknown>>;
 
 /** 兼容旧文档字段名，但只作为提示文案使用；旧模板演示号继续隐藏。 */
@@ -362,7 +372,7 @@ const deliveryColumnsStyle: CSSProperties = {
   alignItems: "start"
 };
 
-function DeliveryResult({ heading, contentsHeading, carrierHeading, result, editing }: { heading: ReactNode; contentsHeading: ReactNode; carrierHeading: ReactNode; result: ReadyToGoTrackingResult; editing?: boolean }) {
+function DeliveryResult({ heading, contentsHeading, carrierHeading, showCarrier = true, result, editing }: { heading: ReactNode; contentsHeading: ReactNode; carrierHeading: ReactNode; showCarrier?: boolean; result: ReadyToGoTrackingResult; editing?: boolean }) {
   const copy = useTrackingCopy();
   return <div className="bt-delivery-columns" style={deliveryColumnsStyle}>
     <div>
@@ -375,11 +385,11 @@ function DeliveryResult({ heading, contentsHeading, carrierHeading, result, edit
         <h3 style={{ margin: "0 0 12px", fontSize: 18, fontWeight: 700 }}>{contentsHeading}</h3>
         <PackageContents items={result.orderItems ?? []} />
       </div>
-      <div>
+      {showCarrier ? <div>
         <h3 style={{ margin: "0 0 12px", fontSize: 18, fontWeight: 700 }}>{carrierHeading}</h3>
         <p style={{ margin: 0, fontSize: 14, fontWeight: 600, color: "#1e293b" }}>{result.carrier ?? copy.notAvailable}</p>
         <p style={{ margin: "8px 0 0", fontSize: 14, color: "#64748b" }}>{result.destination ?? copy.destinationUnavailable}</p>
-      </div>
+      </div> : null}
     </div>
   </div>;
 }
@@ -472,6 +482,7 @@ export function ReadyToGoDeliveryEditor(block: ReadyToGoEditorProps) {
       heading={<LocalizedInlineText block={block} name="heading" englishDefault="Shipping Details" />}
       contentsHeading={<LocalizedInlineText block={block} name="contentsHeading" englishDefault="Package Contents" />}
       carrierHeading={<LocalizedInlineText block={block} name="carrierHeading" englishDefault="Carrier" />}
+      showCarrier={block.showCarrier !== false}
       editing
       result={{ ...previewReadyToGoTracking(), ad: adPreview ?? undefined }}
     />
@@ -569,10 +580,11 @@ export function ReadyToGoDeliveryBlock(props: Record<string, unknown>) {
   const heading = localizedConfiguredText(text(props, "heading", "Shipping Details"), "Shipping Details", copy);
   const contentsHeading = localizedConfiguredText(text(props, "contentsHeading", "Package Contents"), "Package Contents", copy);
   const carrierHeading = localizedConfiguredText(text(props, "carrierHeading", "Carrier"), "Carrier", copy);
+  const showCarrier = props.showCarrier !== false;
   // Runtime 已将选中包裹投影到 result；与进度区读取同一份结果，避免切换后各区块不同步。
   const result = runtime.result;
   return <SectionShell title={heading}>
-    {visibility.showResult && result ? <DeliveryResult heading={heading} contentsHeading={contentsHeading} carrierHeading={carrierHeading} result={result} /> : <div className="bt-delivery-columns" style={deliveryColumnsStyle}>
+    {visibility.showResult && result ? <DeliveryResult heading={heading} contentsHeading={contentsHeading} carrierHeading={carrierHeading} showCarrier={showCarrier} result={result} /> : <div className="bt-delivery-columns" style={deliveryColumnsStyle}>
       <div>
         <ShippingDetailsHeading heading={heading} />
         {visibility.showUnavailable ? <p style={{ margin: "16px 0 0", color: "#b42318" }}>{copy.deliveryUnavailable}</p> : null}

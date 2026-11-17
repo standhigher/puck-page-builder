@@ -1,5 +1,7 @@
+import { DeliveryIcon, ProductIcon, SearchIcon, StatusIcon } from "@shopify/polaris-icons";
 import { createPageDocument, type BlockDefinition, type FieldConfig, type JsonValue, type PageBuilderExtension, type TemplateDefinition } from "@standhigher/puck-page-builder/runtime";
-import { ReadyToGoDeliveryBlock, ReadyToGoDeliveryEditor, ReadyToGoProgressBlock, ReadyToGoProgressEditor, ReadyToGoQueryBlock, ReadyToGoQueryEditor, ReadyToGoRecommendationsBlock, ReadyToGoRecommendationsEditor, ReadyToGoTextField } from "./ready-to-go";
+import { ReadyToGoDeliveryBlock, ReadyToGoDeliveryEditor, ReadyToGoProgressBlock, ReadyToGoProgressEditor, ReadyToGoQueryBlock, ReadyToGoQueryEditor, ReadyToGoRecommendationsBlock, ReadyToGoRecommendationsEditor, ReadyToGoTextField, ReadyToGoToggleField } from "./ready-to-go";
+import { validateReadyToGoDeliveryProps } from "./ready-to-go-delivery-props";
 import { defineTemplatePolicy } from "./template-policy";
 
 const text = (label: string, options: Partial<FieldConfig> = {}) => ({ field: "besttrack.ready-to-go.text", label, control: "text" as const, ...options });
@@ -12,6 +14,7 @@ function withTemplatePolicy(blocks: BlockDefinition[], protectedBlocks: readonly
 const readyToGoBlocks: BlockDefinition[] = withTemplatePolicy([
   {
     type: "besttrack.ready-to-go.query",
+    icon: SearchIcon,
     version: 1,
     label: "Order query",
     category: "BestTrack Ready-to-go",
@@ -44,6 +47,7 @@ const readyToGoBlocks: BlockDefinition[] = withTemplatePolicy([
   },
   {
     type: "besttrack.ready-to-go.progress",
+    icon: StatusIcon,
     version: 1,
     label: "Shipment progress",
     category: "BestTrack Ready-to-go",
@@ -58,24 +62,28 @@ const readyToGoBlocks: BlockDefinition[] = withTemplatePolicy([
   },
   {
     type: "besttrack.ready-to-go.delivery",
+    icon: DeliveryIcon,
     version: 1,
     label: "Delivery information",
     category: "BestTrack Ready-to-go",
     targets: ["web"],
-    defaultProps: { heading: "Shipping Details", contentsHeading: "Package Contents", carrierHeading: "Carrier" },
+    defaultProps: { heading: "Shipping Details", contentsHeading: "Package Contents", carrierHeading: "Carrier", showCarrier: true },
     defaultVariant: "default",
     variants: [{ id: "default", label: "Default" }, { id: "compact", label: "Compact", theme: { spacing: "12px" } }],
     fields: {
       heading: text("Heading", { validation: { maxLength: 52 } }),
       contentsHeading: text("Package contents heading", { validation: { maxLength: 52 } }),
       carrierHeading: text("Carrier heading", { validation: { maxLength: 52 } }),
+      showCarrier: { field: "besttrack.ready-to-go.toggle", label: "Show carrier", description: "When off, hide the carrier.", group: "Content" },
       adImageUrl: { field: "besttrack.ready-to-go.asset", label: "Advertisement image", control: "asset", persist: false, group: "Advertisement" },
       adLinkUrl: { field: "besttrack.ready-to-go.url", label: "Advertisement link", control: "url", persist: false, group: "Advertisement", validation: { allowRelativeUrl: true, allowedUrlProtocols: ["https:", "http:"] } }
     },
+    validate: validateReadyToGoDeliveryProps,
     render: { web: ReadyToGoDeliveryBlock, editor: ReadyToGoDeliveryEditor }
   },
   {
     type: "besttrack.ready-to-go.recommendations",
+    icon: ProductIcon,
     version: 1,
     label: "Recommended products",
     category: "BestTrack Ready-to-go",
@@ -139,7 +147,10 @@ export function createReadyToGoTemplate(): TemplateDefinition {
 export const bestTrackPageExtension: PageBuilderExtension = Object.freeze({
   name: "besttrack.ready-to-go",
   version: "0.7.0",
-  fields: [{ type: "besttrack.ready-to-go.text", component: ReadyToGoTextField }],
+  fields: [
+    { type: "besttrack.ready-to-go.text", component: ReadyToGoTextField },
+    { type: "besttrack.ready-to-go.toggle", component: ReadyToGoToggleField }
+  ],
   blocks: readyToGoBlocks,
   templates: [createReadyToGoTemplate()]
 });

@@ -1,6 +1,6 @@
 import { Puck, usePuck } from "@puckeditor/core";
 import { Badge, Banner, Button, ButtonGroup, Frame, InlineStack, Modal, Select, Text, TextField, Toast } from "@shopify/polaris";
-import { DeleteIcon, DragHandleIcon, LayoutSectionIcon, MenuIcon, ProductIcon, RedoIcon, UndoIcon, XIcon } from "@shopify/polaris-icons";
+import { DeleteIcon, DragHandleIcon, ImageIcon, LayoutSectionIcon, ProductIcon, RedoIcon, TextIcon, UndoIcon, XIcon } from "@shopify/polaris-icons";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
 import { createPageDocumentPuckConfig } from "../../adapters/puck/page-document-config";
 import { fromEngineData, toEngineData } from "../../adapters/puck/page-document";
@@ -86,6 +86,7 @@ export type DeleteConfirmationConfig = {
 };
 
 const deviceLabels: Record<Exclude<Device, "full">, "desktop" | "tablet" | "mobile"> = { desktop: "desktop", tablet: "tablet", mobile: "mobile" };
+const compactLeftRailQuery = "(max-width: 1180px)";
 
 function blockLabel(block: BlockNode, registry: ExtensionRegistry | undefined, i18n: ReturnType<typeof createAdminI18n>) {
   return blockTypeLabel(block.type, registry, i18n);
@@ -174,9 +175,16 @@ function PageDocumentEditor({ iframe = true, registry, adminLocale, onSave, onPu
   const editor = useEditorContext();
   const editorRef = useRef(editor);
   useLayoutEffect(() => { editorRef.current = editor; }, [editor]);
-  const [blockView, setBlockView] = useState<"blocks" | "outline">("blocks");
   const [leftRailOpen, setLeftRailOpen] = useState(true);
   const [rightPanelOpen, setRightPanelOpen] = useState(true);
+  useLayoutEffect(() => {
+    if (typeof window.matchMedia !== "function") return;
+    const media = window.matchMedia(compactLeftRailQuery);
+    const collapseForNarrow = () => { if (media.matches) setLeftRailOpen(false); };
+    collapseForNarrow();
+    media.addEventListener("change", collapseForNarrow);
+    return () => media.removeEventListener("change", collapseForNarrow);
+  }, []);
   const [draggingLibraryType, setDraggingLibraryType] = useState<string | null>(null);
   const [draggingBlockId, setDraggingBlockId] = useState<string | null>(null);
   const draggingBlockIdRef = useRef<string | null>(null);
@@ -345,13 +353,12 @@ function PageDocumentEditor({ iframe = true, registry, adminLocale, onSave, onPu
         {editor.loadState === "success" ? <Banner tone="success">{i18n.t("success")}</Banner> : null}
         {notice && notice !== "published" ? <div className={`pb-editor-notice pb-editor-notice--${notice}`} data-testid="editor-notice" data-notice={notice}><Banner tone="critical">{i18n.t(notice)}</Banner></div> : null}
         <div className={`pb-workspace pb-workspace--document${leftRailOpen ? "" : " pb-workspace--left-closed"}${rightPanelOpen ? "" : " pb-workspace--right-closed"}`} data-left-panel={leftRailOpen ? "open" : "closed"} data-right-panel={rightPanelOpen ? "open" : "closed"}>
-          <nav className="pb-tool-rail" aria-label={i18n.t("editorTools")}>
-            <Button accessibilityLabel={i18n.t("blocks")} icon={LayoutSectionIcon} pressed={blockView === "blocks" && leftRailOpen} variant="tertiary" onClick={() => { setBlockView("blocks"); setLeftRailOpen(true); }} />
-            <Button accessibilityLabel={i18n.t("outline")} icon={MenuIcon} pressed={blockView === "outline" && leftRailOpen} variant="tertiary" onClick={() => { setBlockView("outline"); setLeftRailOpen(true); }} />
-          </nav>
-          <aside className={`pb-left-panel${leftRailOpen ? "" : " pb-panel--closed"}`} aria-label={i18n.t("blocks")}>
-            <div className="pb-panel-header"><InlineStack align="space-between" blockAlign="center" wrap={false}><Text as="h2" variant="headingSm">{blockView === "blocks" ? i18n.t("blocks") : i18n.t("outline")}</Text><Button accessibilityLabel={i18n.t("collapseLeft")} icon={XIcon} variant="tertiary" onClick={() => setLeftRailOpen(false)} /></InlineStack></div>
-            {blockView === "blocks" ? <div className="pb-block-list" data-testid="blocks-view" aria-label={i18n.t("blockLibrary")} role="list" onDrop={cancelLibraryDrop}>
+          <aside className={`pb-left-panel${leftRailOpen ? "" : " pb-left-panel--compact"}`} aria-label={i18n.t("blocks")}>
+            <div className="pb-panel-header"><InlineStack align="space-between" blockAlign="center" wrap={false}>
+              {leftRailOpen ? <Text as="h2" variant="headingSm">{i18n.t("blocks")}</Text> : null}
+              <Button accessibilityLabel={i18n.t(leftRailOpen ? "collapseLeft" : "expandLeft")} ariaExpanded={leftRailOpen} icon={<svg className="pb-sidebar-toggle-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true" focusable="false"><rect x="3.25" y="3.25" width="13.5" height="13.5" rx="1.25" /><path d="M7.25 3.75v12.5" /><path d={leftRailOpen ? "m12.5 7.5-2.5 2.5 2.5 2.5" : "m10.5 7.5 2.5 2.5-2.5 2.5"} strokeLinecap="round" strokeLinejoin="round" /></svg>} variant="plain" onClick={() => setLeftRailOpen((open) => !open)} />
+            </InlineStack></div>
+            <div className="pb-block-list" data-testid="blocks-view" aria-label={i18n.t("blockLibrary")} role="list" onDrop={cancelLibraryDrop}>
               {orderedBlockTypes.map((type) => {
                 const instance = editor.document.blocks.find((item) => item.type === type);
                 const canAdd = editor.canAddBlock(type);
@@ -362,7 +369,9 @@ function PageDocumentEditor({ iframe = true, registry, adminLocale, onSave, onPu
                 const actionHint = canReorder && canAdd ? i18n.t("reorderOrAddHint") : canReorder ? i18n.t("reorderHint") : canAdd ? i18n.t("addHint") : "";
                 const canDelete = Boolean(instance && editor.canDeleteBlock(instance.id));
                 const label = blockTypeLabel(type, registry, i18n);
-                return <div key={type} className={`pb-document-block-row pb-document-block-row--library${selected ? " pb-document-block-row--selected" : ""}${draggingBlockId === instance?.id ? " pb-document-block-row--dragging" : ""}${dropEdge === "before" ? " pb-document-block-row--drop-before" : ""}${dropEdge === "after" ? " pb-document-block-row--drop-after" : ""}`} data-block-type={type} data-selected={selected} data-drop-edge={dropEdge} role="listitem" draggable={draggable} aria-disabled={!draggable} aria-label={`${label}${actionHint}${selected ? i18n.t("selectedTypeHint") : ""}`} onClick={() => { if (!instance) return; editor.requestCanvasSelection(instance.id); scrollCanvasBlockIntoView(instance.id, canvasFrameRef.current); }} onDragStart={(event) => { if ((event.target as HTMLElement).closest("button")) { event.preventDefault(); return; } if (!draggable) { event.preventDefault(); return; } event.dataTransfer.setData("application/x-page-document-block", type); if (instance && canReorder) { event.dataTransfer.setData("application/x-page-document-block-id", instance.id); event.dataTransfer.effectAllowed = canAdd ? "copyMove" : "move"; draggingBlockIdRef.current = instance.id; setDraggingBlockId(instance.id); } else event.dataTransfer.effectAllowed = "copy"; if (canAdd) setDraggingLibraryType(type); }} onDragOver={(event) => { const sourceId = draggingBlockIdRef.current; if (!sourceId || !instance || sourceId === instance.id) return; event.preventDefault(); event.stopPropagation(); event.dataTransfer.dropEffect = "move"; const rect = event.currentTarget.getBoundingClientRect(); setDropTarget({ id: instance.id, edge: dropPlacement(event.clientY, rect.top, rect.height) }); }} onDragLeave={(event) => { if (instance && !event.currentTarget.contains(event.relatedTarget as Node | null)) setDropTarget((current) => current?.id === instance.id ? null : current); }} onDrop={(event) => { const sourceId = draggingBlockIdRef.current; if (!sourceId || !instance || sourceId === instance.id) return; event.preventDefault(); event.stopPropagation(); const rect = event.currentTarget.getBoundingClientRect(); applyListReorder(sourceId, instance.id, dropPlacement(event.clientY, rect.top, rect.height)); clearLibraryDrag(); }} onDragEnd={clearLibraryDrag}>
+                const BlockIcon = type === "core.text" ? TextIcon : type === "core.image" ? ImageIcon : registry?.getBlock(type)?.icon ?? LayoutSectionIcon;
+                return <div key={type} className={`pb-document-block-row pb-document-block-row--library${selected ? " pb-document-block-row--selected" : ""}${draggingBlockId === instance?.id ? " pb-document-block-row--dragging" : ""}${dropEdge === "before" ? " pb-document-block-row--drop-before" : ""}${dropEdge === "after" ? " pb-document-block-row--drop-after" : ""}`} data-block-type={type} data-selected={selected} data-drop-edge={dropEdge} role="listitem" draggable={draggable} aria-disabled={!draggable} aria-label={`${label}${actionHint}${selected ? i18n.t("selectedTypeHint") : ""}`} onClick={() => { if (!instance) return; editor.requestCanvasSelection(instance.id); scrollCanvasBlockIntoView(instance.id, canvasFrameRef.current); }} onDragStart={(event) => { if ((event.target as HTMLElement).closest(".pb-library-block-controls")) { event.preventDefault(); return; } if (!draggable) { event.preventDefault(); return; } event.dataTransfer.setData("application/x-page-document-block", type); if (instance && canReorder) { event.dataTransfer.setData("application/x-page-document-block-id", instance.id); event.dataTransfer.effectAllowed = canAdd ? "copyMove" : "move"; draggingBlockIdRef.current = instance.id; setDraggingBlockId(instance.id); } else event.dataTransfer.effectAllowed = "copy"; if (canAdd) setDraggingLibraryType(type); }} onDragOver={(event) => { const sourceId = draggingBlockIdRef.current; if (!sourceId || !instance || sourceId === instance.id) return; event.preventDefault(); event.stopPropagation(); event.dataTransfer.dropEffect = "move"; const rect = event.currentTarget.getBoundingClientRect(); setDropTarget({ id: instance.id, edge: dropPlacement(event.clientY, rect.top, rect.height) }); }} onDragLeave={(event) => { if (instance && !event.currentTarget.contains(event.relatedTarget as Node | null)) setDropTarget((current) => current?.id === instance.id ? null : current); }} onDrop={(event) => { const sourceId = draggingBlockIdRef.current; if (!sourceId || !instance || sourceId === instance.id) return; event.preventDefault(); event.stopPropagation(); const rect = event.currentTarget.getBoundingClientRect(); applyListReorder(sourceId, instance.id, dropPlacement(event.clientY, rect.top, rect.height)); clearLibraryDrag(); }} onDragEnd={clearLibraryDrag}>
+                {!leftRailOpen ? <span className="pb-library-block-icon"><Button accessibilityLabel={label} pressed={selected} icon={BlockIcon} variant="tertiary" /></span> : <>
                 <span className="pb-library-block-title">
                   <Text as="span" variant="bodySm" fontWeight="semibold">{label}</Text>
                   <span className="pb-library-block-controls">
@@ -373,14 +382,10 @@ function PageDocumentEditor({ iframe = true, registry, adminLocale, onSave, onPu
                   </span>
                 </span>
                 <Text as="span" variant="bodySm" tone="subdued">{type}</Text>
+                </>}
               </div>;
               })}
-            </div> : editor.document.blocks.length === 0 ? <Text as="p" tone="subdued">{i18n.t("empty")}</Text> : <div className="pb-block-list" data-testid="outline-view">
-              {editor.document.blocks.map((block) => <button key={block.id} type="button" className={`pb-document-block-row pb-document-block-row--library ${block.id === editor.selectedBlockId ? "pb-document-block-row--selected" : ""}`} aria-pressed={block.id === editor.selectedBlockId} onClick={() => { editor.requestCanvasSelection(block.id); scrollCanvasBlockIntoView(block.id, canvasFrameRef.current); }}>
-                <Text as="span" variant="bodySm" fontWeight="semibold">{blockLabel(block, registry, i18n)}</Text>
-                <Text as="span" variant="bodySm" tone="subdued">{block.id}</Text>
-              </button>)}
-            </div>}
+            </div>
           </aside>
           <main className="pb-canvas-area">
             <div className="pb-canvas-stage">
@@ -389,7 +394,7 @@ function PageDocumentEditor({ iframe = true, registry, adminLocale, onSave, onPu
                 {draggingLibraryType ? <CanvasLibraryDropTarget frameRef={canvasFrameRef} blocks={editor.document.blocks.map((block) => ({ id: block.id, label: blockLabel(block, registry, i18n) }))} label={blockTypeLabel(draggingLibraryType, registry, i18n)} adminLocale={adminLocale} onDrop={(beforeId) => { addFromLibrary(draggingLibraryType, beforeId); setDraggingLibraryType(null); }} onCancel={() => setDraggingLibraryType(null)} /> : null}
               </CanvasNativeZoom>
             </div>
-            {!leftRailOpen || !rightPanelOpen ? <div className="pb-collapsed-actions">{!leftRailOpen ? <Button onClick={() => setLeftRailOpen(true)}>{i18n.t("expandLeft")}</Button> : null}{!rightPanelOpen ? <Button onClick={() => setRightPanelOpen(true)}>{i18n.t("expandRight")}</Button> : null}</div> : null}
+            {!rightPanelOpen ? <div className="pb-collapsed-actions"><Button onClick={() => setRightPanelOpen(true)}>{i18n.t("expandRight")}</Button></div> : null}
           </main>
           <aside className={`pb-right-panel${rightPanelOpen ? "" : " pb-panel--closed"}`} aria-label={i18n.t("properties")}>
             <InlineStack align="space-between" blockAlign="center"><Text as="h2" variant="headingSm">{i18n.t("properties")}</Text><Button accessibilityLabel={i18n.t("collapseRight")} icon={XIcon} variant="tertiary" onClick={() => setRightPanelOpen(false)} /></InlineStack>
@@ -452,6 +457,8 @@ function CanvasSelectionBridge({ data, requestedBlockId, onCanvasSelected, canva
 
   useEffect(() => {
     if (!requestedBlockId) return;
+    // Every setUi dispatch creates a new Puck state (and a new `puck`), which re-runs this effect.
+    if (puck.selectedItem?.props.id === requestedBlockId) return;
     const selector = puck.getSelectorForId(requestedBlockId);
     if (selector) puck.dispatch({ type: "setUi", ui: { itemSelector: selector } });
     scrollCanvasBlockIntoView(requestedBlockId);
@@ -459,11 +466,12 @@ function CanvasSelectionBridge({ data, requestedBlockId, onCanvasSelected, canva
 
   const selectedId = typeof puck.selectedItem?.props.id === "string" ? puck.selectedItem.props.id : null;
   useEffect(() => {
-    if (selectedId && lastSelectedId.current !== selectedId) {
+    // Confirm requests for the already selected block too, so the request is cleared.
+    if (selectedId && (lastSelectedId.current !== selectedId || requestedBlockId === selectedId)) {
       lastSelectedId.current = selectedId;
       onCanvasSelected(selectedId);
     }
-  }, [onCanvasSelected, selectedId]);
+  }, [onCanvasSelected, requestedBlockId, selectedId]);
 
   return null;
 }
@@ -558,7 +566,7 @@ function InspectorField({ name, field, value, registry, disabled, assetPicker, p
   const Field = registry?.getField(field.field)?.component;
   return <div className="pb-inspector-field" data-control={field.control ?? "custom"}>
     <div className="pb-inspector-field__heading"><Text as="p" variant="bodySm" fontWeight="semibold">{label}</Text>{field.description ? <Text as="p" variant="bodySm" tone="subdued">{field.description}</Text> : null}</div>
-    {field.control === "products" ? <InspectorProductsControl value={value} disabled={disabled} picker={productPicker} pageId={pageId} blockId={blockId} i18n={i18n} onChange={onChange} /> : field.control === "asset" ? <InspectorAssetControl value={value} disabled={disabled} picker={assetPicker} pageId={pageId} blockId={blockId} i18n={i18n} onChange={onChange} /> : field.control ? <InspectorTextControl i18n={i18n} label={label} value={value} control={field.control} maxLength={field.validation?.maxLength} disabled={disabled} onChange={(next) => onChange(next)} /> : Field ? <Field value={value} onChange={onChange} /> : null}
+    {field.control === "products" ? <InspectorProductsControl value={value} disabled={disabled} picker={productPicker} pageId={pageId} blockId={blockId} i18n={i18n} onChange={onChange} /> : field.control === "asset" ? <InspectorAssetControl value={value} disabled={disabled} picker={assetPicker} pageId={pageId} blockId={blockId} i18n={i18n} onChange={onChange} /> : field.control ? <InspectorTextControl i18n={i18n} label={label} value={value} control={field.control} maxLength={field.validation?.maxLength} disabled={disabled} onChange={(next) => onChange(next)} /> : Field ? <Field value={value} onChange={onChange} label={label} disabled={disabled} /> : null}
     {issues.map((issue) => <Text key={issue.message} as="p" variant="bodySm" tone="critical">{issue.message}</Text>)}
   </div>;
 }

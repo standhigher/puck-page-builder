@@ -12,6 +12,8 @@ const document = registry.getTemplate("besttrack.ready-to-go")!.create();
 
 模板创建出的页面是普通 `PageDocument`，可在编辑器修改并保存。查询、进度、配送不可删除或复制；推荐商品不可复制，可以删除，删掉后仍可从区块库加回。没有数据时可隐藏内容。之后的模板升级不会自动覆盖已有页面或补齐历史缺块。三套模板的共享范围与兼容边界见 [Ready-to-go 共用基础能力](./ready-to-go-shared-foundation.md)。
 
+配送信息区块提供“显示承运商”（Show carrier）开关，保存为 `besttrack.ready-to-go.delivery` 的 `props.showCarrier` 布尔值。新页面默认开启；旧文档缺少字段时继续显示。关闭后，Carrier 标题、承运商名称和目的地一起收起，画布、预览与发布页使用相同规则。该配置只控制 Ready-to-go 的承运商区域，查询、物流时间线、包裹内容和广告保持各自原有展示规则。
+
 ## RuntimeState 与数据边界
 
 每页由一份公共 `TrackingRuntimeProvider` 包裹。Ready-to-go、Branded、Sales 共用它；原 `ReadyToGoRuntimeProvider` 等名称保留为兼容入口。查询区块只发起受控 `query`；物流进度和配送信息订阅查单 RuntimeState。推荐商品与原 Track Page 一样页面打开即加载，不依赖是否点击查询。区块 `products` 非空时优先使用商家选品，否则读取独立推荐请求；不读取 `query` 结果中的 `recommendations`：

@@ -31,6 +31,8 @@
   "editor.fields.delivery.heading": "Encabezado",
   "editor.fields.delivery.contentsHeading": "Título del contenido del paquete",
   "editor.fields.delivery.carrierHeading": "Título del transportista",
+  "editor.fields.delivery.showCarrier": "Mostrar transportista",
+  "editor.fields.delivery.showCarrierHelp": "Al desactivarlo, se oculta el transportista.",
   "editor.fields.recommendations.heading": "Encabezado",
   "editor.fields.recommendations.products": "Productos recomendados (Shopify)",
   "editor.fields.style.backgroundColor": "Color de fondo del módulo",

@@ -77,6 +77,8 @@ export function getReadyToGoEditorCopy(adminLocale?: string) {
         heading: t("editor.fields.delivery.heading"),
         contentsHeading: t("editor.fields.delivery.contentsHeading"),
         carrierHeading: t("editor.fields.delivery.carrierHeading"),
+        showCarrier: t("editor.fields.delivery.showCarrier"),
+        showCarrierHelp: t("editor.fields.delivery.showCarrierHelp"),
         adImageUrl: t("customize.ad.imageLabel"),
         adImageHelp: t("customize.ad.imageHelp"),
         adLinkUrl: t("customize.ad.urlLabel"),

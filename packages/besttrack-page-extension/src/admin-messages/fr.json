@@ -31,6 +31,8 @@
   "editor.fields.delivery.heading": "Titre",
   "editor.fields.delivery.contentsHeading": "Titre du contenu du colis",
   "editor.fields.delivery.carrierHeading": "Titre du transporteur",
+  "editor.fields.delivery.showCarrier": "Afficher le transporteur",
+  "editor.fields.delivery.showCarrierHelp": "Lorsque cette option est désactivée, le transporteur est masqué.",
   "editor.fields.recommendations.heading": "Titre",
   "editor.fields.recommendations.products": "Produits recommandés (Shopify)",
   "editor.fields.style.backgroundColor": "Couleur d’arrière-plan du module",

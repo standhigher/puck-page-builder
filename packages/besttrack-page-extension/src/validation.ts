@@ -2,6 +2,7 @@ import type { BlockDefinition, FieldConfig, PageBuilderExtension, TemplateDefini
 import { isValidTrackingNumber } from "./tracking-page-runtime";
 import { isSafeTrackingPageUrl } from "./tracking-page-url";
 import { isShopifyResourceReference } from "./shopify-resource-contract";
+import { validateReadyToGoDeliveryProps } from "./ready-to-go-delivery-props";
 
 const textField: FieldConfig = { field: "besttrack.validation.text", control: "text" };
 const colorField: FieldConfig = { field: "besttrack.validation.color", control: "color" };
@@ -72,10 +73,15 @@ function validateFeaturedProduct(props: Record<string, unknown>) {
   return issues;
 }
 
+const readyToGoDeliveryContract = block("besttrack.ready-to-go.delivery", 1, ["heading", "contentsHeading", "carrierHeading"], ["default", "compact"], validateReadyToGoDeliveryProps);
+
 const readyToGoContracts: BlockDefinition[] = [
   block("besttrack.ready-to-go.query", 1, ["heading", "submitLabel", "submitButtonColor", "defaultTrackingNumber", "defaultOrderNumber", "emailPlaceholder", "defaultQueryMode", "trackingTabLabel", "orderTabLabel"], ["default"]),
   block("besttrack.ready-to-go.progress", 1, ["progressColor"], ["default"]),
-  block("besttrack.ready-to-go.delivery", 1, ["heading", "contentsHeading", "carrierHeading"], ["default", "compact"]),
+  {
+    ...readyToGoDeliveryContract,
+    fields: { ...readyToGoDeliveryContract.fields, showCarrier: { field: "besttrack.validation.boolean" } }
+  },
   block("besttrack.ready-to-go.recommendations", 1, ["heading", "products"], ["default", "grid"], undefined, [], [], ["products"])
 ];
 

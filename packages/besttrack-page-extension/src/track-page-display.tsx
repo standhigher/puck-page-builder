@@ -218,7 +218,7 @@ export function ProductImage({ src, alt, size = 60 }: { src?: string; alt: strin
     width: size,
     height: size,
     flex: "0 0 auto",
-    borderRadius: "var(--pb-radius, 8px)",
+    borderRadius: "var(--pb-image-radius, var(--pb-radius, 8px))",
     objectFit: "contain",
     background: "#fff"
   };
@@ -235,9 +235,10 @@ function progressColor(value?: string) {
   return value && hexColor.test(value) ? value : defaultProgressColor;
 }
 
-export function TrackingProgress({ steps, color }: { steps: ReadyToGoTrackingStep[]; color?: string }) {
+export function TrackingProgress({ steps, color, textColor }: { steps: ReadyToGoTrackingStep[]; color?: string; textColor?: string }) {
   const copy = useTrackingCopy();
   const active = progressColor(color);
+  const labelColor = textColor && hexColor.test(textColor) ? textColor : "#334155";
   const cells = Math.max(steps.length, 1);
   return <div className="bt-progress" role="region" aria-label="Delivery progress" style={{ marginTop: 32, width: "100%", maxWidth: 1200, marginLeft: "auto", marginRight: "auto", overflow: "visible" }}>
     <style>{trackingProgressStyles}</style>
@@ -257,7 +258,7 @@ export function TrackingProgress({ steps, color }: { steps: ReadyToGoTrackingSte
             <StepIcon name={step.icon ?? (index === 0 || index === steps.length - 1 ? "check" : index === 1 ? "bag" : index === 2 ? "truck" : "box")} done={done} />
           </span>
           <div className="bt-progress__copy" style={{ width: "100%", maxWidth: "100%", boxSizing: "border-box", textAlign: "center", padding: "0 2px" }}>
-            <p className="bt-progress__label" style={{ margin: "0 auto", width: "max-content", maxWidth: "100%", fontWeight: 500, color: "#334155", overflowWrap: "anywhere", wordBreak: "break-word" }}>{label}</p>
+            <p className="bt-progress__label" style={{ margin: "0 auto", width: "max-content", maxWidth: "100%", fontWeight: 500, color: labelColor, overflowWrap: "anywhere", wordBreak: "break-word" }}>{label}</p>
             {step.date ? <p style={{ margin: "6px 0 0", fontSize: 12, lineHeight: "16px", color: "#94a3b8", overflowWrap: "anywhere" }}>{step.date}</p> : null}
           </div>
         </div>;
@@ -387,7 +388,7 @@ export function RecommendationCards({ items }: { items: ReadyToGoRecommendation[
           const href = safeHref(item.href);
           const displayPrice = formatRecommendationPrice(item.price);
           const card = <>
-            <div style={{ width: 262, height: 262, maxWidth: "100%", borderRadius: 8, border: "1px solid #E3E3E3", overflow: "hidden", background: "#fff" }}>
+            <div style={{ width: 262, height: 262, maxWidth: "100%", borderRadius: "var(--pb-image-radius, 8px)", border: "1px solid #E3E3E3", overflow: "hidden", background: "#fff" }}>
               <ProductImage src={item.imageUrl} alt={item.title} size={262} />
             </div>
             <div style={{ padding: "12px 8px", textAlign: "center", fontSize: 14 }}>
@@ -407,18 +408,16 @@ export function RecommendationCards({ items }: { items: ReadyToGoRecommendation[
 }
 
 /**
- * Legacy Track Page `bst-ad-placeholder`: the slot is always 20:9 and at most
- * 500px wide. The image is taken out of flow and stretched to that box
- * (`object-fit: fill`), matching `.bst-ad-placeholder__img`. An in-flow image
- * would keep its own ratio and leave side gaps inside the column.
+ * Matches the BestTrack host: the slot is 16:9 and at most 500px wide.
+ * The image stays out of flow and stretches to fill the box (`object-fit: fill`).
  */
 const trackingPageAdSlotStyle: CSSProperties = {
   position: "relative",
   display: "block",
   width: "100%",
   maxWidth: 500,
-  aspectRatio: "20 / 9",
-  borderRadius: 8,
+  aspectRatio: "16 / 9",
+  borderRadius: "var(--pb-image-radius, 8px)",
   overflow: "hidden",
   textDecoration: "none"
 };

@@ -3,6 +3,7 @@ import { isValidTrackingNumber } from "./tracking-page-runtime";
 import { isSafeTrackingPageUrl } from "./tracking-page-url";
 import { isShopifyResourceReference } from "./shopify-resource-contract";
 import { validateReadyToGoDeliveryProps } from "./ready-to-go-delivery-props";
+import { readyToGoModuleStyleFields, validateReadyToGoModuleStyle } from "./ready-to-go-module-style";
 
 const textField: FieldConfig = { field: "besttrack.validation.text", control: "text" };
 const colorField: FieldConfig = { field: "besttrack.validation.color", control: "color" };
@@ -73,16 +74,27 @@ function validateFeaturedProduct(props: Record<string, unknown>) {
   return issues;
 }
 
-const readyToGoDeliveryContract = block("besttrack.ready-to-go.delivery", 1, ["heading", "contentsHeading", "carrierHeading"], ["default", "compact"], validateReadyToGoDeliveryProps);
+// 模块样式字段与编辑器定义同名，并按区块决定是否带图片圆角。
+function readyToGoBlock(type: string, keys: readonly string[], variants: readonly string[], validate?: BlockDefinition["validate"], productsKeys: readonly string[] = []): BlockDefinition {
+  const validateStyle = validateReadyToGoModuleStyle(type);
+  const styleKeys = Object.keys(readyToGoModuleStyleFields(type));
+  return block(type, 1, [...keys, ...styleKeys], variants, (props) => [...(validate?.(props) ?? []), ...validateStyle(props)], [], [], productsKeys);
+}
+
+const readyToGoDeliveryContract = readyToGoBlock("besttrack.ready-to-go.delivery", ["heading", "contentsHeading", "carrierHeading"], ["default", "compact"], validateReadyToGoDeliveryProps);
+const readyToGoQueryContract = readyToGoBlock("besttrack.ready-to-go.query", ["heading", "submitLabel", "submitButtonColor", "defaultTrackingNumber", "defaultOrderNumber", "emailPlaceholder", "defaultQueryMode", "trackingTabLabel", "orderTabLabel"], ["default"]);
 
 const readyToGoContracts: BlockDefinition[] = [
-  block("besttrack.ready-to-go.query", 1, ["heading", "submitLabel", "submitButtonColor", "defaultTrackingNumber", "defaultOrderNumber", "emailPlaceholder", "defaultQueryMode", "trackingTabLabel", "orderTabLabel"], ["default"]),
-  block("besttrack.ready-to-go.progress", 1, ["progressColor"], ["default"]),
+  {
+    ...readyToGoQueryContract,
+    fields: { ...readyToGoQueryContract.fields, hideShadow: { field: "besttrack.validation.boolean" } }
+  },
+  readyToGoBlock("besttrack.ready-to-go.progress", ["progressColor", "textColor"], ["default"]),
   {
     ...readyToGoDeliveryContract,
     fields: { ...readyToGoDeliveryContract.fields, showCarrier: { field: "besttrack.validation.boolean" } }
   },
-  block("besttrack.ready-to-go.recommendations", 1, ["heading", "products"], ["default", "grid"], undefined, [], [], ["products"])
+  readyToGoBlock("besttrack.ready-to-go.recommendations", ["heading", "products"], ["default", "grid"], undefined, ["products"])
 ];
 
 const brandedContracts: BlockDefinition[] = [

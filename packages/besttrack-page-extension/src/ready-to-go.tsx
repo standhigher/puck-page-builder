@@ -26,6 +26,7 @@ import { TranslateUpdatesMenu } from "./i18n/translate-updates";
 import { localizeKnownLabel, localizedConfiguredText, useTrackingCopy } from "./i18n/storefront-copy";
 import { TrackingNotFound } from "./tracking-not-found";
 import { TrackingLoading } from "./tracking-loading";
+import { READY_TO_GO_DEFAULT_SHADOW_STRENGTH, readyToGoShadowStrength, readyToGoQueryShadow, READY_TO_GO_BUTTON_RADIUS_MAX, READY_TO_GO_INPUT_RADIUS_MAX, READY_TO_GO_DEFAULT_BUTTON_RADIUS, READY_TO_GO_DEFAULT_INPUT_RADIUS, READY_TO_GO_DEFAULT_MODULE_RADIUS, READY_TO_GO_MODULE_STYLE_LIMIT, readyToGoModuleStyle, readyToGoPixelValue, readyToGoPixelValueError, readyToGoRadiusPercent, readyToGoRadiusValue } from "./ready-to-go-module-style";
 import type {
   TrackingPageOrderItem,
   TrackingPageQueryResult,
@@ -99,7 +100,7 @@ const tabStyle = (active: boolean): CSSProperties => ({
 });
 const inputStyle: CSSProperties = {
   width: "100%",
-  height: 48,
+  height: READY_TO_GO_INPUT_RADIUS_MAX * 2,
   borderRadius: "var(--pb-radius, 8px)",
   border: "1px solid #111",
   background: "#fff",
@@ -112,6 +113,10 @@ const inputStyle: CSSProperties = {
 };
 const hexColor = /^#(?:[\da-f]{3}|[\da-f]{4}|[\da-f]{6}|[\da-f]{8})$/i;
 const defaultSubmitButtonColor = "var(--pb-color-primary, #111)";
+
+function queryInputStyle(props: Record<string, unknown>): CSSProperties {
+  return { ...inputStyle, borderRadius: readyToGoRadiusValue(props.inputRadius, READY_TO_GO_INPUT_RADIUS_MAX) || readyToGoRadiusValue(READY_TO_GO_DEFAULT_INPUT_RADIUS, READY_TO_GO_INPUT_RADIUS_MAX) };
+}
 
 function submitButtonBackground(props: Record<string, unknown>, loading = false) {
   if (loading) return "#475569";
@@ -126,9 +131,9 @@ function submitButtonStyle(props: Record<string, unknown>, loading = false): CSS
     justifyContent: "center",
     textAlign: "center",
     width: "100%",
-    minHeight: 58,
+    minHeight: READY_TO_GO_BUTTON_RADIUS_MAX * 2,
     marginTop: 8,
-    borderRadius: "var(--pb-radius, 8px)",
+    borderRadius: readyToGoRadiusValue(props.buttonRadius, READY_TO_GO_BUTTON_RADIUS_MAX) || readyToGoRadiusValue(READY_TO_GO_DEFAULT_BUTTON_RADIUS, READY_TO_GO_BUTTON_RADIUS_MAX),
     background: submitButtonBackground(props, loading),
     color: "#fff",
     fontSize: 15,
@@ -141,14 +146,86 @@ export function ReadyToGoTextField({ value, onChange }: FieldProps) {
 }
 
 /** Boolean inspector field for optional delivery presentation settings. */
-export function ReadyToGoToggleField({ value, onChange, label, disabled }: FieldProps) {
-  const checked = value !== false;
+export function ReadyToGoToggleField({ value, defaultValue, onChange, label, disabled }: FieldProps) {
+  const checked = value === undefined ? defaultValue !== false : value !== false;
   return <button type="button" role="switch" aria-label={label} aria-checked={checked} disabled={disabled} onClick={() => onChange(!checked)} style={{ display: "inline-flex", alignItems: "center", justifySelf: "end", width: 32, height: 16, padding: 0, border: 0, background: "transparent", cursor: disabled ? "default" : "pointer", opacity: disabled ? 0.5 : 1 }}>
     <span aria-hidden="true" style={{ display: "block", width: 32, height: 16, borderRadius: 8, background: checked ? "var(--p-color-bg-fill-brand, #303030)" : "var(--p-color-bg-fill-disabled, #b5b5b5)" }}>
       <span style={{ display: "block", width: 12, height: 12, margin: 2, borderRadius: "50%", background: "var(--p-color-bg-surface, #fff)", transform: checked ? "translateX(16px)" : undefined }} />
     </span>
   </button>;
 }
+
+/**
+ * Empty legacy values display the block default without changing the document.
+ * Reset writes that default; fields without an explicit default still inherit the template.
+ */
+export function ReadyToGoPixelField(props: FieldProps) {
+  return <ReadyToGoRangeField {...props} unit="px" />;
+}
+
+export function ReadyToGoInputRadiusField(props: FieldProps) {
+  return <ReadyToGoRadiusField {...props} maxRadius={READY_TO_GO_INPUT_RADIUS_MAX} />;
+}
+
+export function ReadyToGoButtonRadiusField(props: FieldProps) {
+  return <ReadyToGoRadiusField {...props} maxRadius={READY_TO_GO_BUTTON_RADIUS_MAX} />;
+}
+
+function ReadyToGoRadiusField(props: FieldProps & { maxRadius: number }) {
+  const fallback = readyToGoRadiusPercent(props.defaultValue, props.maxRadius);
+  const percent = readyToGoRadiusPercent(props.value, props.maxRadius) ?? fallback;
+  const displayValue = (amount: number | undefined) => amount === undefined ? "" : String(Number(amount.toFixed(2)));
+  return <ReadyToGoRangeField {...props} unit="%" step={0.01}
+    value={displayValue(percent)} defaultValue={displayValue(fallback)}
+    onChange={(value) => props.onChange(`${value}%`)}
+    onReset={() => props.onChange(props.defaultValue ?? "0%")}
+  />;
+}
+
+export function ReadyToGoShadowStrengthField(props: FieldProps) {
+  const value = String(readyToGoShadowStrength({ ...props.blockProps, shadowStrength: props.value }));
+  return <ReadyToGoRangeField {...props} value={value} defaultValue={READY_TO_GO_DEFAULT_SHADOW_STRENGTH} unit="%" />;
+}
+
+function ReadyToGoRangeField({ value, defaultValue, onChange, label, disabled, resetLabel = "Reset to default", unit, step = 1, onReset }: FieldProps & { unit: "px" | "%"; step?: number; onReset?: () => void }) {
+  const stringValue = typeof value === "string" ? value.trim() : "";
+  const amount = stringValue && !readyToGoPixelValueError(stringValue) ? Number.parseFloat(stringValue) : undefined;
+  const fallback = unit === "px" ? readyToGoPixelValue(defaultValue) : String(defaultValue);
+  const defaultAmount = fallback ? Number.parseFloat(fallback) : undefined;
+  const effectiveAmount = amount ?? defaultAmount;
+  const display = effectiveAmount === undefined ? "—" : `${effectiveAmount}${unit}`;
+  return <div style={{ display: "grid", gap: 6 }}>
+    <div style={{ display: "flex", alignItems: "center", gap: 8, minHeight: 24 }}>
+      <span style={{ flex: 1, minWidth: 0, color: "#616161", fontSize: 12, fontWeight: 450 }}>{label}</span>
+      <span style={{ color: "#616161", fontSize: 12, fontVariantNumeric: "tabular-nums" }}>{display}</span>
+      {stringValue && amount !== defaultAmount && !disabled ? <button type="button" className="pb-inspector-field__reset" aria-label={resetLabel} title={resetLabel} onClick={onReset ?? (() => onChange(fallback))}>
+        <svg viewBox="0 0 16 16" width={14} height={14} fill="none" stroke="currentColor" strokeWidth={1.4} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <path d="M13 8a5 5 0 1 1-1.4-3.45" />
+          <path d="M12.2 2.4v2.7h-2.7" />
+        </svg>
+      </button> : null}
+    </div>
+    <input
+      type="range"
+      aria-label={label}
+      aria-valuetext={display}
+      min={0}
+      max={READY_TO_GO_MODULE_STYLE_LIMIT}
+      step={step}
+      value={amount ?? defaultAmount ?? 0}
+      disabled={disabled}
+      onChange={(event) => onChange(event.currentTarget.value)}
+    />
+  </div>;
+}
+
+/** Applies the saved module background, radius and spacing around one block in the canvas and on the storefront. */
+function ModuleFrame({ style, children }: { style?: CSSProperties; children: ReactNode }) {
+  return style ? <div data-module-style="" style={style}>{children}</div> : <>{children}</>;
+}
+
+// 区块分隔线只在没有模块样式时保留，商家自定义背景时不再出现浅色底边。
+const sectionDivider = (style?: CSSProperties) => style ? undefined : "1px solid #f1f5f9";
 
 type ReadyToGoEditorProps = BlockEditorProps<Record<string, unknown>>;
 
@@ -200,7 +277,7 @@ function CanvasPlaceholderInput({ block, name, value, fallback, label }: { block
       setEditing((current) => ({ ...current, draft: next }));
       block.onPropsChange({ [name]: next });
     }}
-    style={{ ...inputStyle, color: "#64748b" }}
+    style={{ ...queryInputStyle(block), color: "#64748b" }}
   />;
 }
 
@@ -277,6 +354,7 @@ function ProgressResult({
   result,
   showEstimatedDelivery = true,
   color,
+  textColor,
   recentQueries = [],
   selectedRecentIndex = 0,
   onSelectRecent,
@@ -286,6 +364,7 @@ function ProgressResult({
   result: ReadyToGoTrackingResult;
   showEstimatedDelivery?: boolean;
   color?: string;
+  textColor?: string;
   recentQueries?: ReadyToGoRecentQuery[];
   selectedRecentIndex?: number;
   onSelectRecent?: (index: number) => void;
@@ -339,7 +418,7 @@ function ProgressResult({
     <h2 style={{ margin: "clamp(24px, 8%, 48px) 0 0", fontSize: 32, lineHeight: 1.25, fontWeight: 700, color: "#303030", overflowWrap: "anywhere" }}>{localizeKnownLabel(result.status, copy)}</h2>
     <div className="bt-progress-band">
       {showEstimatedDelivery && result.estimatedDelivery ? <EstimatedDeliveryCard dateText={result.estimatedDelivery} steps={steps.length} /> : null}
-      <TrackingProgress steps={steps} color={color} />
+      <TrackingProgress steps={steps} color={color} textColor={textColor} />
     </div>
   </div>;
 }
@@ -388,7 +467,6 @@ function DeliveryResult({ heading, contentsHeading, carrierHeading, showCarrier 
       {showCarrier ? <div>
         <h3 style={{ margin: "0 0 12px", fontSize: 18, fontWeight: 700 }}>{carrierHeading}</h3>
         <p style={{ margin: 0, fontSize: 14, fontWeight: 600, color: "#1e293b" }}>{result.carrier ?? copy.notAvailable}</p>
-        <p style={{ margin: "8px 0 0", fontSize: 14, color: "#64748b" }}>{result.destination ?? copy.destinationUnavailable}</p>
       </div> : null}
     </div>
   </div>;
@@ -402,8 +480,10 @@ export function ReadyToGoQueryEditor(block: ReadyToGoEditorProps) {
   const placeholder = mode === "tracking" ? readyToGoTrackingPlaceholder(block) : text(block, "defaultOrderNumber", "");
   const placeholderField = mode === "tracking" ? "defaultTrackingNumber" : "defaultOrderNumber";
   const emailPlaceholder = text(block, "emailPlaceholder", "");
-  return <section aria-label="Ready-to-go query editor" style={editorHeroStyle}>
-    <div role="region" aria-label="Ready-to-go tracking query" style={editorFormCardStyle}>
+  // 查询模块的圆角只作用于 Tab 卡片，不传给外层区块、输入框或按钮。
+  const moduleStyle = readyToGoModuleStyle({ ...block, moduleRadius: undefined }, false);
+  return <ModuleFrame style={moduleStyle}><section aria-label="Ready-to-go query editor" style={moduleStyle ? { ...editorHeroStyle, backgroundColor: "var(--pb-color-background, #fff)" } : editorHeroStyle}>
+    <div role="region" aria-label="Ready-to-go tracking query" style={{ ...editorFormCardStyle, borderRadius: readyToGoPixelValue(block.moduleRadius) || READY_TO_GO_DEFAULT_MODULE_RADIUS, boxShadow: readyToGoQueryShadow(block) }}>
       <div role="tablist" aria-label="Canvas tracking method" style={{ display: "flex", width: "100%", borderBottom: "1px solid #cbd5e1" }}>
         {([
           { mode: "tracking", name: "trackingTabLabel", fallback: "Tracking Number" },
@@ -462,22 +542,24 @@ export function ReadyToGoQueryEditor(block: ReadyToGoEditorProps) {
       </div>
       <p style={{ marginTop: "auto", paddingTop: 28, textAlign: "center", fontSize: 12, lineHeight: "17px", fontStyle: "italic", color: "#b8b8b8" }}>Powered by BestTrack</p>
     </div>
-  </section>;
+  </section></ModuleFrame>;
 }
 
 export function ReadyToGoProgressEditor(block: ReadyToGoEditorProps) {
   // 画布使用公共演示结果预览进度外观，但明确隐藏演示送达日期，避免把占位日期当商家配置。
-  return <section aria-label="Ready-to-go progress editor" style={{ ...pageFont, background: "var(--pb-color-background, #fff)", color: "var(--pb-color-text, #0f172a)", borderBottom: "1px solid #f1f5f9" }}>
+  const moduleStyle = readyToGoModuleStyle(block, false);
+  return <ModuleFrame style={moduleStyle}><section aria-label="Ready-to-go progress editor" style={{ ...pageFont, background: "var(--pb-color-background, #fff)", color: "var(--pb-color-text, #0f172a)", borderBottom: sectionDivider(moduleStyle) }}>
     <div style={{ ...contentWidth, textAlign: "center", width: "min(1248px, 100%)" }}>
-      <ProgressResult result={previewReadyToGoTracking()} showEstimatedDelivery={false} color={text(block, "progressColor")} />
+      <ProgressResult result={previewReadyToGoTracking()} showEstimatedDelivery={false} color={text(block, "progressColor")} textColor={text(block, "textColor")} />
     </div>
-  </section>;
+  </section></ModuleFrame>;
 }
 
 export function ReadyToGoDeliveryEditor(block: ReadyToGoEditorProps) {
   // 管理端广告预览只在画布覆盖演示结果，editing 禁止预览跳转；Web 继续使用查询结果的广告。
   const { adPreview } = useReadyToGoRuntime();
-  return <section aria-label="Ready-to-go delivery editor" style={{ ...pageFont, background: "var(--pb-color-background, #fff)", color: "var(--pb-color-text, #0f172a)", borderBottom: "1px solid #f1f5f9" }}>
+  const moduleStyle = readyToGoModuleStyle(block, true);
+  return <ModuleFrame style={moduleStyle}><section aria-label="Ready-to-go delivery editor" style={{ ...pageFont, background: "var(--pb-color-background, #fff)", color: "var(--pb-color-text, #0f172a)", borderBottom: sectionDivider(moduleStyle) }}>
     <DeliveryResult
       heading={<LocalizedInlineText block={block} name="heading" englishDefault="Shipping Details" />}
       contentsHeading={<LocalizedInlineText block={block} name="contentsHeading" englishDefault="Package Contents" />}
@@ -486,19 +568,19 @@ export function ReadyToGoDeliveryEditor(block: ReadyToGoEditorProps) {
       editing
       result={{ ...previewReadyToGoTracking(), ad: adPreview ?? undefined }}
     />
-  </section>;
+  </section></ModuleFrame>;
 }
 
 export function ReadyToGoRecommendationsEditor(block: ReadyToGoEditorProps) {
   // 画布用演示商品展示未配置时的轮播外观；这不是 Web 查询失败时的推荐兜底。
   const selected = configuredRecommendations(block.products);
   const items = selected.length ? selected : previewReadyToGoTracking().recommendations ?? [];
-  return <section aria-label="Ready-to-go recommendations editor" style={{ ...pageFont, background: "var(--pb-color-background, #fff)", color: "var(--pb-color-text, #0f172a)" }}>
+  return <ModuleFrame style={readyToGoModuleStyle(block, true)}><section aria-label="Ready-to-go recommendations editor" style={{ ...pageFont, background: "var(--pb-color-background, #fff)", color: "var(--pb-color-text, #0f172a)" }}>
     <div style={contentWidth}>
       <h3 style={{ margin: 0, textAlign: "center", fontSize: 20, lineHeight: "20px", fontWeight: 700 }}><InlineText block={block} name="heading" fallback="You may also like..." /></h3>
       <div style={{ marginTop: 24 }}><RecommendationCards items={items} /></div>
     </div>
-  </section>;
+  </section></ModuleFrame>;
 }
 
 
@@ -520,8 +602,9 @@ export function ReadyToGoQueryBlock(props: Record<string, unknown>) {
   const submitLabel = text(props, "submitLabel", "Track Your Order");
   const trackingTabLabel = text(props, "trackingTabLabel", "Tracking Number");
   const orderTabLabel = text(props, "orderTabLabel", "Order Number");
-  return <section style={heroStyle}>
-    <div role="region" aria-label="Ready-to-go tracking query" style={formCardStyle}>
+  const moduleStyle = readyToGoModuleStyle({ ...props, moduleRadius: undefined }, false);
+  return <ModuleFrame style={moduleStyle}><section style={moduleStyle ? { ...heroStyle, backgroundColor: "var(--pb-color-background, #fff)" } : heroStyle}>
+    <div role="region" aria-label="Ready-to-go tracking query" style={{ ...formCardStyle, borderRadius: readyToGoPixelValue(props.moduleRadius) || READY_TO_GO_DEFAULT_MODULE_RADIUS, boxShadow: readyToGoQueryShadow(props) }}>
       <div role="tablist" aria-label="Tracking method" style={{ display: "flex", width: "100%", borderBottom: "1px solid #cbd5e1" }}>
         <button type="button" role="tab" aria-selected={mode === "tracking"} onClick={() => setMode("tracking")} style={tabStyle(mode === "tracking")}>{trackingTabLabel}</button>
         <button type="button" role="tab" aria-selected={mode === "order"} onClick={() => setMode("order")} style={tabStyle(mode === "order")}>{orderTabLabel}</button>
@@ -529,12 +612,12 @@ export function ReadyToGoQueryBlock(props: Record<string, unknown>) {
       <form onSubmit={submit} style={{ marginTop: 24, display: "flex", flexDirection: "column", gap: 16, flex: 1 }}>
         {mode === "order" ? <>
           <label htmlFor="ready-to-go-order-number" style={{ position: "absolute", width: 1, height: 1, overflow: "hidden", clipPath: "inset(50%)" }}>Order number</label>
-          <input id="ready-to-go-order-number" aria-label="Order number" value={orderNumber} onChange={(event) => setOrderNumber(event.target.value)} placeholder={text(props, "defaultOrderNumber", "") || "Order Number"} style={inputStyle} />
+          <input id="ready-to-go-order-number" aria-label="Order number" value={orderNumber} onChange={(event) => setOrderNumber(event.target.value)} placeholder={text(props, "defaultOrderNumber", "") || "Order Number"} style={queryInputStyle(props)} />
           <label htmlFor="ready-to-go-email" style={{ position: "absolute", width: 1, height: 1, overflow: "hidden", clipPath: "inset(50%)" }}>Email</label>
-          <input id="ready-to-go-email" aria-label="Email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder={text(props, "emailPlaceholder", "") || "Email"} style={inputStyle} />
+          <input id="ready-to-go-email" aria-label="Email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder={text(props, "emailPlaceholder", "") || "Email"} style={queryInputStyle(props)} />
         </> : <>
           <label htmlFor="ready-to-go-tracking-number" style={{ position: "absolute", width: 1, height: 1, overflow: "hidden", clipPath: "inset(50%)" }}>Tracking number</label>
-          <input id="ready-to-go-tracking-number" aria-label="Tracking number" value={trackingNumber} onChange={(event) => setTrackingNumber(event.target.value)} placeholder={readyToGoTrackingPlaceholder(props) || "Tracking Number"} style={inputStyle} />
+          <input id="ready-to-go-tracking-number" aria-label="Tracking number" value={trackingNumber} onChange={(event) => setTrackingNumber(event.target.value)} placeholder={readyToGoTrackingPlaceholder(props) || "Tracking Number"} style={queryInputStyle(props)} />
         </>}
         {localError ? <p role="alert" style={{ margin: 0, textAlign: "center", fontSize: 12, color: "#f43f5e" }}>{localError}</p> : null}
         <button type="submit" disabled={submitDisabled} style={{ ...submitButtonStyle(props, submitDisabled), border: 0, font: "inherit", fontSize: 15, fontWeight: 600, cursor: submitDisabled ? "wait" : "pointer", opacity: submitDisabled ? 0.7 : 1 }}>{submitLabel}</button>
@@ -543,7 +626,7 @@ export function ReadyToGoQueryBlock(props: Record<string, unknown>) {
       <RuntimeWatermark watermark={runtime.watermark} />
       {loading ? <TrackingLoading /> : null}
     </div>
-  </section>;
+  </section></ModuleFrame>;
 }
 
 export function ReadyToGoProgressBlock(props: Record<string, unknown>) {
@@ -554,14 +637,16 @@ export function ReadyToGoProgressBlock(props: Record<string, unknown>) {
   const visibility = trackingBlockState(runtime);
   const result = runtime.result;
   if (!visibility.showProgress) return null;
-  if (visibility.showNotFound) return <TrackingNotFound resultAnchor />;
-  return <SectionShell title={copy.shipmentProgress} resultAnchor>
+  const moduleStyle = readyToGoModuleStyle(props, false);
+  if (visibility.showNotFound) return <ModuleFrame style={moduleStyle}><TrackingNotFound resultAnchor /></ModuleFrame>;
+  return <ModuleFrame style={moduleStyle}><SectionShell title={copy.shipmentProgress} resultAnchor bordered={!moduleStyle}>
     <div style={{ ...contentWidth, textAlign: "center", width: "min(1248px, 100%)" }}>
       {visibility.showUnavailable ? <p style={{ margin: 0, color: "#b42318" }}>{copy.shipmentProgressUnavailable}</p> : null}
       {visibility.showResult && result ? <ProgressResult
         result={result}
         showEstimatedDelivery={visibility.showEstimatedDelivery}
         color={text(props, "progressColor")}
+        textColor={text(props, "textColor")}
         recentQueries={runtime.recentQueries}
         selectedRecentIndex={runtime.selectedRecentIndex}
         onSelectRecent={runtime.selectRecentQuery}
@@ -569,7 +654,7 @@ export function ReadyToGoProgressBlock(props: Record<string, unknown>) {
         onSelectShipment={runtime.selectShipment}
       /> : null}
     </div>
-  </SectionShell>;
+  </SectionShell></ModuleFrame>;
 }
 
 export function ReadyToGoDeliveryBlock(props: Record<string, unknown>) {
@@ -583,14 +668,15 @@ export function ReadyToGoDeliveryBlock(props: Record<string, unknown>) {
   const showCarrier = props.showCarrier !== false;
   // Runtime 已将选中包裹投影到 result；与进度区读取同一份结果，避免切换后各区块不同步。
   const result = runtime.result;
-  return <SectionShell title={heading}>
+  const moduleStyle = readyToGoModuleStyle(props, true);
+  return <ModuleFrame style={moduleStyle}><SectionShell title={heading} bordered={!moduleStyle}>
     {visibility.showResult && result ? <DeliveryResult heading={heading} contentsHeading={contentsHeading} carrierHeading={carrierHeading} showCarrier={showCarrier} result={result} /> : <div className="bt-delivery-columns" style={deliveryColumnsStyle}>
       <div>
         <ShippingDetailsHeading heading={heading} />
         {visibility.showUnavailable ? <p style={{ margin: "16px 0 0", color: "#b42318" }}>{copy.deliveryUnavailable}</p> : null}
       </div>
     </div>}
-  </SectionShell>;
+  </SectionShell></ModuleFrame>;
 }
 
 export function ReadyToGoRecommendationsBlock(props: Record<string, unknown>) {
@@ -600,10 +686,10 @@ export function ReadyToGoRecommendationsBlock(props: Record<string, unknown>) {
   // 没有商品只隐藏渲染内容；推荐区块本身仍受模板的必需区块策略保护。
   const items = recommendationItems(props.products, runtime);
   if (!items.length) return null;
-  return <SectionShell title={heading} bordered={false}>
+  return <ModuleFrame style={readyToGoModuleStyle(props, true)}><SectionShell title={heading} bordered={false}>
     <div style={contentWidth}>
       <h3 style={{ margin: 0, textAlign: "center", fontSize: 20, lineHeight: "20px", fontWeight: 700 }}>{heading}</h3>
       <div style={{ marginTop: 24 }}><RecommendationCards items={items} /></div>
     </div>
-  </SectionShell>;
+  </SectionShell></ModuleFrame>;
 }

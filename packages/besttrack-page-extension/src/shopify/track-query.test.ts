@@ -413,7 +413,7 @@ describe("Shopify Track Page query helpers", () => {
     expect(shouldHidePoweredBy(visible)).toBe(false);
   });
 
-  it("hides powered-by when #besttrack-page-bootstrap enables watermark removal", () => {
+  it("hides powered-by only when #besttrack-page-bootstrap featureFlags enable watermark removal", () => {
     const windowWithBootstrap = (raw: string | null) =>
       ({
         location: { hostname: "shop.example", search: "", hash: "" },
@@ -425,11 +425,16 @@ describe("Shopify Track Page query helpers", () => {
 
     expect(shouldHidePoweredBy(windowWithBootstrap(JSON.stringify({
       queryPath: "/apps/bestrack-test/track/query",
-      enableTrackingPageWatermarkRemoval: true
+      featureFlags: { enableTrackingPageWatermarkRemoval: true }
     })))).toBe(true);
     expect(shouldHidePoweredBy(windowWithBootstrap(JSON.stringify({
       queryPath: "/apps/bestrack-test/track/query",
-      enableTrackingPageWatermarkRemoval: "true"
+      featureFlags: { enableTrackingPageWatermarkRemoval: "true" }
+    })))).toBe(false);
+    // The top-level field is a bootstrap default, not the shop's authorization.
+    expect(shouldHidePoweredBy(windowWithBootstrap(JSON.stringify({
+      queryPath: "/apps/bestrack-test/track/query",
+      enableTrackingPageWatermarkRemoval: true
     })))).toBe(false);
     expect(shouldHidePoweredBy(windowWithBootstrap(null))).toBe(false);
   });

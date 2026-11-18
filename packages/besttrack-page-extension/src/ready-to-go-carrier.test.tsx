@@ -37,16 +37,15 @@ describe("Ready-to-go Carrier visibility", () => {
     renderEditor(showCarrier);
 
     expect(screen.getByText("Carrier")).toBeVisible();
-    expect(screen.getByText("BestTrack demo carrier")).toBeVisible();
-    expect(screen.getByText("Shanghai")).toBeVisible();
+    expect(screen.getByText("4PX")).toBeVisible();
+    expect(screen.queryByText("Shanghai")).not.toBeInTheDocument();
   });
 
   it("hides only the Carrier section in the editor preview", () => {
     renderEditor(false);
 
     expect(screen.queryByText("Carrier")).not.toBeInTheDocument();
-    expect(screen.queryByText("BestTrack demo carrier")).not.toBeInTheDocument();
-    expect(screen.queryByText("Shanghai")).not.toBeInTheDocument();
+    expect(screen.queryByText("4PX")).not.toBeInTheDocument();
     expect(screen.getByLabelText("Demo shipment item")).toBeVisible();
     expect(screen.getByText("Shipment accepted at the regional hub")).toBeVisible();
   });
@@ -87,6 +86,6 @@ describe("Ready-to-go Carrier visibility", () => {
       </ReadyToGoRuntimeProvider>
     );
     await waitFor(() => expect(screen.getByText("Carrier BBB")).toBeVisible());
-    expect(screen.getByText("Destination BBB")).toBeVisible();
+    expect(screen.queryByText("Destination BBB")).not.toBeInTheDocument();
   });
 });

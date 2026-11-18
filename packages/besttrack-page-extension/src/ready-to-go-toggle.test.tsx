@@ -55,6 +55,88 @@ function carrierToggle() {
 }
 
 describe("Ready-to-go Carrier inspector toggle", () => {
+  it.each<PageDocument["blocks"][number]["props"]>([{}, { textColor: "" }])("shows the default font color without writing missing or empty settings: %j", async (props) => {
+    const onDocumentChange = vi.fn<(document: PageDocument) => void>();
+    const initialDocument = createPageDocument({ pageId: "font-color", blocks: [{ id: "delivery", type: "besttrack.ready-to-go.progress", version: 1, props }] });
+    render(editor({ initialDocument, onDocumentChange }));
+    const swatch = await screen.findByLabelText("Font color");
+    const row = swatch.closest(".pb-inspector-field__color")!;
+    expect(swatch).toHaveValue("#334155");
+    expect(row).toHaveTextContent("#334155");
+    expect(row.querySelector("button")).toBeNull();
+    expect(onDocumentChange).toHaveBeenCalledTimes(1);
+    expect(onDocumentChange.mock.lastCall?.[0]).toEqual(initialDocument);
+    fireEvent.change(swatch, { target: { value: "#cc3366" } });
+    expect(onDocumentChange.mock.lastCall?.[0].blocks[0]!.props.textColor).toBe("#cc3366");
+    fireEvent.click(row.querySelector<HTMLButtonElement>("button[aria-label=\"Reset to default\"]")!);
+    expect(swatch).toHaveValue("#334155");
+    expect(onDocumentChange.mock.lastCall?.[0].blocks[0]!.props.textColor).toBe("#334155");
+    expect(row.querySelector("button")).toBeNull();
+  });
+
+  it("converts legacy px control radii for display and saves percentage edits through history and reset", async () => {
+    const onDocumentChange = vi.fn<(document: PageDocument) => void>();
+    const initialDocument = createPageDocument({ pageId: "radius-percent", blocks: [{ id: "delivery", type: "besttrack.ready-to-go.query", version: 1, props: { inputRadius: "8px", buttonRadius: "100px" } }] });
+    render(editor({ initialDocument, onDocumentChange }));
+    const input = await screen.findByRole("slider", { name: "Input radius (%)" });
+    const button = screen.getByRole("slider", { name: "Button radius (%)" });
+    expect(input).toHaveAttribute("aria-valuetext", "33.33%");
+    expect(button).toHaveValue("100");
+    expect(onDocumentChange.mock.lastCall?.[0]).toEqual(initialDocument);
+    fireEvent.change(button, { target: { value: "30" } });
+    expect(onDocumentChange.mock.lastCall?.[0].blocks[0]!.props.buttonRadius).toBe("30%");
+    fireEvent.click(screen.getByRole("button", { name: "Undo" }));
+    expect(button).toHaveValue("100");
+    expect(onDocumentChange.mock.lastCall?.[0].blocks[0]!.props.buttonRadius).toBe("100px");
+    fireEvent.click(screen.getByRole("button", { name: "Redo" }));
+    expect(button).toHaveValue("30");
+    fireEvent.click(button.closest(".pb-inspector-field")!.querySelector<HTMLButtonElement>("button[aria-label=\"Reset to default\"]")!);
+    expect(button).toHaveAttribute("aria-valuetext", "27.59%");
+    expect(onDocumentChange.mock.lastCall?.[0].blocks[0]!.props.buttonRadius).toBe("27.59%");
+    fireEvent.change(input, { target: { value: "0" } });
+    expect(onDocumentChange.mock.lastCall?.[0].blocks[0]!.props.inputRadius).toBe("0%");
+  });
+
+  it.each([undefined, false, true])("edits shadow strength with legacy hideShadow=%s through reset, history and persistence", async (hideShadow) => {
+    const onDocumentChange = vi.fn<(document: PageDocument) => void>();
+    const saveDraft = vi.fn<(input: DraftSaveInput) => Promise<{ revision: number }>>().mockResolvedValue({ revision: 2 });
+    const publish = vi.fn<(input: PublishActionInput) => Promise<{ versionId: string }>>().mockResolvedValue({ versionId: "published-2" });
+    const initialDocument = createPageDocument({
+      pageId: "shadow-strength",
+      blocks: [{ id: "delivery", type: "besttrack.ready-to-go.query", version: 1, props: hideShadow === undefined ? {} : { hideShadow } }]
+    });
+    const view = render(editor({ initialDocument, onDocumentChange, autoSave: true, autoSaveDelayMs: 1, draftRevision: 1, draftPersistence: { saveDraft }, publishAction: { publish } }));
+    const slider = await screen.findByRole("slider", { name: "Shadow strength (%)" });
+    expect(slider).toHaveValue(hideShadow ? "0" : "100");
+    expect(slider).toHaveAttribute("aria-valuetext", hideShadow ? "0%" : "100%");
+    expect(screen.queryByRole("switch", { name: "Hide shadow" })).not.toBeInTheDocument();
+    expect(onDocumentChange.mock.lastCall?.[0]).toEqual(initialDocument);
+    fireEvent.change(slider, { target: { value: "50" } });
+    expect(onDocumentChange.mock.lastCall?.[0].blocks[0]!.props.shadowStrength).toBe("50");
+    fireEvent.click(screen.getByRole("button", { name: "Undo" }));
+    expect(onDocumentChange.mock.lastCall?.[0].blocks[0]!.props).not.toHaveProperty("shadowStrength");
+    expect(slider).toHaveValue(hideShadow ? "0" : "100");
+    fireEvent.click(screen.getByRole("button", { name: "Redo" }));
+    expect(slider).toHaveValue("50");
+    fireEvent.click(slider.closest(".pb-inspector-field")!.querySelector<HTMLButtonElement>("button[aria-label=\"Reset to default\"]")!);
+    expect(slider).toHaveValue("100");
+    expect(onDocumentChange.mock.lastCall?.[0].blocks[0]!.props.shadowStrength).toBe("100");
+    fireEvent.change(slider, { target: { value: "0" } });
+    await waitFor(() => expect(saveDraft).toHaveBeenCalledTimes(1));
+    expect(saveDraft.mock.calls[0]![0].document.blocks[0]!.props.shadowStrength).toBe("0");
+    await waitFor(() => expect(screen.getByTestId("page-document-editor")).toHaveAttribute("data-dirty", "false"));
+    fireEvent.click(screen.getByRole("button", { name: "Publish" }));
+    await waitFor(() => expect(publish).toHaveBeenCalledTimes(1));
+    const published = publish.mock.calls[0]![0];
+    expect(published.validationIssues).toEqual([]);
+    const restored = migratePageDocument(JSON.parse(JSON.stringify(published.document)));
+    expect(restored.success).toBe(true);
+    if (!restored.success) throw new Error("Expected valid stored shadow strength.");
+    view.unmount();
+    render(editor({ initialDocument: restored.data }));
+    expect(await screen.findByRole("slider", { name: "Shadow strength (%)" })).toHaveValue("0");
+  });
+
   it("writes boolean values and preserves the unset default through undo and redo", async () => {
     const onDocumentChange = vi.fn<(document: PageDocument) => void>();
     render(editor({ onDocumentChange }));

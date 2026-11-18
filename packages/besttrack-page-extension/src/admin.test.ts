@@ -51,6 +51,8 @@ describe("BestTrack admin copy", () => {
     const copy = getReadyToGoEditorCopy("zh-CN");
     expect(copy.blockLabels["besttrack.ready-to-go.query"]).toBe("查询");
     expect(copy.fieldLabels.query.submitLabel).toBe("按钮文案");
+    expect(copy.fieldLabels.progress.textColor).toBe("字体颜色");
+    expect(copy.fieldLabels.style.shadowStrength).toBe("阴影强度 (%)");
     expect(copy.fieldLabels.delivery.showCarrier).toBe("显示承运商");
     expect(copy.fieldLabels.delivery.showCarrierHelp).toBe("关闭时，隐藏承运商。");
     expect(copy.fieldLabels.controls.exceedsLimit(100)).toBe("最多允许 100px。");

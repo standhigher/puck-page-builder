@@ -10,10 +10,10 @@ const DEMO_QUERY_NUMBERS = ["BT-2048-DEMO", "BT-2049-DEMO", "BT-2050-DEMO"] as c
 
 // 为三个演示号码提供不同状态，便于观察第一层历史记录恢复后，状态和承运商是否一起更新。
 // 这些号码只是测试入口；实际的最近三条记录仍由 Runtime 在每次成功查询后生成。
-const demoLookups: Record<string, Pick<TrackingPageQueryResult, "status" | "carrier" | "latestEvent">> = {
+const demoLookups: Record<string, Required<Pick<TrackingPageQueryResult, "status" | "carrier" | "latestEvent">>> = {
   "BT-2048-DEMO": {
     status: "In transit",
-    carrier: "BestTrack North",
+    carrier: "4PX",
     latestEvent: "Shipment accepted at the regional hub"
   },
   "BT-2049-DEMO": {
@@ -47,7 +47,7 @@ function demoResult(request: Parameters<TrackingPageQuery>[0]): TrackingPageQuer
   // 此处没有发起网络请求，这个默认值不承担 Live 请求失败后的回退职责。
   const lookup = demoLookups[trackingNumber] ?? {
     status: "In transit",
-    carrier: "BestTrack demo carrier",
+    carrier: "4PX",
     latestEvent: "Shipment accepted at the regional hub"
   };
   return {

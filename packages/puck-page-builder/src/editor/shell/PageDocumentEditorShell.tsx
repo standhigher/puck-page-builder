@@ -1,5 +1,5 @@
 import { Puck, usePuck } from "@puckeditor/core";
-import { Badge, Banner, Button, ButtonGroup, Frame, InlineStack, Modal, Select, Text, TextField, Toast } from "@shopify/polaris";
+import { Badge, Banner, Button, ButtonGroup, Frame, Icon, InlineStack, Modal, Select, Text, TextField, Toast } from "@shopify/polaris";
 import { DeleteIcon, DragHandleIcon, ImageIcon, LayoutSectionIcon, ProductIcon, RedoIcon, TextIcon, UndoIcon, XIcon } from "@shopify/polaris-icons";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
 import { createPageDocumentPuckConfig } from "../../adapters/puck/page-document-config";
@@ -36,6 +36,8 @@ export type PageDocumentEditorShellProps = {
   availableBlockTypes?: readonly string[];
   /** Enables generic Variant and token-only style editing in the inspector. */
   appearanceControls?: boolean;
+  /** Shows move, duplicate and delete buttons under the inspector; the block list keeps its own delete and drag controls. */
+  inspectorActions?: boolean;
   /** Host rules that supplement block-declared operation and cardinality policies. */
   policy?: PageDocumentEditorPolicy;
   /** Copy or presentation overrides for the built-in, two-step deletion dialog. */
@@ -171,7 +173,7 @@ export function PageDocumentEditorShell(props: PageDocumentEditorShellProps) {
   </EditorProvider>;
 }
 
-function PageDocumentEditor({ iframe = true, registry, adminLocale, onSave, onPublish, draftPersistence, draftRevision: initialDraftRevision, autoSave = true, autoSaveDelayMs = 800, publishAction, assetPicker, inspectorSettings, productPicker, pageStatus, onBack, onHistory, onPreview, onAddToStore, deleteConfirmation, availableBlockTypes, appearanceControls = false }: PageDocumentEditorShellProps) {
+function PageDocumentEditor({ iframe = true, registry, adminLocale, onSave, onPublish, draftPersistence, draftRevision: initialDraftRevision, autoSave = true, autoSaveDelayMs = 800, publishAction, assetPicker, inspectorSettings, productPicker, pageStatus, onBack, onHistory, onPreview, onAddToStore, deleteConfirmation, availableBlockTypes, appearanceControls = false, inspectorActions = true }: PageDocumentEditorShellProps) {
   const editor = useEditorContext();
   const editorRef = useRef(editor);
   useLayoutEffect(() => { editorRef.current = editor; }, [editor]);
@@ -369,7 +371,7 @@ function PageDocumentEditor({ iframe = true, registry, adminLocale, onSave, onPu
                 const actionHint = canReorder && canAdd ? i18n.t("reorderOrAddHint") : canReorder ? i18n.t("reorderHint") : canAdd ? i18n.t("addHint") : "";
                 const canDelete = Boolean(instance && editor.canDeleteBlock(instance.id));
                 const label = blockTypeLabel(type, registry, i18n);
-                const BlockIcon = type === "core.text" ? TextIcon : type === "core.image" ? ImageIcon : registry?.getBlock(type)?.icon ?? LayoutSectionIcon;
+                const BlockIcon = blockTypeIcon(type, registry);
                 return <div key={type} className={`pb-document-block-row pb-document-block-row--library${selected ? " pb-document-block-row--selected" : ""}${draggingBlockId === instance?.id ? " pb-document-block-row--dragging" : ""}${dropEdge === "before" ? " pb-document-block-row--drop-before" : ""}${dropEdge === "after" ? " pb-document-block-row--drop-after" : ""}`} data-block-type={type} data-selected={selected} data-drop-edge={dropEdge} role="listitem" draggable={draggable} aria-disabled={!draggable} aria-label={`${label}${actionHint}${selected ? i18n.t("selectedTypeHint") : ""}`} onClick={() => { if (!instance) return; editor.requestCanvasSelection(instance.id); scrollCanvasBlockIntoView(instance.id, canvasFrameRef.current); }} onDragStart={(event) => { if ((event.target as HTMLElement).closest(".pb-library-block-controls")) { event.preventDefault(); return; } if (!draggable) { event.preventDefault(); return; } event.dataTransfer.setData("application/x-page-document-block", type); if (instance && canReorder) { event.dataTransfer.setData("application/x-page-document-block-id", instance.id); event.dataTransfer.effectAllowed = canAdd ? "copyMove" : "move"; draggingBlockIdRef.current = instance.id; setDraggingBlockId(instance.id); } else event.dataTransfer.effectAllowed = "copy"; if (canAdd) setDraggingLibraryType(type); }} onDragOver={(event) => { const sourceId = draggingBlockIdRef.current; if (!sourceId || !instance || sourceId === instance.id) return; event.preventDefault(); event.stopPropagation(); event.dataTransfer.dropEffect = "move"; const rect = event.currentTarget.getBoundingClientRect(); setDropTarget({ id: instance.id, edge: dropPlacement(event.clientY, rect.top, rect.height) }); }} onDragLeave={(event) => { if (instance && !event.currentTarget.contains(event.relatedTarget as Node | null)) setDropTarget((current) => current?.id === instance.id ? null : current); }} onDrop={(event) => { const sourceId = draggingBlockIdRef.current; if (!sourceId || !instance || sourceId === instance.id) return; event.preventDefault(); event.stopPropagation(); const rect = event.currentTarget.getBoundingClientRect(); applyListReorder(sourceId, instance.id, dropPlacement(event.clientY, rect.top, rect.height)); clearLibraryDrag(); }} onDragEnd={clearLibraryDrag}>
                 {!leftRailOpen ? <span className="pb-library-block-icon"><Button accessibilityLabel={label} pressed={selected} icon={BlockIcon} variant="tertiary" /></span> : <>
                 <span className="pb-library-block-title">
@@ -397,8 +399,8 @@ function PageDocumentEditor({ iframe = true, registry, adminLocale, onSave, onPu
             {!rightPanelOpen ? <div className="pb-collapsed-actions"><Button onClick={() => setRightPanelOpen(true)}>{i18n.t("expandRight")}</Button></div> : null}
           </main>
           <aside className={`pb-right-panel${rightPanelOpen ? "" : " pb-panel--closed"}`} aria-label={i18n.t("properties")}>
-            <InlineStack align="space-between" blockAlign="center"><Text as="h2" variant="headingSm">{i18n.t("properties")}</Text><Button accessibilityLabel={i18n.t("collapseRight")} icon={XIcon} variant="tertiary" onClick={() => setRightPanelOpen(false)} /></InlineStack>
-            {editor.selectedBlock ? <><DocumentInspector key={editor.selectedBlock.id} settings={inspectorSettings?.[editor.selectedBlock.id] ?? inspectorSettings?.[editor.selectedBlock.type]} pageId={editor.document.pageId} assetPicker={assetPicker} productPicker={productPicker} i18n={i18n} block={editor.selectedBlock} registry={registry} disabled={!editor.actionState.canEdit} appearanceControls={appearanceControls} onChange={(props) => editor.updateBlockProps(editor.selectedBlock!.id, props)} onPresentationChange={(presentation) => updateBlockPresentation(editor.selectedBlock!.id, presentation)} /><InspectorActions block={editor.selectedBlock} canDuplicate={editor.actionState.canDuplicate} canDelete={editor.actionState.canDelete} canMove={editor.actionState.canReorder} canMoveUp={editor.document.blocks[0]?.id !== editor.selectedBlock.id} canMoveDown={editor.document.blocks.at(-1)?.id !== editor.selectedBlock.id} i18n={i18n} onDuplicate={() => editor.duplicateBlock(editor.selectedBlock!.id)} onDelete={() => editor.requestDeleteBlock(editor.selectedBlock!.id)} onMove={(direction) => editor.moveBlock(editor.selectedBlock!.id, direction)} /></> : <Text as="p" tone="subdued">{i18n.t("selectBlock")}</Text>}
+            <div className="pb-right-panel__header"><InlineStack align="space-between" blockAlign="center"><Text as="h2" variant="headingSm">{i18n.t("properties")}</Text><Button accessibilityLabel={i18n.t("collapseRight")} icon={XIcon} variant="tertiary" onClick={() => setRightPanelOpen(false)} /></InlineStack></div>
+            {editor.selectedBlock ? <><DocumentInspector key={editor.selectedBlock.id} settings={inspectorSettings?.[editor.selectedBlock.id] ?? inspectorSettings?.[editor.selectedBlock.type]} pageId={editor.document.pageId} assetPicker={assetPicker} productPicker={productPicker} i18n={i18n} block={editor.selectedBlock} registry={registry} disabled={!editor.actionState.canEdit} appearanceControls={appearanceControls} onChange={(props) => editor.updateBlockProps(editor.selectedBlock!.id, props)} onPresentationChange={(presentation) => updateBlockPresentation(editor.selectedBlock!.id, presentation)} />{inspectorActions ? <InspectorActions block={editor.selectedBlock} canDuplicate={editor.actionState.canDuplicate} canDelete={editor.actionState.canDelete} canMove={editor.actionState.canReorder} canMoveUp={editor.document.blocks[0]?.id !== editor.selectedBlock.id} canMoveDown={editor.document.blocks.at(-1)?.id !== editor.selectedBlock.id} i18n={i18n} onDuplicate={() => editor.duplicateBlock(editor.selectedBlock!.id)} onDelete={() => editor.requestDeleteBlock(editor.selectedBlock!.id)} onMove={(direction) => editor.moveBlock(editor.selectedBlock!.id, direction)} /> : null}</> : <Text as="p" tone="subdued">{i18n.t("selectBlock")}</Text>}
           </aside>
         </div>
         {editor.pendingDeleteBlock ? <DeleteConfirmation block={editor.pendingDeleteBlock} config={deleteConfirmation} i18n={i18n} onCancel={editor.cancelDeleteBlock} onConfirm={editor.confirmDeleteBlock} /> : null}
@@ -430,7 +432,7 @@ function CanvasSelectionActionBar({ label, children, parentAction }: { label?: s
 }
 
 /** Bridges list-originated selection requests into Puck, then waits for Puck's selected item before updating the inspector. */
-function CanvasSelectionBridge({ data, requestedBlockId, onCanvasSelected, canvasMutationVersion, canvasResetVersion, permissionsVersion }: { data: ReturnType<typeof toEngineData>; requestedBlockId: string | null; onCanvasSelected: (id: string | null) => void; canvasMutationVersion: number; canvasResetVersion: number; permissionsVersion: string }) {
+export function CanvasSelectionBridge({ data, requestedBlockId, onCanvasSelected, canvasMutationVersion, canvasResetVersion, permissionsVersion }: { data: ReturnType<typeof toEngineData>; requestedBlockId: string | null; onCanvasSelected: (id: string | null) => void; canvasMutationVersion: number; canvasResetVersion: number; permissionsVersion: string }) {
   const puck = usePuck();
   const lastSelectedId = useRef<string | null>(null);
   const lastSyncedData = useRef<string | null>(null);
@@ -455,23 +457,28 @@ function CanvasSelectionBridge({ data, requestedBlockId, onCanvasSelected, canva
     refreshPermissions?.({}, true);
   }, [permissionsVersion, refreshPermissions]);
 
-  useEffect(() => {
-    if (!requestedBlockId) return;
-    // Every setUi dispatch creates a new Puck state (and a new `puck`), which re-runs this effect.
-    if (puck.selectedItem?.props.id === requestedBlockId) return;
-    const selector = puck.getSelectorForId(requestedBlockId);
-    if (selector) puck.dispatch({ type: "setUi", ui: { itemSelector: selector } });
-    scrollCanvasBlockIntoView(requestedBlockId);
-  }, [puck, requestedBlockId]);
-
   const selectedId = typeof puck.selectedItem?.props.id === "string" ? puck.selectedItem.props.id : null;
   useEffect(() => {
-    // Confirm requests for the already selected block too, so the request is cleared.
-    if (selectedId && (lastSelectedId.current !== selectedId || requestedBlockId === selectedId)) {
-      lastSelectedId.current = selectedId;
-      onCanvasSelected(selectedId);
+    // A pending request outranks Puck's current selection, which may still be an older block
+    // until Puck receives the requested block's data; only the requested ID can acknowledge it.
+    if (requestedBlockId) {
+      if (selectedId !== requestedBlockId) {
+        // Every setUi dispatch creates a new Puck state (and a new `puck`), which re-runs this effect.
+        const selector = puck.getSelectorForId(requestedBlockId);
+        if (selector) puck.dispatch({ type: "setUi", ui: { itemSelector: selector } });
+        scrollCanvasBlockIntoView(requestedBlockId);
+        return;
+      }
+      lastSelectedId.current = requestedBlockId;
+      onCanvasSelected(requestedBlockId);
+      scrollCanvasBlockIntoView(requestedBlockId);
+      return;
     }
-  }, [onCanvasSelected, requestedBlockId, selectedId]);
+    // Track cleared selections too, so selecting the same block again is reported.
+    if (lastSelectedId.current === selectedId) return;
+    lastSelectedId.current = selectedId;
+    if (selectedId) onCanvasSelected(selectedId);
+  }, [onCanvasSelected, puck, requestedBlockId, selectedId]);
 
   return null;
 }
@@ -495,9 +502,39 @@ function InspectorSection({ title, children, defaultOpen = true }: { title: stri
   </details>;
 }
 
-function InspectorTextControl({ label, value, control, maxLength, disabled, i18n, onChange }: { i18n: ReturnType<typeof createAdminI18n>; label: string; value: unknown; control: Exclude<NonNullable<FieldConfig["control"]>, "products" | "asset">; maxLength?: number; disabled: boolean; onChange: (value: string) => void }) {
+const HEX_COLOR = /^#[\da-f]{6}$/i;
+
+function blockTypeIcon(type: string, registry?: ExtensionRegistry) {
+  return type === "core.text" ? TextIcon : type === "core.image" ? ImageIcon : registry?.getBlock(type)?.icon ?? LayoutSectionIcon;
+}
+
+function InspectorResetButton({ label, onClick }: { label: string; onClick: () => void }) {
+  return <button type="button" className="pb-inspector-field__reset" aria-label={label} title={label} onClick={onClick}>
+    <svg viewBox="0 0 16 16" width={14} height={14} fill="none" stroke="currentColor" strokeWidth={1.4} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M13 8a5 5 0 1 1-1.4-3.45" />
+      <path d="M12.2 2.4v2.7h-2.7" />
+    </svg>
+  </button>;
+}
+
+function InspectorColorControl({ label, value, defaultValue, disabled, i18n, onChange }: { label: string; value: unknown; defaultValue: unknown; disabled: boolean; i18n: ReturnType<typeof createAdminI18n>; onChange: (value: string) => void }) {
   const stringValue = typeof value === "string" ? value : "";
-  if (control === "color") return <input aria-label={label} type="color" value={/^#[\da-f]{6}$/i.test(stringValue) ? stringValue : "#000000"} disabled={disabled} onChange={(event) => onChange(event.currentTarget.value)} />;
+  const fallback = typeof defaultValue === "string" && HEX_COLOR.test(defaultValue) ? defaultValue : undefined;
+  const savedColor = HEX_COLOR.test(stringValue) ? stringValue : undefined;
+  const changed = stringValue.trim() !== "" && fallback !== undefined && stringValue.toLowerCase() !== fallback.toLowerCase();
+  const color = savedColor ?? fallback;
+  return <div className="pb-inspector-field__color">
+    <span>{label}</span>
+    <label>
+      <input aria-label={label} type="color" value={color ?? "#000000"} disabled={disabled} onChange={(event) => onChange(event.currentTarget.value)} />
+      <span aria-hidden="true">{color ?? "—"}</span>
+    </label>
+    {changed && !disabled ? <InspectorResetButton label={i18n.t("resetToDefault")} onClick={() => onChange(fallback)} /> : null}
+  </div>;
+}
+
+function InspectorTextControl({ label, value, control, maxLength, disabled, i18n, onChange }: { i18n: ReturnType<typeof createAdminI18n>; label: string; value: unknown; control: Exclude<NonNullable<FieldConfig["control"]>, "products" | "asset" | "color">; maxLength?: number; disabled: boolean; onChange: (value: string) => void }) {
+  const stringValue = typeof value === "string" ? value : "";
   const length = Array.from(stringValue).length;
   const field = <TextField label={label} labelHidden value={stringValue} onChange={(next) => onChange(maxLength === undefined ? next : Array.from(next).slice(0, maxLength).join(""))} autoComplete="off" disabled={disabled} multiline={control === "textarea" ? 4 : false} type={control === "url" ? "url" : "text"} maxLength={maxLength} />;
   if (maxLength === undefined) return field;
@@ -566,16 +603,20 @@ function InspectorToggle({ label, checked, disabled, onChange }: { label: string
   </button>;
 }
 
-function InspectorField({ name, field, value, toggleValue, registry, disabled, assetPicker, productPicker, pageId, blockId, i18n, onChange, onToggleChange }: { name: string; field: FieldConfig; value: unknown; toggleValue?: unknown; registry?: ExtensionRegistry; disabled: boolean; assetPicker?: AssetPickerAdapter; productPicker?: ProductPickerAdapter; pageId: string; blockId: string; i18n: ReturnType<typeof createAdminI18n>; onChange: (value: JsonValue) => void; onToggleChange?: (checked: boolean) => void }) {
+function InspectorField({ name, field, value, defaultValue, blockProps, toggleValue, registry, disabled, assetPicker, productPicker, pageId, blockId, i18n, onChange, onToggleChange }: { name: string; field: FieldConfig; value: unknown; defaultValue?: unknown; blockProps?: Readonly<Record<string, JsonValue>>; toggleValue?: unknown; registry?: ExtensionRegistry; disabled: boolean; assetPicker?: AssetPickerAdapter; productPicker?: ProductPickerAdapter; pageId: string; blockId: string; i18n: ReturnType<typeof createAdminI18n>; onChange: (value: JsonValue) => void; onToggleChange?: (checked: boolean) => void }) {
   const label = field.label ?? name;
   const issues = validateFieldValue(field, value, i18n.t);
-  const Field = registry?.getField(field.field)?.component;
+  const fieldDefinition = registry?.getField(field.field);
+  const Field = fieldDefinition?.component;
   const toggleOn = toggleValue !== false;
   const controlDisabled = disabled || Boolean(field.toggle?.disablesField && !toggleOn);
+  const controlOwnsLabel = field.control === "color" || (!field.control && Boolean(fieldDefinition?.rendersLabel));
+  const description = field.description ? <Text as="p" variant="bodySm" tone="subdued">{field.description}</Text> : null;
   return <div className="pb-inspector-field" data-control={field.control ?? "custom"}>
-    <div className="pb-inspector-field__heading"><Text as="p" variant="bodySm" fontWeight="semibold">{label}</Text>{field.description ? <Text as="p" variant="bodySm" tone="subdued">{field.description}</Text> : null}</div>
+    {controlOwnsLabel ? null : <div className="pb-inspector-field__heading"><Text as="p" variant="bodySm" fontWeight="semibold">{label}</Text>{description}</div>}
     {field.toggle && onToggleChange ? <InspectorToggle label={field.toggle.label} checked={toggleOn} disabled={disabled} onChange={onToggleChange} /> : null}
-    {field.control === "products" ? <InspectorProductsControl value={value} disabled={controlDisabled} picker={productPicker} pageId={pageId} blockId={blockId} i18n={i18n} onChange={onChange} /> : field.control === "asset" ? <InspectorAssetControl value={value} disabled={controlDisabled} picker={assetPicker} pageId={pageId} blockId={blockId} i18n={i18n} onChange={onChange} /> : field.control ? <InspectorTextControl i18n={i18n} label={label} value={value} control={field.control} maxLength={field.validation?.maxLength} disabled={controlDisabled} onChange={(next) => onChange(next)} /> : Field ? <Field value={value} onChange={onChange} label={label} disabled={controlDisabled} /> : null}
+    {field.control === "products" ? <InspectorProductsControl value={value} disabled={controlDisabled} picker={productPicker} pageId={pageId} blockId={blockId} i18n={i18n} onChange={onChange} /> : field.control === "asset" ? <InspectorAssetControl value={value} disabled={controlDisabled} picker={assetPicker} pageId={pageId} blockId={blockId} i18n={i18n} onChange={onChange} /> : field.control === "color" ? <InspectorColorControl label={label} value={value} defaultValue={defaultValue} disabled={controlDisabled} i18n={i18n} onChange={(next) => onChange(next)} /> : field.control ? <InspectorTextControl i18n={i18n} label={label} value={value} control={field.control} maxLength={field.validation?.maxLength} disabled={controlDisabled} onChange={(next) => onChange(next)} /> : Field ? <Field value={value} defaultValue={defaultValue} blockProps={blockProps} onChange={onChange} label={label} disabled={controlDisabled} resetLabel={i18n.t("resetToDefault")} /> : null}
+    {controlOwnsLabel ? description : null}
     {issues.map((issue) => <Text key={issue.message} as="p" variant="bodySm" tone="critical">{issue.message}</Text>)}
   </div>;
 }
@@ -632,7 +673,7 @@ function DocumentInspector({ settings, pageId, assetPicker, productPicker, i18n,
     return groups;
   }, {}) : {};
   return <div className="pb-inspector" data-testid="document-inspector">
-    <header className="pb-inspector__header"><Badge>{block.type}</Badge><div><Text as="p" variant="headingSm">{blockLabel(block, registry, i18n)}</Text><Text as="p" variant="bodySm" tone="subdued">{definition?.category ?? i18n.t("coreBlock")}</Text></div></header>
+    <header className="pb-inspector__header" title={block.type}><span className="pb-inspector__icon" aria-hidden="true"><Icon source={blockTypeIcon(block.type, registry)} /></span><div><Text as="p" variant="headingSm">{blockLabel(block, registry, i18n)}</Text><Text as="p" variant="bodySm" tone="subdued">{definition?.category ?? i18n.t("coreBlock")}</Text></div></header>
     {block.type === "core.text" ? <InspectorSection title={i18n.t("content")}><InspectorField name="content" field={{ field: "", label: i18n.t("textContent"), control: "textarea", description: i18n.t("longTextHelp") }} value={block.props.content} registry={registry} disabled={disabled} productPicker={productPicker} pageId={pageId} blockId={block.id} i18n={i18n} onChange={(content) => onChange({ content })} /></InspectorSection> : null}
     {block.type === "core.image" ? <InspectorSection title={i18n.t("coreImage")}><InspectorField name="src" field={{ field: "", label: i18n.t("imageUrl"), control: "url", description: i18n.t("imageUrlHelp") }} value={block.props.src} registry={registry} disabled={disabled} productPicker={productPicker} pageId={pageId} blockId={block.id} i18n={i18n} onChange={(src) => onChange({ src })} /><InspectorField name="alt" field={{ field: "", label: i18n.t("imageAlt"), control: "text", description: i18n.t("imageAltHelp") }} value={block.props.alt} registry={registry} disabled={disabled} productPicker={productPicker} pageId={pageId} blockId={block.id} i18n={i18n} onChange={(alt) => onChange({ alt })} />{assetPicker ? <><Button disabled={disabled || selectingAsset} onClick={() => void (async () => {
       setSelectingAsset(true);
@@ -646,7 +687,7 @@ function DocumentInspector({ settings, pageId, assetPicker, productPicker, i18n,
         setSelectingAsset(false);
       }
     })()}>{selectingAsset ? i18n.t("selectingAsset") : i18n.t("selectAsset")}</Button>{assetError ? <Text as="p" variant="bodySm" tone="critical">{assetError}</Text> : null}</> : null}</InspectorSection> : null}
-    {Object.entries(groupedFields).map(([group, fields]) => <InspectorSection key={group} title={inspectorGroupLabel(group, i18n)} defaultOpen={group !== "Advanced"}>{fields.map(([name, field]) => <InspectorField key={name} name={name} field={field} value={field.persist === false ? settings?.values[name] : block.props[name]} toggleValue={field.toggle ? block.props[field.toggle.prop] : undefined} onToggleChange={field.toggle ? (checked) => onChange({ [field.toggle!.prop]: checked }) : undefined} registry={registry} disabled={disabled || (field.persist === false && (!settings || Boolean(settings.disabled)))} assetPicker={assetPicker} productPicker={productPicker} pageId={pageId} blockId={block.id} i18n={i18n} onChange={(value) => field.persist === false ? settings?.onChange(name, value) : onChange({ [name]: value })} />)}</InspectorSection>)}
+    {Object.entries(groupedFields).map(([group, fields]) => <InspectorSection key={group} title={inspectorGroupLabel(group, i18n)} defaultOpen={group !== "Advanced"}>{fields.map(([name, field]) => <InspectorField key={name} name={name} field={field} value={field.persist === false ? settings?.values[name] : block.props[name]} defaultValue={field.persist === false ? undefined : definition?.defaultProps[name]} blockProps={field.persist === false ? undefined : block.props} toggleValue={field.toggle ? block.props[field.toggle.prop] : undefined} onToggleChange={field.toggle ? (checked) => onChange({ [field.toggle!.prop]: checked }) : undefined} registry={registry} disabled={disabled || (field.persist === false && (!settings || Boolean(settings.disabled)))} assetPicker={assetPicker} productPicker={productPicker} pageId={pageId} blockId={block.id} i18n={i18n} onChange={(value) => field.persist === false ? settings?.onChange(name, value) : onChange({ [name]: value })} />)}</InspectorSection>)}
     {Object.values(definition?.fields ?? {}).some((field) => field.persist === false) ? settings?.footer : null}
     {appearanceControls && definition?.variants?.length ? <InspectorSection title={i18n.t("appearance")}><Select label={i18n.t("variant")} options={definition.variants.map((variant) => ({ label: variant.label, value: variant.id }))} value={block.variant} disabled={disabled} onChange={(variant) => onPresentationChange({ variant, style: block.style })} /></InspectorSection> : null}
     {appearanceControls && definition ? <InspectorSection title={i18n.t("styleOverrides")} defaultOpen={false}>{appearanceTokens.map(([token, label]) => <TextField key={token} label={i18n.t(label)} value={block.style[token] ?? ""} placeholder={i18n.t("inheritStyle")} autoComplete="off" disabled={disabled} onChange={(value) => {

@@ -487,7 +487,7 @@ describe("V0.7.0 Ready-to-go", () => {
     expect(screen.getByLabelText("Delivery progress")).toHaveStyle({ width: "100%", overflow: "visible" });
     expect(screen.getByText("Courier assigned")).toBeVisible();
     expect(screen.getByText("BestTrack")).toBeVisible();
-    expect(screen.getByText("Shanghai")).toBeVisible();
+    expect(screen.queryByText("Shanghai")).not.toBeInTheDocument();
     expect(screen.getByLabelText("Travel case")).toBeVisible();
     expect(screen.queryByText("Shipping protection")).not.toBeInTheDocument();
     expect(screen.getByText("Sep 22 - Sep 24")).toBeVisible();
@@ -501,7 +501,9 @@ describe("V0.7.0 Ready-to-go", () => {
   it("renders a namespaced Track Page surface with theme tokens", () => {
     renderReadyToGo();
     expect(screen.getByLabelText("Ready-to-go tracking query")).toHaveStyle({ maxWidth: "560px" });
-    expect(screen.getByLabelText("Ready-to-go tracking query").parentElement).toHaveStyle({ backgroundColor: "#fff" });
+    const hero = screen.getByLabelText("Ready-to-go tracking query").parentElement;
+    expect(hero).toHaveStyle({ backgroundColor: "var(--pb-color-background, #fff)" });
+    expect(hero?.closest("[data-module-style]")).toHaveStyle({ "--pb-color-background": "#ffffff" });
     expect(screen.getByRole("tab", { name: "Tracking Number" })).toHaveAttribute("aria-selected", "true");
     expect(screen.getByRole("main")).toHaveStyle({ "--pb-color-primary": "#111111" });
     expect(screen.queryByLabelText("Recommended products carousel")).not.toBeInTheDocument();
@@ -538,7 +540,7 @@ describe("V0.7.0 Ready-to-go", () => {
     fireEvent.change(screen.getByLabelText("Tracking number"), { target: { value: "BT-1000" } });
     fireEvent.click(screen.getByRole("button", { name: "Track Your Order" }));
     expect(await screen.findByText("Not available")).toBeVisible();
-    expect(screen.getByText("Destination details are not available.")).toBeVisible();
+    expect(screen.queryByText("Destination details are not available.")).not.toBeInTheDocument();
     expect(screen.getByText("Shipping events will appear when the carrier publishes them.")).toBeVisible();
   });
 

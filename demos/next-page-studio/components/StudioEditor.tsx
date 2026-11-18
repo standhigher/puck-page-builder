@@ -23,6 +23,6 @@ function LoadedStudioEditor({ record: initialRecord }: { record: PageRecord }) {
   const save = async (document: PageDocument) => { setRecord(saveDraft(pageId, document, title)); };
   const publish = async (document: PageDocument) => { setRecord(publishPage(pageId, document, title)); };
   return <AppProvider i18n={{}}><main className="editor-page"><header className="studio-editor-bar"><a href="/pages">← 我的页面</a><TextField label="页面名称" labelHidden value={title || record.title} onChange={setTitle} autoComplete="off" /><span>{record.publishedDocument ? `已发布 v${record.publishedVersion}` : "草稿"}</span><div><a className="studio-link-button" href={`/pages/${pageId}/preview`} target="_blank">预览</a></div></header>
-    <StudioAdPreview><PageDocumentEditorShell initialDocument={record.draftDocument} registry={pageStudioRegistry} policy={profile?.editorPolicy} availableBlockTypes={profile?.allowedBlockTypes} appearanceControls productPicker={studioProductPicker} onSave={save} onPublish={publish} /></StudioAdPreview>
+    <StudioAdPreview><PageDocumentEditorShell initialDocument={record.draftDocument} registry={pageStudioRegistry} policy={profile?.editorPolicy} availableBlockTypes={profile?.allowedBlockTypes} inspectorActions={false} productPicker={studioProductPicker} onSave={save} onPublish={publish} /></StudioAdPreview>
   </main></AppProvider>;
 }

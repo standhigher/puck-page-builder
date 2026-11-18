@@ -39,8 +39,8 @@ function readBootstrapWatermarkRemoval(runtimeWindow: Window) {
   const raw = runtimeWindow.document?.getElementById?.(TRACKING_PAGE_BOOTSTRAP_SCRIPT_ID)?.textContent?.trim() ?? ''
   if (!raw) return false
   try {
-    const parsed = JSON.parse(raw) as { enableTrackingPageWatermarkRemoval?: unknown }
-    return parsed.enableTrackingPageWatermarkRemoval === true
+    const parsed = JSON.parse(raw) as { featureFlags?: { enableTrackingPageWatermarkRemoval?: unknown } }
+    return parsed.featureFlags?.enableTrackingPageWatermarkRemoval === true
   } catch {
     return false
   }

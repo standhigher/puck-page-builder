@@ -30,10 +30,9 @@ export function previewTrackingPageResult(trackingNumber = "BT-2048-DEMO"): Trac
   return {
     trackingNumber,
     status: "In transit",
-    carrier: "BestTrack demo carrier",
+    carrier: "4PX",
     latestEvent: "Shipment accepted at the regional hub",
     updatedAt: "Sep 17, 10:00 AM",
-    destination: "Shanghai",
     estimatedDelivery: "Sep 22 - Sep 24",
     progress: defaultProgress("In transit"),
     events: [

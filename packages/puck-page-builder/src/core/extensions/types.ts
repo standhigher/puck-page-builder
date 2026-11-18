@@ -71,10 +71,16 @@ export type FieldToggle = {
 
 export type FieldProps<T = unknown> = {
   value: T;
+  /** Default from the block definition, for display fallbacks and reset controls. */
+  defaultValue?: T;
+  /** Saved sibling props for compatibility fallbacks; custom fields must not mutate them. */
+  blockProps?: Readonly<Record<string, JsonValue>>;
   onChange(value: T): void;
   /** Inspector context for accessible custom controls and read-only sessions. */
   label?: string;
   disabled?: boolean;
+  /** Localized accessible name for a reset-to-default button, in the inspector's admin language. */
+  resetLabel?: string;
 };
 
 /**
@@ -119,6 +125,8 @@ export interface BlockVariantDefinition {
 export interface FieldDefinition<T = unknown> {
   type: string;
   component: ComponentType<FieldProps<T>>;
+  /** The component draws the field label itself; the inspector then shows only the description, below the component. */
+  rendersLabel?: boolean;
   normalize?: (value: T) => T;
   validate?: (value: T) => ValidationIssue[];
 }

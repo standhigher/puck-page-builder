@@ -72,7 +72,7 @@ export function getReadyToGoEditorCopy(adminLocale?: string) {
         submitLabel: t("editor.fields.query.submitLabel"),
         submitButtonColor: t("editor.fields.query.submitButtonColor"),
       },
-      progress: { progressColor: t("editor.fields.progress.progressColor") },
+      progress: { progressColor: t("editor.fields.progress.progressColor"), textColor: t("editor.fields.progress.textColor") },
       delivery: {
         heading: t("editor.fields.delivery.heading"),
         contentsHeading: t("editor.fields.delivery.contentsHeading"),
@@ -91,6 +91,9 @@ export function getReadyToGoEditorCopy(adminLocale?: string) {
       style: {
         backgroundColor: t("editor.fields.style.backgroundColor"),
         moduleRadius: t("editor.fields.style.moduleRadius"),
+        inputRadius: t("editor.fields.style.inputRadius"),
+        buttonRadius: t("editor.fields.style.buttonRadius"),
+        shadowStrength: t("editor.fields.style.shadowStrength"),
         imageRadius: t("editor.fields.style.imageRadius"),
         verticalSpacing: t("editor.fields.style.verticalSpacing"),
       },

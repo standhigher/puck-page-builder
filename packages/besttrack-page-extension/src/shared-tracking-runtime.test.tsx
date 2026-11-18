@@ -57,7 +57,7 @@ afterEach(() => {
   window.history.replaceState({}, "", "/");
 });
 
-describe.each(templates)("$name uses the Ready-to-go foundation", ({ Provider, Query, Recommendations, trackingLabel, separateDetails }) => {
+describe.each(templates)("$name uses the Ready-to-go foundation", ({ name, Provider, Query, Recommendations, trackingLabel, separateDetails }) => {
   it("trims inputs and accepts nonempty short identifiers and email values", async () => {
     // A、#1 和 buyer 故意不满足旧模板的部分格式规则，验证三套表单只共享 trim + 非空校验。
     const query = vi.fn<TrackingPageQuery>(async (request) => resultFor(request.mode === "tracking" ? request.trackingNumber : request.orderNumber));
@@ -92,7 +92,7 @@ describe.each(templates)("$name uses the Ready-to-go foundation", ({ Provider, Q
     await act(async () => { lookup.reject(new Error("private upstream failure")); });
     expect(screen.getByText(independentProduct.title)).toBeInTheDocument();
     expect(screen.queryByText("private upstream failure")).toBeNull();
-    expect(screen.queryByText("BestTrack demo carrier")).toBeNull();
+    expect(screen.queryByText("4PX")).toBeNull();
     expect(queryRecommendations).toHaveBeenCalledTimes(1);
   });
 
@@ -184,7 +184,10 @@ describe.each(templates)("$name uses the Ready-to-go foundation", ({ Provider, Q
     submitTracking(trackingLabel, "AAA");
     await screen.findByText(/Status AAA/);
     fireEvent.click(screen.getByRole("button", { name: "BBB" }));
-    for (const value of ["Second carrier", "Second destination", "Second parcel event"]) expect(screen.getByText(value)).toBeInTheDocument();
+    for (const value of ["Second carrier", "Second parcel event"]) expect(screen.getByText(value)).toBeInTheDocument();
+    // Ready-to-go 的 Carrier 区域只显示承运商；Branded 与 Sales 的结果卡片仍有目的地字段。
+    if (name === "Ready-to-go") expect(screen.queryByText("Second destination")).toBeNull();
+    else expect(screen.getByText("Second destination")).toBeInTheDocument();
     expect(screen.getAllByText("Second parcel item").length).toBeGreaterThan(0);
     expect(screen.getByText(/Oct 12 - Oct 14/)).toBeInTheDocument();
     expect(screen.getByText(/Status BBB/)).toBeInTheDocument();
@@ -210,7 +213,7 @@ describe.each(templates)("$name uses the Ready-to-go foundation", ({ Provider, Q
     submitTracking(trackingLabel, "MISSING");
     expect(await screen.findByText("Can not find order")).toBeInTheDocument();
     expect(screen.queryByText("Suggestions")).toBeNull();
-    expect(screen.queryByText("BestTrack demo carrier")).toBeNull();
+    expect(screen.queryByText("4PX")).toBeNull();
     expect(screen.queryByText("Demo shipment item")).toBeNull();
     expect(screen.queryByText(lookupProduct.title)).toBeNull();
   });

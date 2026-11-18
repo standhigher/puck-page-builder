@@ -1,3 +1,4 @@
+import type { Data } from "@puckeditor/core";
 import { AppProvider } from "@shopify/polaris";
 import { fireEvent, render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
@@ -10,8 +11,12 @@ import { PageDocumentEditorShell } from "./PageDocumentEditorShell";
 // The canvas engine has layout dependencies that jsdom cannot measure; keep the
 // real inspector with the section already selected.
 vi.mock("@puckeditor/core", () => {
-  const passthrough = ({ children }: { children: ReactNode }) => <>{children}</>;
+  const passthrough = ({ children, data }: { children: ReactNode; data?: Data }) => {
+    if (data) puck.appState.data = data;
+    return <>{children}</>;
+  };
   const puck = {
+    appState: { data: { root: { props: {} }, content: [] } as Data },
     dispatch: vi.fn(),
     refreshPermissions: vi.fn(),
     getSelectorForId: () => null,

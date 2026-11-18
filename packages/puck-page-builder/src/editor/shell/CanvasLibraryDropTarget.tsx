@@ -19,17 +19,6 @@ function uniqueBlocks(blocks: CanvasLibraryDropTargetProps["blocks"]) {
   return blocks.filter((block) => !seen.has(block.id) && seen.add(block.id));
 }
 
-function scrollableAncestors(start: HTMLElement) {
-  const result: HTMLElement[] = [];
-  let node: HTMLElement | null = start;
-  while (node) {
-    const style = window.getComputedStyle(node);
-    if (["auto", "scroll", "overlay"].includes(style.overflowY) && node.scrollHeight > node.clientHeight) result.push(node);
-    node = node.parentElement;
-  }
-  return result;
-}
-
 function scrollDelta(pointerY: number, rect: DOMRect, elapsedMs: number) {
   const top = Math.max(0, rect.top);
   const bottom = Math.min(window.innerHeight, rect.bottom);
@@ -114,18 +103,10 @@ export function CanvasLibraryDropTarget({ frameRef, blocks, label, onDrop, onCan
     if (!dragging.current) return;
     const elapsedMs = Math.min(64, Math.max(0, timestamp - (lastFrameTime.current ?? timestamp)));
     lastFrameTime.current = timestamp;
-    const stage = targetRef.current?.parentElement;
-    if (stage) {
-      let scrolled = false;
-      for (const ancestor of scrollableAncestors(stage)) {
-        const delta = scrollDelta(pointerY.current, ancestor.getBoundingClientRect(), elapsedMs);
-        if (scrollElement(ancestor, delta)) { scrolled = true; break; }
-      }
-      const documentScroller = document.scrollingElement;
-      if (!scrolled && documentScroller) {
-        const viewport = new DOMRect(0, 0, window.innerWidth, window.innerHeight);
-        scrollElement(documentScroller, scrollDelta(pointerY.current, viewport, elapsedMs));
-      }
+    const canvas = frameRef.current?.closest<HTMLElement>(".pb-canvas-area");
+    if (canvas) {
+      // Reaching the canvas edge must not start scrolling the editor or its embedded host.
+      scrollElement(canvas, scrollDelta(pointerY.current, canvas.getBoundingClientRect(), elapsedMs));
       updatePreview(pointerY.current);
     }
     animationFrame.current = window.requestAnimationFrame(autoScroll);

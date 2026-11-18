@@ -9,12 +9,12 @@ const blocks = [{ id: "first", label: "Heading" }, { id: "second", label: "Conte
 
 function Canvas({ children, onDrop, onCancel }: { children?: ReactNode; onDrop: (beforeId?: string) => void; onCancel: () => void }) {
   const frameRef = useRef<HTMLDivElement>(null);
-  return <div data-testid="canvas-scroll" style={{ overflowY: "auto" }}>
+  return <div data-testid="host-scroll" style={{ overflowY: "auto" }}><div className="pb-canvas-area" data-testid="canvas-scroll" style={{ overflowY: "auto" }}>
     <div className="pb-canvas-stage">
       <div data-testid="canvas-frame" ref={frameRef}>{children ?? <><div data-page-document-block-id="first" /><div data-page-document-block-id="second" /></>}</div>
       <CanvasLibraryDropTarget frameRef={frameRef} blocks={blocks} label="Text" adminLocale="en" onDrop={onDrop} onCancel={onCancel} />
     </div>
-  </div>;
+  </div></div>;
 }
 
 function setRect(element: Element, top: number, height: number, left = 100, width = 600) {
@@ -146,6 +146,35 @@ describe("canvas library drop target", () => {
     expect(pendingFrames.size).toBeGreaterThan(0);
     unmount();
     expect(pendingFrames.size).toBe(0);
+  });
+
+  it.each([{ top: 0, pointer: 110 }, { top: 1000, pointer: 690 }])("keeps host scrolling fixed when the canvas reaches a boundary ($top)", ({ top, pointer }) => {
+    const { target, scroll } = fixture();
+    const host = screen.getByTestId("host-scroll");
+    Object.defineProperties(scroll, { clientHeight: { configurable: true, value: 600 }, scrollHeight: { configurable: true, value: 1600 } });
+    Object.defineProperties(host, { clientHeight: { configurable: true, value: 600 }, scrollHeight: { configurable: true, value: 2600 } });
+    setRect(host, 100, 600);
+    scroll.scrollTop = top;
+    host.scrollTop = 100;
+    drag("dragOver", target, pointer);
+    nextFrame();
+    nextFrame(32);
+    expect(scroll.scrollTop).toBe(top);
+    expect(host.scrollTop).toBe(100);
+  });
+
+  it("does not scroll an outer container when all canvas content already fits", () => {
+    const { target, scroll } = fixture();
+    const host = screen.getByTestId("host-scroll");
+    Object.defineProperties(scroll, { clientHeight: { configurable: true, value: 600 }, scrollHeight: { configurable: true, value: 600 } });
+    Object.defineProperties(host, { clientHeight: { configurable: true, value: 600 }, scrollHeight: { configurable: true, value: 2600 } });
+    setRect(host, 100, 600);
+    host.scrollTop = 100;
+    drag("dragOver", target, 690);
+    nextFrame();
+    nextFrame(32);
+    expect(scroll.scrollTop).toBe(0);
+    expect(host.scrollTop).toBe(100);
   });
 
   it("cancels a drag on Escape and stops pending scrolling", () => {

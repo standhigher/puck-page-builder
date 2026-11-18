@@ -16,17 +16,7 @@ import type { Device } from "../state/types";
 import { CanvasLibraryDropTarget } from "./CanvasLibraryDropTarget";
 import { AdaptiveIframe } from "./AdaptiveIframe";
 import { beforeIdAfterPlacement, dropPlacement, libraryTypesInDocumentOrder } from "./drop-position";
-
-function scrollCanvasBlockIntoView(blockId: string, frame?: HTMLElement | null) {
-  const selector = `[data-page-document-block-id="${CSS.escape(blockId)}"]`;
-  const scroll = () => {
-    const iframe = frame?.querySelector("iframe");
-    const element = iframe?.contentDocument?.querySelector<HTMLElement>(selector) ?? document.querySelector<HTMLElement>(selector);
-    element?.scrollIntoView({ block: "start", inline: "nearest" });
-  };
-  if (typeof requestAnimationFrame === "function") requestAnimationFrame(scroll);
-  else scroll();
-}
+import { scrollCanvasBlockIntoView } from "./canvas-scroll";
 
 export type PageDocumentEditorShellProps = {
   initialDocument: PageDocument;
@@ -332,7 +322,7 @@ function PageDocumentEditor({ iframe = true, registry, adminLocale, onSave, onPu
     if (!editor.updateFromCanvas(fromEngineData(data, editor.document, registry))) setCanvasResetVersion((version) => version + 1);
   }}>
     <Puck.Layout>
-      <CanvasSelectionBridge data={engineData} requestedBlockId={editor.canvasSelectionRequest} onCanvasSelected={confirmCanvasSelection} canvasMutationVersion={canvasMutationVersion} canvasResetVersion={canvasResetVersion} permissionsVersion={`${editor.isEditable}:${editor.document.blocks.map((block) => `${block.id}:${block.type}`).join("|")}`} />
+      <CanvasSelectionBridge data={engineData} requestedBlockId={editor.canvasSelectionRequest} onCanvasSelected={confirmCanvasSelection} canvasMutationVersion={canvasMutationVersion} canvasResetVersion={canvasResetVersion} canvasFrameRef={canvasFrameRef} permissionsVersion={`${editor.isEditable}:${editor.document.blocks.map((block) => `${block.id}:${block.type}`).join("|")}`} />
       <div className="pb-shell pb-shell--v04" data-testid="page-document-editor" data-page-id={editor.document.pageId} data-dirty={editor.isDirty} data-editor-state={editor.loadState} data-editor-session-state={editor.sessionState} data-save-state={resolvedSaveState} data-left-panel={leftRailOpen ? "open" : "closed"} data-right-panel={rightPanelOpen ? "open" : "closed"}>
         <header className="pb-header">
           <div className="pb-header-content">
@@ -432,7 +422,7 @@ function CanvasSelectionActionBar({ label, children, parentAction }: { label?: s
 }
 
 /** Bridges list-originated selection requests into Puck, then waits for Puck's selected item before updating the inspector. */
-export function CanvasSelectionBridge({ data, requestedBlockId, onCanvasSelected, canvasMutationVersion, canvasResetVersion, permissionsVersion }: { data: ReturnType<typeof toEngineData>; requestedBlockId: string | null; onCanvasSelected: (id: string | null) => void; canvasMutationVersion: number; canvasResetVersion: number; permissionsVersion: string }) {
+export function CanvasSelectionBridge({ data, requestedBlockId, onCanvasSelected, canvasMutationVersion, canvasResetVersion, canvasFrameRef, permissionsVersion }: { data: ReturnType<typeof toEngineData>; requestedBlockId: string | null; onCanvasSelected: (id: string | null) => void; canvasMutationVersion: number; canvasResetVersion: number; canvasFrameRef?: RefObject<HTMLElement>; permissionsVersion: string }) {
   const puck = usePuck();
   const lastSelectedId = useRef<string | null>(null);
   const lastSyncedData = useRef<string | null>(null);
@@ -457,8 +447,14 @@ export function CanvasSelectionBridge({ data, requestedBlockId, onCanvasSelected
     refreshPermissions?.({}, true);
   }, [permissionsVersion, refreshPermissions]);
 
+  const canvasContent = puck.appState.data.content;
+  const canvasOrderMatches = canvasContent.length === data.content.length
+    && data.content.every((item, index) => item.props.id === canvasContent[index]?.props.id);
   const selectedId = typeof puck.selectedItem?.props.id === "string" ? puck.selectedItem.props.id : null;
   useEffect(() => {
+    // Puck retains a zone/index selector during setData. Wait for the new order before
+    // resolving or acknowledging a request, otherwise that index can select another block.
+    if (!canvasOrderMatches) return;
     // A pending request outranks Puck's current selection, which may still be an older block
     // until Puck receives the requested block's data; only the requested ID can acknowledge it.
     if (requestedBlockId) {
@@ -466,19 +462,19 @@ export function CanvasSelectionBridge({ data, requestedBlockId, onCanvasSelected
         // Every setUi dispatch creates a new Puck state (and a new `puck`), which re-runs this effect.
         const selector = puck.getSelectorForId(requestedBlockId);
         if (selector) puck.dispatch({ type: "setUi", ui: { itemSelector: selector } });
-        scrollCanvasBlockIntoView(requestedBlockId);
+        scrollCanvasBlockIntoView(requestedBlockId, canvasFrameRef?.current);
         return;
       }
       lastSelectedId.current = requestedBlockId;
       onCanvasSelected(requestedBlockId);
-      scrollCanvasBlockIntoView(requestedBlockId);
+      scrollCanvasBlockIntoView(requestedBlockId, canvasFrameRef?.current);
       return;
     }
     // Track cleared selections too, so selecting the same block again is reported.
     if (lastSelectedId.current === selectedId) return;
     lastSelectedId.current = selectedId;
     if (selectedId) onCanvasSelected(selectedId);
-  }, [onCanvasSelected, puck, requestedBlockId, selectedId]);
+  }, [canvasFrameRef, canvasOrderMatches, onCanvasSelected, puck, requestedBlockId, selectedId]);
 
   return null;
 }

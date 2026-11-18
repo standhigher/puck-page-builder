@@ -13,15 +13,19 @@ const puck = vi.hoisted(() => {
   let itemSelector: Selector = null;
   const listeners = new Set<() => void>();
   const actions: Array<{ type: string }> = [];
-  const build = () => ({
-    dispatch,
-    refreshPermissions: () => undefined,
-    selectedItem: itemSelector ? data.content[itemSelector.index] ?? null : null,
-    getSelectorForId(id: string) {
-      const index = data.content.findIndex((item) => item.props.id === id);
-      return index >= 0 ? { zone: "root:default-zone", index } : undefined;
-    }
-  });
+  const build = () => {
+    const snapshotData = data;
+    return {
+      appState: { data: snapshotData },
+      dispatch,
+      refreshPermissions: () => undefined,
+      selectedItem: itemSelector ? snapshotData.content[itemSelector.index] ?? null : null,
+      getSelectorForId(id: string) {
+        const index = snapshotData.content.findIndex((item) => item.props.id === id);
+        return index >= 0 ? { zone: "root:default-zone", index } : undefined;
+      }
+    };
+  };
   let snapshot = build();
   function dispatch(action: { type: "setData"; data: Data } | { type: "setUi"; ui: { itemSelector: Selector } }) {
     actions.push(action);
@@ -156,5 +160,31 @@ describe("CanvasSelectionBridge", () => {
     act(() => puck.selectInCanvas(recommendationId));
 
     expect(host.confirmations).toEqual([recommendationId, recommendationId]);
+  });
+
+  it("keeps the already selected drag source selected after its index changes", () => {
+    const host = renderBridge(documentData(true));
+    host.update({ requestedBlockId: recommendationId });
+    host.update({
+      data: { root: { props: {} }, content: [block(recommendationId), ...precedingBlocks] },
+      requestedBlockId: recommendationId
+    });
+
+    expect(puck.selectedId).toBe(recommendationId);
+    expect(host.requestedBlockId).toBeNull();
+    expect(host.confirmations).toEqual([recommendationId, recommendationId]);
+  });
+
+  it("selects a previously unselected drag source using its new index", () => {
+    const host = renderBridge({ root: { props: {} }, content: [block("tracking-2"), block("shipment-3"), block(recommendationId), block("header-1")] });
+    host.update({ requestedBlockId: recommendationId });
+    host.update({
+      data: { root: { props: {} }, content: [block("tracking-2"), block("header-1"), block("shipment-3"), block(recommendationId)] },
+      requestedBlockId: "header-1"
+    });
+
+    expect(puck.selectedId).toBe("header-1");
+    expect(host.requestedBlockId).toBeNull();
+    expect(host.confirmations).toEqual([recommendationId, "header-1"]);
   });
 });

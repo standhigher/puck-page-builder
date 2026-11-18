@@ -86,20 +86,27 @@ describe("Ready-to-go Carrier inspector toggle", () => {
     const input = await screen.findByRole("slider", { name: "Input radius (%)" });
     const button = screen.getByRole("slider", { name: "Button radius (%)" });
     expect(input).toHaveAttribute("aria-valuetext", "33.33%");
+    expect(input).toHaveStyle({ "--pb-range-progress": "33.33%" });
     expect(button).toHaveValue("100");
+    expect(button).toHaveStyle({ "--pb-range-progress": "100%" });
     expect(onDocumentChange.mock.lastCall?.[0]).toEqual(initialDocument);
-    fireEvent.change(button, { target: { value: "30" } });
+    fireEvent.input(button, { target: { value: "30" } });
     expect(onDocumentChange.mock.lastCall?.[0].blocks[0]!.props.buttonRadius).toBe("30%");
+    expect(button).toHaveStyle({ "--pb-range-progress": "30%" });
     fireEvent.click(screen.getByRole("button", { name: "Undo" }));
     expect(button).toHaveValue("100");
+    expect(button).toHaveStyle({ "--pb-range-progress": "100%" });
     expect(onDocumentChange.mock.lastCall?.[0].blocks[0]!.props.buttonRadius).toBe("100px");
     fireEvent.click(screen.getByRole("button", { name: "Redo" }));
     expect(button).toHaveValue("30");
+    expect(button).toHaveStyle({ "--pb-range-progress": "30%" });
     fireEvent.click(button.closest(".pb-inspector-field")!.querySelector<HTMLButtonElement>("button[aria-label=\"Reset to default\"]")!);
     expect(button).toHaveAttribute("aria-valuetext", "27.59%");
+    expect(button).toHaveStyle({ "--pb-range-progress": "27.59%" });
     expect(onDocumentChange.mock.lastCall?.[0].blocks[0]!.props.buttonRadius).toBe("27.59%");
     fireEvent.change(input, { target: { value: "0" } });
     expect(onDocumentChange.mock.lastCall?.[0].blocks[0]!.props.inputRadius).toBe("0%");
+    expect(input).toHaveStyle({ "--pb-range-progress": "0%" });
   });
 
   it.each([undefined, false, true])("edits shadow strength with legacy hideShadow=%s through reset, history and persistence", async (hideShadow) => {
@@ -114,17 +121,22 @@ describe("Ready-to-go Carrier inspector toggle", () => {
     const slider = await screen.findByRole("slider", { name: "Shadow strength (%)" });
     expect(slider).toHaveValue(hideShadow ? "0" : "100");
     expect(slider).toHaveAttribute("aria-valuetext", hideShadow ? "0%" : "100%");
+    expect(slider).toHaveStyle({ "--pb-range-progress": hideShadow ? "0%" : "100%" });
     expect(screen.queryByRole("switch", { name: "Hide shadow" })).not.toBeInTheDocument();
     expect(onDocumentChange.mock.lastCall?.[0]).toEqual(initialDocument);
     fireEvent.change(slider, { target: { value: "50" } });
     expect(onDocumentChange.mock.lastCall?.[0].blocks[0]!.props.shadowStrength).toBe("50");
+    expect(slider).toHaveStyle({ "--pb-range-progress": "50%" });
     fireEvent.click(screen.getByRole("button", { name: "Undo" }));
     expect(onDocumentChange.mock.lastCall?.[0].blocks[0]!.props).not.toHaveProperty("shadowStrength");
     expect(slider).toHaveValue(hideShadow ? "0" : "100");
+    expect(slider).toHaveStyle({ "--pb-range-progress": hideShadow ? "0%" : "100%" });
     fireEvent.click(screen.getByRole("button", { name: "Redo" }));
     expect(slider).toHaveValue("50");
+    expect(slider).toHaveStyle({ "--pb-range-progress": "50%" });
     fireEvent.click(slider.closest(".pb-inspector-field")!.querySelector<HTMLButtonElement>("button[aria-label=\"Reset to default\"]")!);
     expect(slider).toHaveValue("100");
+    expect(slider).toHaveStyle({ "--pb-range-progress": "100%" });
     expect(onDocumentChange.mock.lastCall?.[0].blocks[0]!.props.shadowStrength).toBe("100");
     fireEvent.change(slider, { target: { value: "0" } });
     await waitFor(() => expect(saveDraft).toHaveBeenCalledTimes(1));
@@ -140,6 +152,7 @@ describe("Ready-to-go Carrier inspector toggle", () => {
     view.unmount();
     render(editor({ initialDocument: restored.data }));
     expect(await screen.findByRole("slider", { name: "Shadow strength (%)" })).toHaveValue("0");
+    expect(screen.getByRole("slider", { name: "Shadow strength (%)" })).toHaveStyle({ "--pb-range-progress": "0%" });
   });
 
   it("writes boolean values and preserves the unset default through undo and redo", async () => {

@@ -295,6 +295,7 @@ describe("ReadyToGoPixelField", () => {
     expect(slider).toHaveAttribute("step", "1");
     expect(slider).toHaveValue("12");
     expect(slider).toHaveAttribute("aria-valuetext", "12px");
+    expect(slider).toHaveStyle({ "--pb-range-progress": "12%" });
 
     fireEvent.change(slider, { target: { value: "30" } });
     fireEvent.click(screen.getByRole("button", { name: "恢复默认" }));
@@ -305,15 +306,18 @@ describe("ReadyToGoPixelField", () => {
     render(<ReadyToGoPixelField label="Module radius (px)" value="" onChange={vi.fn()} />);
     expect(screen.getByText("—")).toBeInTheDocument();
     expect(screen.getByRole("slider", { name: "Module radius (px)" })).toHaveValue("0");
+    expect(screen.getByRole("slider", { name: "Module radius (px)" })).toHaveStyle({ "--pb-range-progress": "0%" });
     expect(screen.queryByRole("button")).toBeNull();
   });
 
   it("keeps saved decimal and px values readable and falls back to an English reset label", () => {
     const view = render(<ReadyToGoPixelField label="Module vertical spacing (px)" value="24px" onChange={vi.fn()} />);
     expect(screen.getByText("24px")).toBeInTheDocument();
+    expect(screen.getByRole("slider")).toHaveStyle({ "--pb-range-progress": "24%" });
     expect(screen.getByRole("button", { name: "Reset to default" })).toBeInTheDocument();
     view.rerender(<ReadyToGoPixelField label="Module vertical spacing (px)" value="16.5" onChange={vi.fn()} />);
     expect(screen.getByText("16.5px")).toBeInTheDocument();
+    expect(screen.getByRole("slider")).toHaveStyle({ "--pb-range-progress": "16.5%" });
   });
 
   it.each(["16px", "8px", "0px"])("shows and resets to the block default %s", (defaultValue) => {
@@ -327,6 +331,7 @@ describe("ReadyToGoPixelField", () => {
       view.rerender(field(value));
       expect(screen.getByText(defaultValue)).toBeInTheDocument();
       expect(screen.getByRole("slider")).toHaveValue(String(Number.parseFloat(defaultValue)));
+      expect(screen.getByRole("slider")).toHaveStyle({ "--pb-range-progress": `${Number.parseFloat(defaultValue)}%` });
       expect(screen.queryByRole("button")).toBeNull();
     }
     view.rerender(field("0"));

@@ -48,6 +48,8 @@ export const deliveryExtension: PageBuilderExtension = {
 
 属性面板默认在自定义控件上方绘制字段标题。控件需要把数值或操作按钮放在标题同一行时（例如滑块右侧显示 `16px` 和重置按钮），在 `FieldDefinition` 上设置 `rendersLabel: true`，由控件用 `FieldProps.label` 自己绘制标题；字段的 `description` 仍由属性面板显示在控件下方。`FieldProps.resetLabel` 是按管理端语言翻译好的“恢复默认”文案，可直接用作重置按钮的无障碍名称。
 
+自定义滑块字段可在 `input[type="range"]` 的内联样式上设置 `--pb-range-progress`（`0%`–`100%`），由 Core 的公开样式绘制左侧深色填充和右侧浅色轨道。扩展应根据受控值及其默认值同步计算进度；未提供该变量时，轨道保持浅灰色。
+
 `FieldProps.defaultValue` 来自该区块定义的 `defaultProps`，自定义字段可用它显示未配置时的默认值，并在重置时写回；仅展示默认值不会自动改写文档。`FieldProps.blockProps` 提供当前区块已保存的只读 props，便于自定义控件读取旧字段并显示兼容值；控件不得直接修改它。
 
 `control: "color"` 字段显示为“标题在左、36×22px 胶囊形色块和色值在右”的一行。当前值与区块 `defaultProps` 中的颜色不同时，色值右侧出现重置按钮，点击后写回默认值。

@@ -194,6 +194,7 @@ function ReadyToGoRangeField({ value, defaultValue, onChange, label, disabled, r
   const defaultAmount = fallback ? Number.parseFloat(fallback) : undefined;
   const effectiveAmount = amount ?? defaultAmount;
   const display = effectiveAmount === undefined ? "—" : `${effectiveAmount}${unit}`;
+  const progress = (effectiveAmount ?? 0) * 100 / READY_TO_GO_MODULE_STYLE_LIMIT;
   return <div style={{ display: "grid", gap: 6 }}>
     <div style={{ display: "flex", alignItems: "center", gap: 8, minHeight: 24 }}>
       <span style={{ flex: 1, minWidth: 0, color: "#616161", fontSize: 12, fontWeight: 450 }}>{label}</span>
@@ -212,7 +213,8 @@ function ReadyToGoRangeField({ value, defaultValue, onChange, label, disabled, r
       min={0}
       max={READY_TO_GO_MODULE_STYLE_LIMIT}
       step={step}
-      value={amount ?? defaultAmount ?? 0}
+      value={effectiveAmount ?? 0}
+      style={{ "--pb-range-progress": `${progress}%` } as CSSProperties}
       disabled={disabled}
       onChange={(event) => onChange(event.currentTarget.value)}
     />

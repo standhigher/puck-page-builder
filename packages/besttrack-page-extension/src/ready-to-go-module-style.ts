@@ -20,6 +20,22 @@ const IMAGE_RADIUS_BLOCK_TYPES: readonly string[] = ["besttrack.ready-to-go.deli
 const PX_VALUE = /^\d+(?:\.\d+)?(?:px)?$/i;
 const MODULE_BACKGROUND = /^#[\da-f]{6}$/i;
 
+function moduleColorLuminance(value: unknown): number | undefined {
+  if (typeof value !== "string" || !MODULE_BACKGROUND.test(value)) return undefined;
+  const channels = [1, 3, 5].map((offset) => {
+    const channel = Number.parseInt(value.slice(offset, offset + 2), 16) / 255;
+    return channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4;
+  });
+  return channels[0] * 0.2126 + channels[1] * 0.7152 + channels[2] * 0.0722;
+}
+
+/** Choose black or white by their contrast against the saved module background. */
+export function readyToGoContrastTextColor(background: unknown): string | undefined {
+  const luminance = moduleColorLuminance(background);
+  if (luminance === undefined) return undefined;
+  return 1.05 / (luminance + 0.05) >= (luminance + 0.05) / 0.05 ? "#ffffff" : "#000000";
+}
+
 export function readyToGoBlockHasImageRadius(type: string) {
   return IMAGE_RADIUS_BLOCK_TYPES.includes(type);
 }
@@ -133,6 +149,7 @@ export function readyToGoModuleStyle(props: Record<string, unknown>, withImage: 
   if (MODULE_BACKGROUND.test(background)) {
     style.backgroundColor = background;
     style["--pb-color-background"] = background;
+    style["--bt-module-text-color"] = readyToGoContrastTextColor(background)!;
   }
   const radius = readyToGoPixelValue(props.moduleRadius);
   if (radius) {

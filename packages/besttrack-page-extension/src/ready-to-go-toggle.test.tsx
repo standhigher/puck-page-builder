@@ -60,23 +60,15 @@ function carrierToggle() {
 }
 
 describe("Ready-to-go Carrier inspector toggle", () => {
-  it.each<PageDocument["blocks"][number]["props"]>([{}, { textColor: "" }])("shows the default font color without writing missing or empty settings: %j", async (props) => {
+  it.each<PageDocument["blocks"][number]["props"]>([{}, { textColor: "" }, { textColor: "#cc3366" }])("removes the font color control without rewriting saved settings: %j", async (props) => {
     const onDocumentChange = vi.fn<(document: PageDocument) => void>();
     const initialDocument = createPageDocument({ pageId: "font-color", blocks: [{ id: "delivery", type: "besttrack.ready-to-go.progress", version: 1, props }] });
     render(editor({ initialDocument, onDocumentChange }));
-    const swatch = await screen.findByLabelText("Font color");
-    const row = swatch.closest(".pb-inspector-field__color")!;
-    expect(swatch).toHaveValue("#334155");
-    expect(row).toHaveTextContent("#334155");
-    expect(row.querySelector("button")).toBeNull();
+    await screen.findByLabelText("Module background color");
+    expect(screen.queryByLabelText("Font color")).toBeNull();
+    expect(screen.getByLabelText("Progress color")).toBeInTheDocument();
     expect(onDocumentChange).toHaveBeenCalledTimes(1);
     expect(onDocumentChange.mock.lastCall?.[0]).toEqual(initialDocument);
-    fireEvent.change(swatch, { target: { value: "#cc3366" } });
-    expect(onDocumentChange.mock.lastCall?.[0].blocks[0]!.props.textColor).toBe("#cc3366");
-    fireEvent.click(row.querySelector<HTMLButtonElement>("button[aria-label=\"Reset to default\"]")!);
-    expect(swatch).toHaveValue("#334155");
-    expect(onDocumentChange.mock.lastCall?.[0].blocks[0]!.props.textColor).toBe("#334155");
-    expect(row.querySelector("button")).toBeNull();
   });
 
   it("converts legacy px control radii for display and saves percentage edits through history and reset", async () => {
@@ -85,8 +77,10 @@ describe("Ready-to-go Carrier inspector toggle", () => {
     render(editor({ initialDocument, onDocumentChange }));
     const input = await screen.findByRole("slider", { name: "Input radius (%)" });
     const button = screen.getByRole("slider", { name: "Button radius (%)" });
-    expect(input).toHaveAttribute("aria-valuetext", "33.33%");
-    expect(input).toHaveStyle({ "--pb-range-progress": "33.33%" });
+    expect(input).toHaveValue("33");
+    expect(input).toHaveAttribute("step", "1");
+    expect(input).toHaveAttribute("aria-valuetext", "33%");
+    expect(input).toHaveStyle({ "--pb-range-progress": "33%" });
     expect(button).toHaveValue("100");
     expect(button).toHaveStyle({ "--pb-range-progress": "100%" });
     expect(onDocumentChange.mock.lastCall?.[0]).toEqual(initialDocument);
@@ -101,12 +95,43 @@ describe("Ready-to-go Carrier inspector toggle", () => {
     expect(button).toHaveValue("30");
     expect(button).toHaveStyle({ "--pb-range-progress": "30%" });
     fireEvent.click(button.closest(".pb-inspector-field")!.querySelector<HTMLButtonElement>("button[aria-label=\"Reset to default\"]")!);
-    expect(button).toHaveAttribute("aria-valuetext", "27.59%");
-    expect(button).toHaveStyle({ "--pb-range-progress": "27.59%" });
+    expect(button).toHaveValue("28");
+    expect(button).toHaveAttribute("aria-valuetext", "28%");
+    expect(button).toHaveStyle({ "--pb-range-progress": "28%" });
     expect(onDocumentChange.mock.lastCall?.[0].blocks[0]!.props.buttonRadius).toBe("27.59%");
     fireEvent.change(input, { target: { value: "0" } });
     expect(onDocumentChange.mock.lastCall?.[0].blocks[0]!.props.inputRadius).toBe("0%");
     expect(input).toHaveStyle({ "--pb-range-progress": "0%" });
+  });
+
+  it.each([
+    { field: "inputRadius", label: "Input radius (%)", saved: "54.18%", displayed: "54", edited: "55", storedEdit: "55%", defaultValue: "33.33%", defaultDisplay: "33" },
+    { field: "buttonRadius", label: "Button radius (%)", saved: "55.17%", displayed: "55", edited: "56", storedEdit: "56%", defaultValue: "27.59%", defaultDisplay: "28" },
+    { field: "shadowStrength", label: "Shadow strength (%)", saved: "99.8", displayed: "100", edited: "99", storedEdit: "99", defaultValue: "100", defaultDisplay: "100" }
+  ])("shows whole percentages for saved $field without rewriting fractional values", async ({ field, label, saved, displayed, edited, storedEdit, defaultValue, defaultDisplay }) => {
+    const onDocumentChange = vi.fn<(document: PageDocument) => void>();
+    const initialDocument = createPageDocument({ pageId: "fractional-percent", blocks: [{ id: "delivery", type: "besttrack.ready-to-go.query", version: 1, props: { [field]: saved } }] });
+    render(editor({ initialDocument, onDocumentChange }));
+    const slider = await screen.findByRole("slider", { name: label });
+    expect(slider).toHaveValue(displayed);
+    expect(slider).toHaveAttribute("step", "1");
+    expect(slider).toHaveAttribute("aria-valuetext", `${displayed}%`);
+    expect(slider).toHaveStyle({ "--pb-range-progress": `${displayed}%` });
+    expect(onDocumentChange).toHaveBeenCalledTimes(1);
+    expect(onDocumentChange.mock.lastCall?.[0]).toEqual(initialDocument);
+    // A fractional value that rounds to the default must still be resettable.
+    const row = slider.closest(".pb-inspector-field")!;
+    expect(row.querySelector("button[aria-label=\"Reset to default\"]")).not.toBeNull();
+    fireEvent.change(slider, { target: { value: edited } });
+    expect(onDocumentChange.mock.lastCall?.[0].blocks[0]!.props[field]).toBe(storedEdit);
+    fireEvent.click(screen.getByRole("button", { name: "Undo" }));
+    expect(onDocumentChange.mock.lastCall?.[0].blocks[0]!.props[field]).toBe(saved);
+    expect(slider).toHaveValue(displayed);
+    fireEvent.click(row.querySelector<HTMLButtonElement>("button[aria-label=\"Reset to default\"]")!);
+    expect(onDocumentChange.mock.lastCall?.[0].blocks[0]!.props[field]).toBe(defaultValue);
+    expect(slider).toHaveValue(defaultDisplay);
+    expect(slider).toHaveAttribute("aria-valuetext", `${defaultDisplay}%`);
+    expect(row.querySelector("button[aria-label=\"Reset to default\"]")).toBeNull();
   });
 
   it.each([undefined, false, true])("edits shadow strength with legacy hideShadow=%s through reset, history and persistence", async (hideShadow) => {

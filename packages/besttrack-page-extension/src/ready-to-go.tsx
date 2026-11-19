@@ -175,7 +175,7 @@ function ReadyToGoRadiusField(props: FieldProps & { maxRadius: number }) {
   const fallback = readyToGoRadiusPercent(props.defaultValue, props.maxRadius);
   const percent = readyToGoRadiusPercent(props.value, props.maxRadius) ?? fallback;
   const displayValue = (amount: number | undefined) => amount === undefined ? "" : String(Number(amount.toFixed(2)));
-  return <ReadyToGoRangeField {...props} unit="%" step={0.01}
+  return <ReadyToGoRangeField {...props} unit="%"
     value={displayValue(percent)} defaultValue={displayValue(fallback)}
     onChange={(value) => props.onChange(`${value}%`)}
     onReset={() => props.onChange(props.defaultValue ?? "0%")}
@@ -193,8 +193,9 @@ function ReadyToGoRangeField({ value, defaultValue, onChange, label, disabled, r
   const fallback = unit === "px" ? readyToGoPixelValue(defaultValue) : String(defaultValue);
   const defaultAmount = fallback ? Number.parseFloat(fallback) : undefined;
   const effectiveAmount = amount ?? defaultAmount;
-  const display = effectiveAmount === undefined ? "—" : `${effectiveAmount}${unit}`;
-  const progress = (effectiveAmount ?? 0) * 100 / READY_TO_GO_MODULE_STYLE_LIMIT;
+  const rangeAmount = effectiveAmount === undefined || unit === "px" ? effectiveAmount : Math.round(effectiveAmount);
+  const display = rangeAmount === undefined ? "—" : `${rangeAmount}${unit}`;
+  const progress = (rangeAmount ?? 0) * 100 / READY_TO_GO_MODULE_STYLE_LIMIT;
   return <div style={{ display: "grid", gap: 6 }}>
     <div style={{ display: "flex", alignItems: "center", gap: 8, minHeight: 24 }}>
       <span style={{ flex: 1, minWidth: 0, color: "#616161", fontSize: 12, fontWeight: 450 }}>{label}</span>
@@ -213,7 +214,7 @@ function ReadyToGoRangeField({ value, defaultValue, onChange, label, disabled, r
       min={0}
       max={READY_TO_GO_MODULE_STYLE_LIMIT}
       step={step}
-      value={effectiveAmount ?? 0}
+      value={rangeAmount ?? 0}
       style={{ "--pb-range-progress": `${progress}%` } as CSSProperties}
       disabled={disabled}
       onChange={(event) => onChange(event.currentTarget.value)}
@@ -417,7 +418,7 @@ function ProgressResult({
     {shipmentValues.length > 1 && onSelectShipment
       ? <TrackPageOrderBadges values={shipmentValues} selectedIndex={selectedShipmentIndex} onSelect={onSelectShipment} style={{ marginTop: 8 }} />
       : null}
-    <h2 style={{ margin: "clamp(24px, 8%, 48px) 0 0", fontSize: 32, lineHeight: 1.25, fontWeight: 700, color: "#303030", overflowWrap: "anywhere" }}>{localizeKnownLabel(result.status, copy)}</h2>
+    <h2 style={{ margin: "clamp(24px, 8%, 48px) 0 0", fontSize: 32, lineHeight: 1.25, fontWeight: 700, color: "var(--bt-module-text-color, #303030)", overflowWrap: "anywhere" }}>{localizeKnownLabel(result.status, copy)}</h2>
     <div className="bt-progress-band">
       {showEstimatedDelivery && result.estimatedDelivery ? <EstimatedDeliveryCard dateText={result.estimatedDelivery} steps={steps.length} /> : null}
       <TrackingProgress steps={steps} color={color} textColor={textColor} />
@@ -428,7 +429,7 @@ function ProgressResult({
 // eventsFrom 是公共 trackingEvents 的本地别名：优先完整事件列表，其次取 latestEvent 摘要。
 // 本组件只保留左右栏外观；不自行截断事件，也不按模板生成另一份物流数据。
 function ShippingDetailsHeading({ heading }: { heading: ReactNode }) {
-  return <h3 style={{ margin: 0, fontSize: 20, lineHeight: 1.2, fontWeight: 700 }}>{heading}</h3>;
+  return <h3 style={{ margin: 0, fontSize: 20, lineHeight: 1.2, fontWeight: 700, color: "var(--bt-module-text-color, inherit)" }}>{heading}</h3>;
 }
 
 function LocalizedInlineText({ block, name, englishDefault }: { block: ReadyToGoEditorProps; name: string; englishDefault: string }) {
@@ -463,12 +464,12 @@ function DeliveryResult({ heading, contentsHeading, carrierHeading, showCarrier 
     <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
       <TrackingPageAdSlot ad={result.ad} disableLink={editing} />
       <div>
-        <h3 style={{ margin: "0 0 12px", fontSize: 18, fontWeight: 700 }}>{contentsHeading}</h3>
+        <h3 style={{ margin: "0 0 12px", fontSize: 18, fontWeight: 700, color: "var(--bt-module-text-color, inherit)" }}>{contentsHeading}</h3>
         <PackageContents items={result.orderItems ?? []} />
       </div>
       {showCarrier ? <div>
-        <h3 style={{ margin: "0 0 12px", fontSize: 18, fontWeight: 700 }}>{carrierHeading}</h3>
-        <p style={{ margin: 0, fontSize: 14, fontWeight: 600, color: "#1e293b" }}>{result.carrier ?? copy.notAvailable}</p>
+        <h3 style={{ margin: "0 0 12px", fontSize: 18, fontWeight: 700, color: "var(--bt-module-text-color, inherit)" }}>{carrierHeading}</h3>
+        <p style={{ margin: 0, fontSize: 14, fontWeight: 600, color: "var(--bt-module-text-color, #1e293b)" }}>{result.carrier ?? copy.notAvailable}</p>
       </div> : null}
     </div>
   </div>;
@@ -550,7 +551,7 @@ export function ReadyToGoQueryEditor(block: ReadyToGoEditorProps) {
 export function ReadyToGoProgressEditor(block: ReadyToGoEditorProps) {
   // 画布使用公共演示结果预览进度外观，但明确隐藏演示送达日期，避免把占位日期当商家配置。
   const moduleStyle = readyToGoModuleStyle(block, false);
-  return <ModuleFrame style={moduleStyle}><section aria-label="Ready-to-go progress editor" style={{ ...pageFont, background: "var(--pb-color-background, #fff)", color: "var(--pb-color-text, #0f172a)", borderBottom: sectionDivider(moduleStyle) }}>
+  return <ModuleFrame style={moduleStyle}><section aria-label="Ready-to-go progress editor" style={{ ...pageFont, background: "var(--pb-color-background, #fff)", color: "var(--bt-module-text-color, var(--pb-color-text, #0f172a))", borderBottom: sectionDivider(moduleStyle) }}>
     <div style={{ ...contentWidth, textAlign: "center", width: "min(1248px, 100%)" }}>
       <ProgressResult result={previewReadyToGoTracking()} showEstimatedDelivery={false} color={text(block, "progressColor")} textColor={text(block, "textColor")} />
     </div>
@@ -561,7 +562,7 @@ export function ReadyToGoDeliveryEditor(block: ReadyToGoEditorProps) {
   // 管理端广告预览只在画布覆盖演示结果，editing 禁止预览跳转；Web 继续使用查询结果的广告。
   const { adPreview } = useReadyToGoRuntime();
   const moduleStyle = readyToGoModuleStyle(block, true);
-  return <ModuleFrame style={moduleStyle}><section aria-label="Ready-to-go delivery editor" style={{ ...pageFont, background: "var(--pb-color-background, #fff)", color: "var(--pb-color-text, #0f172a)", borderBottom: sectionDivider(moduleStyle) }}>
+  return <ModuleFrame style={moduleStyle}><section aria-label="Ready-to-go delivery editor" style={{ ...pageFont, background: "var(--pb-color-background, #fff)", color: "var(--bt-module-text-color, var(--pb-color-text, #0f172a))", borderBottom: sectionDivider(moduleStyle) }}>
     <DeliveryResult
       heading={<LocalizedInlineText block={block} name="heading" englishDefault="Shipping Details" />}
       contentsHeading={<LocalizedInlineText block={block} name="contentsHeading" englishDefault="Package Contents" />}
@@ -577,9 +578,9 @@ export function ReadyToGoRecommendationsEditor(block: ReadyToGoEditorProps) {
   // 画布用演示商品展示未配置时的轮播外观；这不是 Web 查询失败时的推荐兜底。
   const selected = configuredRecommendations(block.products);
   const items = selected.length ? selected : previewReadyToGoTracking().recommendations ?? [];
-  return <ModuleFrame style={readyToGoModuleStyle(block, true)}><section aria-label="Ready-to-go recommendations editor" style={{ ...pageFont, background: "var(--pb-color-background, #fff)", color: "var(--pb-color-text, #0f172a)" }}>
+  return <ModuleFrame style={readyToGoModuleStyle(block, true)}><section aria-label="Ready-to-go recommendations editor" style={{ ...pageFont, background: "var(--pb-color-background, #fff)", color: "var(--bt-module-text-color, var(--pb-color-text, #0f172a))" }}>
     <div style={contentWidth}>
-      <h3 style={{ margin: 0, textAlign: "center", fontSize: 20, lineHeight: "20px", fontWeight: 700 }}><InlineText block={block} name="heading" fallback="You may also like..." /></h3>
+      <h3 style={{ margin: 0, textAlign: "center", fontSize: 20, lineHeight: "20px", fontWeight: 700, color: "var(--bt-module-text-color, inherit)" }}><InlineText block={block} name="heading" fallback="You may also like..." /></h3>
       <div style={{ marginTop: 24 }}><RecommendationCards items={items} /></div>
     </div>
   </section></ModuleFrame>;
@@ -643,7 +644,7 @@ export function ReadyToGoProgressBlock(props: Record<string, unknown>) {
   if (visibility.showNotFound) return <ModuleFrame style={moduleStyle}><TrackingNotFound resultAnchor /></ModuleFrame>;
   return <ModuleFrame style={moduleStyle}><SectionShell title={copy.shipmentProgress} resultAnchor bordered={!moduleStyle}>
     <div style={{ ...contentWidth, textAlign: "center", width: "min(1248px, 100%)" }}>
-      {visibility.showUnavailable ? <p style={{ margin: 0, color: "#b42318" }}>{copy.shipmentProgressUnavailable}</p> : null}
+      {visibility.showUnavailable ? <p style={{ margin: 0, color: "var(--bt-module-text-color, #b42318)" }}>{copy.shipmentProgressUnavailable}</p> : null}
       {visibility.showResult && result ? <ProgressResult
         result={result}
         showEstimatedDelivery={visibility.showEstimatedDelivery}
@@ -675,7 +676,7 @@ export function ReadyToGoDeliveryBlock(props: Record<string, unknown>) {
     {visibility.showResult && result ? <DeliveryResult heading={heading} contentsHeading={contentsHeading} carrierHeading={carrierHeading} showCarrier={showCarrier} result={result} /> : <div className="bt-delivery-columns" style={deliveryColumnsStyle}>
       <div>
         <ShippingDetailsHeading heading={heading} />
-        {visibility.showUnavailable ? <p style={{ margin: "16px 0 0", color: "#b42318" }}>{copy.deliveryUnavailable}</p> : null}
+        {visibility.showUnavailable ? <p style={{ margin: "16px 0 0", color: "var(--bt-module-text-color, #b42318)" }}>{copy.deliveryUnavailable}</p> : null}
       </div>
     </div>}
   </SectionShell></ModuleFrame>;
@@ -690,7 +691,7 @@ export function ReadyToGoRecommendationsBlock(props: Record<string, unknown>) {
   if (!items.length) return null;
   return <ModuleFrame style={readyToGoModuleStyle(props, true)}><SectionShell title={heading} bordered={false}>
     <div style={contentWidth}>
-      <h3 style={{ margin: 0, textAlign: "center", fontSize: 20, lineHeight: "20px", fontWeight: 700 }}>{heading}</h3>
+      <h3 style={{ margin: 0, textAlign: "center", fontSize: 20, lineHeight: "20px", fontWeight: 700, color: "var(--bt-module-text-color, inherit)" }}>{heading}</h3>
       <div style={{ marginTop: 24 }}><RecommendationCards items={items} /></div>
     </div>
   </SectionShell></ModuleFrame>;

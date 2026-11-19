@@ -60,8 +60,8 @@ describe("Ready-to-go module style fields", () => {
     expect("buttonRadius" in defaultProps).toBe(type === "besttrack.ready-to-go.query");
   });
 
-  it("shows background, progress, and font colors for shipment progress", () => {
-    expect(Object.keys(definition("besttrack.ready-to-go.progress").fields)).toEqual(["backgroundColor", "progressColor", "textColor"]);
+  it("shows only background and progress colors for shipment progress", () => {
+    expect(Object.keys(definition("besttrack.ready-to-go.progress").fields)).toEqual(["backgroundColor", "progressColor"]);
   });
 
   it("omits module radius from delivery information while keeping image radius and spacing", () => {
@@ -102,7 +102,7 @@ describe("Ready-to-go module style fields", () => {
 });
 
 describe("Ready-to-go module style rendering", () => {
-  it.each(["storefront", "canvas"])("applies font color only to progress labels on the %s and preserves legacy defaults", async (target) => {
+  it.each(["storefront", "canvas"])("preserves legacy progress label colors without a module background on the %s", async (target) => {
     const progress = (textColor?: string) => <ReadyToGoRuntimeProvider>{target === "canvas"
       ? <ReadyToGoProgressEditor blockId="progress" selected={false} onPropsChange={() => undefined} textColor={textColor} progressColor="#123456" />
       : <><ReadyToGoQueryBlock /><ReadyToGoProgressBlock textColor={textColor} progressColor="#123456" /></>
@@ -115,13 +115,13 @@ describe("Ready-to-go module style rendering", () => {
     await screen.findByRole("region", { name: "Delivery progress" });
     const labels = () => container.querySelectorAll(".bt-progress__label");
     expect(labels()).toHaveLength(5);
-    for (const label of labels()) expect(label).toHaveStyle({ color: "#334155" });
+    for (const label of labels()) expect(label).toHaveStyle({ color: "var(--bt-module-text-color, #334155)" });
     rerender(progress("#cc3366"));
-    for (const label of labels()) expect(label).toHaveStyle({ color: "#cc3366" });
+    for (const label of labels()) expect(label).toHaveStyle({ color: "var(--bt-module-text-color, #cc3366)" });
     expect(container.querySelector(".bt-progress__icon")).toHaveStyle({ background: "#123456" });
-    expect(container.querySelector(".bt-progress-result h2")).toHaveStyle({ color: "#303030" });
+    expect(container.querySelector(".bt-progress-result h2")).toHaveStyle({ color: "var(--bt-module-text-color, #303030)" });
     rerender(progress(""));
-    for (const label of labels()) expect(label).toHaveStyle({ color: "#334155" });
+    for (const label of labels()) expect(label).toHaveStyle({ color: "var(--bt-module-text-color, #334155)" });
   });
 
   it.each(Object.entries(registries))("validates saved font colors with the %s registry", (_name, registry) => {
@@ -133,6 +133,7 @@ describe("Ready-to-go module style rendering", () => {
     expect(readyToGoModuleStyle({ backgroundColor: "#FEF3C7", moduleRadius: "12", verticalSpacing: "20px" }, false)).toEqual({
       backgroundColor: "#FEF3C7",
       "--pb-color-background": "#FEF3C7",
+      "--bt-module-text-color": "#000000",
       borderRadius: "12px",
       overflow: "hidden",
       "--pb-radius": "12px",

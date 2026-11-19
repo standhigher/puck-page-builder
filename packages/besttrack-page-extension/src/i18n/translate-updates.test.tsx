@@ -195,7 +195,8 @@ describe("Translate updates menu", () => {
     expect(document.querySelectorAll(".bt-translating__dot")).toHaveLength(3);
     for (const dot of document.querySelectorAll(".bt-translating__dot")) {
       expect(dot).not.toBeEmptyDOMElement();
-      expect(dot).toHaveStyle({ display: "inline-block", width: "6px", height: "6px", backgroundColor: "rgb(100, 116, 139)" });
+      expect(dot).toHaveStyle({ display: "inline-block", width: "6px", height: "6px" });
+      expect((dot as HTMLElement).style.getPropertyValue("background-color")).toBe("var(--bt-module-text-color, #64748b)");
     }
 
     await act(async () => { pending.resolve(resultFor("AAA")); });

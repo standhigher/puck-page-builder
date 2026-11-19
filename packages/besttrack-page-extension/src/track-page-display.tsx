@@ -12,7 +12,7 @@ import { resolveShopifyRecommendHref } from "./shopify/track-query";
 import { safeTrackingPageUrl } from "./tracking-page-url";
 import { useTrackingRuntime } from "./tracking-runtime";
 
-const translatingColor = "#64748b";
+const translatingColor = "var(--bt-module-text-color, #64748b)";
 
 export const translatingEventStyles = `
 @keyframes bt-translating-dot {
@@ -172,7 +172,7 @@ const trackingProgressStyles = `
 // 名称本身必须裁成单行，完整文案只能放在同级弹层里，否则会被 overflow 裁掉。
 const packageNameStyles = `
 .bt-package-name { position: relative; width: 100%; max-width: 100%; min-width: 0; outline: none; }
-.bt-package-name__text { display: block; width: 100%; max-width: 100%; margin: 0; overflow: hidden; font-size: 14px; font-weight: 500; color: #1e293b; text-overflow: ellipsis; white-space: nowrap; }
+.bt-package-name__text { display: block; width: 100%; max-width: 100%; margin: 0; overflow: hidden; font-size: 14px; font-weight: 500; color: var(--bt-module-text-color, #1e293b); text-overflow: ellipsis; white-space: nowrap; }
 .bt-package-name__tooltip { position: absolute; bottom: calc(100% + 8px); left: 0; z-index: 30; width: max-content; max-width: min(320px, calc(100vw - 48px)); padding: 8px 10px; border-radius: 6px; background: #0f172a; box-shadow: 0 12px 28px rgba(15, 23, 42, 0.18); color: #fff; font-size: 12px; font-weight: 500; line-height: 1.35; opacity: 0; overflow-wrap: anywhere; pointer-events: none; transform: translateY(2px); transition: opacity 0.15s ease, transform 0.15s ease, visibility 0.15s ease; visibility: hidden; white-space: normal; }
 .bt-package-name:hover .bt-package-name__tooltip,
 .bt-package-name:focus-within .bt-package-name__tooltip { opacity: 1; transform: translateY(0); visibility: visible; }
@@ -258,8 +258,8 @@ export function TrackingProgress({ steps, color, textColor }: { steps: ReadyToGo
             <StepIcon name={step.icon ?? (index === 0 || index === steps.length - 1 ? "check" : index === 1 ? "bag" : index === 2 ? "truck" : "box")} done={done} />
           </span>
           <div className="bt-progress__copy" style={{ width: "100%", maxWidth: "100%", boxSizing: "border-box", textAlign: "center", padding: "0 2px" }}>
-            <p className="bt-progress__label" style={{ margin: "0 auto", width: "max-content", maxWidth: "100%", fontWeight: 500, color: labelColor, overflowWrap: "anywhere", wordBreak: "break-word" }}>{label}</p>
-            {step.date ? <p style={{ margin: "6px 0 0", fontSize: 12, lineHeight: "16px", color: "#94a3b8", overflowWrap: "anywhere" }}>{step.date}</p> : null}
+            <p className="bt-progress__label" style={{ margin: "0 auto", width: "max-content", maxWidth: "100%", fontWeight: 500, color: `var(--bt-module-text-color, ${labelColor})`, overflowWrap: "anywhere", wordBreak: "break-word" }}>{label}</p>
+            {step.date ? <p style={{ margin: "6px 0 0", fontSize: 12, lineHeight: "16px", color: "var(--bt-module-text-color, #94a3b8)", overflowWrap: "anywhere" }}>{step.date}</p> : null}
           </div>
         </div>;
       })}
@@ -271,17 +271,17 @@ export function ShippingTimeline({ events }: { events: ReadyToGoTrackingEvent[] 
   const copy = useTrackingCopy();
   const translating = useTrackingRuntime().localeRefreshing;
   if (!events.length) {
-    return <p style={{ margin: "16px 0 0", color: "#475569", fontSize: 14 }}>{copy.shippingEventsEmpty}</p>;
+    return <p style={{ margin: "16px 0 0", color: "var(--bt-module-text-color, #475569)", fontSize: 14 }}>{copy.shippingEventsEmpty}</p>;
   }
-  return <div aria-label={copy.shippingEvents} aria-busy={translating || undefined} aria-live={translating ? "polite" : undefined} style={{ marginTop: 16, display: "flex", flexDirection: "column", gap: 20 }}>
+  return <div aria-label={copy.shippingEvents} aria-busy={translating || undefined} aria-live={translating ? "polite" : undefined} style={{ marginTop: 16, display: "flex", flexDirection: "column", gap: 0 }}>
     {translating ? <style>{translatingEventStyles}</style> : null}
     {events.map((event, index) => {
       const latest = event.state === "current" || index === 0;
-      return <div key={event.id} style={{ position: "relative", paddingLeft: 28, paddingBottom: index < events.length - 1 ? 20 : 0 }}>
+      return <div key={event.id} style={{ position: "relative", paddingLeft: 28, paddingBottom: index < events.length - 1 ? 10 : 0 }}>
         <span aria-hidden="true" style={{ position: "absolute", left: 0, top: 2, width: 16, height: 16, borderRadius: 9999, background: latest ? "#16a34a" : "#cbd5e1" }} />
-        {index < events.length - 1 ? <span aria-hidden="true" style={{ position: "absolute", left: 7, top: 20, width: 1, height: "100%", background: "#e2e8f0" }} /> : null}
-        <p style={{ margin: 0, fontSize: 14, fontWeight: 500, lineHeight: 1.5, color: translating ? "#64748b" : latest ? "#c01400" : "#64748b" }}>{translating ? <TranslatingEventLabel /> : <>{localizeKnownLabel(event.title, copy)}{event.detail ? ", " + event.detail : ""}</>}</p>
-        {!translating && event.at ? <p style={{ margin: "4px 0 0", fontSize: 12, lineHeight: 1.5, color: latest ? "rgba(192, 20, 0, 0.8)" : "#94a3b8" }}>{event.at}</p> : null}
+        {index < events.length - 1 ? <span aria-hidden="true" style={{ position: "absolute", left: 7, top: 20, bottom: 0, width: 1, background: "#e2e8f0" }} /> : null}
+        <p style={{ margin: 0, fontSize: 14, fontWeight: 500, lineHeight: 1.5, color: `var(--bt-module-text-color, ${translating ? "#64748b" : latest ? "#c01400" : "#64748b"})` }}>{translating ? <TranslatingEventLabel /> : <>{localizeKnownLabel(event.title, copy)}{event.detail ? ", " + event.detail : ""}</>}</p>
+        {!translating && event.at ? <p style={{ margin: "4px 0 0", fontSize: 12, lineHeight: 1.5, color: `var(--bt-module-text-color, ${latest ? "rgba(192, 20, 0, 0.8)" : "#94a3b8"})` }}>{event.at}</p> : null}
       </div>;
     })}
   </div>;
@@ -289,7 +289,7 @@ export function ShippingTimeline({ events }: { events: ReadyToGoTrackingEvent[] 
 
 export function PackageContents({ items }: { items: ReadyToGoOrderItem[] }) {
   const copy = useTrackingCopy();
-  if (!items.length) return <p style={{ margin: 0, color: "#64748b", fontSize: 14 }}>{copy.packageContentsUnavailable}</p>;
+  if (!items.length) return <p style={{ margin: 0, color: "var(--bt-module-text-color, #64748b)", fontSize: 14 }}>{copy.packageContentsUnavailable}</p>;
   return <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
     <style>{packageNameStyles}</style>
     {items.map((item) => {
@@ -301,9 +301,9 @@ export function PackageContents({ items }: { items: ReadyToGoOrderItem[] }) {
             <p className="bt-package-name__text">{title}</p>
             <span className="bt-package-name__tooltip" role="tooltip">{title}</span>
           </div>
-          {item.description ? <p style={{ margin: "4px 0 0", fontSize: 13, color: "#64748b" }}>{item.description}</p> : null}
+          {item.description ? <p style={{ margin: "4px 0 0", fontSize: 13, color: "var(--bt-module-text-color, #64748b)" }}>{item.description}</p> : null}
           <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8, marginTop: 4 }}>
-            <p style={{ margin: 0, fontSize: 13, color: "#64748b" }}>x{item.quantity}</p>
+            <p style={{ margin: 0, fontSize: 13, color: "var(--bt-module-text-color, #64748b)" }}>x{item.quantity}</p>
             <a href={packageReorderHref(item.href)} className="bt-package-reorder">{copy.reorder}</a>
           </div>
         </div>
@@ -392,9 +392,9 @@ export function RecommendationCards({ items }: { items: ReadyToGoRecommendation[
               <ProductImage src={item.imageUrl} alt={item.title} size={262} />
             </div>
             <div style={{ padding: "12px 8px", textAlign: "center", fontSize: 14 }}>
-              <p style={{ margin: 0, color: "#334155" }}>{item.title}</p>
-              {displayPrice ? <p style={{ margin: "4px 0 0", fontWeight: 600, color: "#0f172a" }}>{displayPrice}</p> : null}
-              {item.description ? <p style={{ margin: "4px 0 0", color: "#64748b", fontSize: 13 }}>{item.description}</p> : null}
+              <p style={{ margin: 0, color: "var(--bt-module-text-color, #334155)" }}>{item.title}</p>
+              {displayPrice ? <p style={{ margin: "4px 0 0", fontWeight: 600, color: "var(--bt-module-text-color, #0f172a)" }}>{displayPrice}</p> : null}
+              {item.description ? <p style={{ margin: "4px 0 0", color: "var(--bt-module-text-color, #64748b)", fontSize: 13 }}>{item.description}</p> : null}
             </div>
           </>;
           return <div key={item.id} style={{ flex: "0 0 286px", minWidth: 0, paddingRight: 24, boxSizing: "border-box" }}>
@@ -470,12 +470,12 @@ const orderBadgeStyle = (active: boolean): CSSProperties => ({
   height: 36,
   minWidth: 128,
   borderRadius: 8,
-  border: `1px solid ${active ? "#c01400" : "#cbd5e1"}`,
+  border: `1px solid ${active ? "var(--bt-module-text-color, #c01400)" : "#cbd5e1"}`,
   padding: "0 16px",
   font: "inherit",
   fontSize: 14,
   fontWeight: 600,
-  color: active ? "#c01400" : "#64748b",
+  color: `var(--bt-module-text-color, ${active ? "#c01400" : "#64748b"})`,
   background: "transparent",
   cursor: "pointer"
 });
@@ -513,17 +513,17 @@ export function TrackPageOrderBadges({
 /** 第一层只有一个查询标识时显示文本；mode 用于区分订单号/运单号文案，不控制包裹拆分。 */
 export function TrackPageQueryNumber({ mode, value }: { mode: "tracking" | "order"; value: string }) {
   const copy = useTrackingCopy();
-  return <p style={{ margin: 0, fontSize: 20, fontWeight: 400, lineHeight: 1.4, color: "#000", overflowWrap: "anywhere" }}>
+  return <p style={{ margin: 0, fontSize: 20, fontWeight: 400, lineHeight: 1.4, color: "var(--bt-module-text-color, #000)", overflowWrap: "anywhere" }}>
     {mode === "order" ? copy.orderLabel : copy.trackingLabel}: {value}
   </p>;
 }
 
 export function SectionShell({ title, children, bordered = true, resultAnchor = false }: { title: string; children: ReactNode; bordered?: boolean; resultAnchor?: boolean }) {
-  return <section aria-label={title} data-tracking-result={resultAnchor ? "" : undefined} style={{ ...pageFont, background: "var(--pb-color-background, #fff)", color: "var(--pb-color-text, #0f172a)", borderBottom: bordered ? "1px solid #f1f5f9" : "0" }}>{children}</section>;
+  return <section aria-label={title} data-tracking-result={resultAnchor ? "" : undefined} style={{ ...pageFont, background: "var(--pb-color-background, #fff)", color: "var(--bt-module-text-color, var(--pb-color-text, #0f172a))", borderBottom: bordered ? "1px solid #f1f5f9" : "0" }}>{children}</section>;
 }
 
 export function IdleMessage({ children }: { children: ReactNode }) {
-  return <p style={{ margin: 0, textAlign: "center", color: "var(--pb-color-muted, #64748b)" }}>{children}</p>;
+  return <p style={{ margin: 0, textAlign: "center", color: "var(--bt-module-text-color, var(--pb-color-muted, #64748b))" }}>{children}</p>;
 }
 
 export function SkeletonRow() {

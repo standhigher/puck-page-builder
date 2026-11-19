@@ -1,5 +1,5 @@
 import { DeliveryIcon, ProductIcon, SearchIcon, StatusIcon } from "@shopify/polaris-icons";
-import { createPageDocument, type BlockDefinition, type FieldConfig, type JsonValue, type PageBuilderExtension, type TemplateDefinition } from "@standhigher/puck-page-builder/runtime";
+import { createPageDocument, validateFieldValue, type BlockDefinition, type FieldConfig, type JsonValue, type PageBuilderExtension, type TemplateDefinition } from "@standhigher/puck-page-builder/runtime";
 import { ReadyToGoDeliveryBlock, ReadyToGoDeliveryEditor, ReadyToGoPixelField, ReadyToGoInputRadiusField, ReadyToGoButtonRadiusField, ReadyToGoShadowStrengthField, ReadyToGoProgressBlock, ReadyToGoProgressEditor, ReadyToGoQueryBlock, ReadyToGoQueryEditor, ReadyToGoRecommendationsBlock, ReadyToGoRecommendationsEditor, ReadyToGoTextField, ReadyToGoToggleField } from "./ready-to-go";
 import { READY_TO_GO_INPUT_RADIUS_FIELD, READY_TO_GO_BUTTON_RADIUS_FIELD, READY_TO_GO_SHADOW_FIELD, READY_TO_GO_PIXEL_FIELD, readyToGoModuleStyleDefaults, readyToGoModuleStyleFields, validateReadyToGoModuleStyle } from "./ready-to-go-module-style";
 import { defineTemplatePolicy } from "./template-policy";
@@ -8,7 +8,7 @@ const text = (label: string, options: Partial<FieldConfig> = {}) => ({ field: "b
 function withTemplatePolicy(blocks: BlockDefinition[], protectedBlocks: readonly string[]): BlockDefinition[] {
   return blocks.map((block) => ({ ...block, policy: { singleton: true, ...(protectedBlocks.includes(block.type) ? { required: true, allowDelete: false } : {}) } }));
 }
-// 进度区显示背景色、进度色与字体颜色；配送区保留图片圆角和间距，推荐区仅保留背景色和图片圆角，查询区保留卡片与表单样式。
+// 进度区显示背景色与进度色，文字按背景自动配色；配送区保留图片圆角和间距，推荐区仅保留背景色和图片圆角，查询区保留卡片与表单样式。
 function withModuleStyle(block: BlockDefinition): BlockDefinition {
   const style = readyToGoModuleStyleFields(block.type);
   const validateStyle = validateReadyToGoModuleStyle(block.type);
@@ -68,13 +68,16 @@ const readyToGoBlocks: BlockDefinition[] = withTemplatePolicy(([
     label: "Shipment progress",
     category: "BestTrack Ready-to-go",
     targets: ["web"],
+    // Declare the legacy prop for saved-document compatibility without exposing its control.
     defaultProps: { progressColor: "#0f172a", textColor: "#334155" },
     defaultVariant: "default",
     variants: [{ id: "default", label: "Default" }],
     fields: {
-      progressColor: { field: "besttrack.ready-to-go.text", label: "Progress color", control: "color" as const, group: "Style" },
-      textColor: { field: "besttrack.ready-to-go.text", label: "Font color", control: "color" as const, group: "Style" }
+      progressColor: { field: "besttrack.ready-to-go.text", label: "Progress color", control: "color" as const, group: "Style" }
     },
+    // Keep validating legacy saved values after removing their inspector control.
+    validate: (props) => validateFieldValue({ field: "besttrack.ready-to-go.text", control: "color" }, props.textColor)
+      .map((issue) => ({ ...issue, path: "props.textColor" })),
     render: { web: ReadyToGoProgressBlock, editor: ReadyToGoProgressEditor }
   },
   {

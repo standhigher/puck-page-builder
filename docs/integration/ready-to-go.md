@@ -68,7 +68,7 @@ Ready-to-go 的 `defaultTrackingNumber` / `defaultOrderNumber` 保留旧 JSON �
 
 右侧暂不显示 `Default query mode` 配置；新建页面默认使用 `tracking`，旧文档中的配置继续兼容。
 
-画布支持点击 Tracking Number / Order Number 标签切换表单布局，也支持左右方向键、Home 和 End。切换只改变当前画布预览，不写入 `defaultQueryMode` 或触发查询。选中区块后可直接编辑当前标签标题和对应的占位提示；Order Number 模式也可编辑邮箱提示文案，右侧属性中的 Email placeholder 对应 `emailPlaceholder`。预览和正式 Web 使用同一文案，未配置或清空时显示 `Email`；提示文案不会预填邮箱值或参与提交。高度随字段数量自适应。
+画布支持点击 Tracking Number / Order Number 标签切换表单布局，也支持左右方向键、Home 和 End。切换只改变当前画布预览，不写入 `defaultQueryMode` 或触发查询。选中区块后可直接编辑当前标签标题和对应的占位提示；Order Number 模式也可编辑邮箱提示文案，右侧属性中的 Email placeholder 对应 `emailPlaceholder`。三个提示字段未配置或为 `null` 时分别显示 `Tracking Number`、`Order Number`、`Email`，新建模板也明确写入这些默认文案。显式空字符串表示商家已清空，画布、预览和正式 Web 均保持空白，失焦、切换标签或重新加载后不恢复默认文案；宿主的读取和保存逻辑也应保留该空字符串。提示文案不会预填查询值或参与提交。高度随字段数量自适应。
 
 ```tsx
 // 表单每次挂载只查询内部演示编号一次，用于展示预览；这不会预填三条历史，也不会自动加载推荐。

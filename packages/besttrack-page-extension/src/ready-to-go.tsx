@@ -236,8 +236,8 @@ type ReadyToGoEditorProps = BlockEditorProps<Record<string, unknown>>;
 const LEGACY_READY_TO_GO_DEMO_TRACKING_NUMBER = "BT-2048-DEMO";
 
 function readyToGoTrackingPlaceholder(source: Record<string, unknown>) {
-  const value = text(source, "defaultTrackingNumber", "");
-  return value === LEGACY_READY_TO_GO_DEMO_TRACKING_NUMBER ? "" : value;
+  const value = text(source, "defaultTrackingNumber", "Tracking Number");
+  return value === LEGACY_READY_TO_GO_DEMO_TRACKING_NUMBER ? "Tracking Number" : value;
 }
 
 function InlineText({ block, name, fallback }: { block: ReadyToGoEditorProps; name: string; fallback: string }) {
@@ -254,13 +254,9 @@ function InlineText({ block, name, fallback }: { block: ReadyToGoEditorProps; na
   />;
 }
 
-function CanvasPlaceholderInput({ block, name, value, fallback, label }: { block: ReadyToGoEditorProps; name: string; value: string; fallback: string; label: string }) {
+function CanvasPlaceholderInput({ block, name, value, label }: { block: ReadyToGoEditorProps; name: string; value: string; label: string }) {
   const inputRef = useRef<HTMLInputElement>(null);
-  // 默认提示在编辑态作为可选文字展示；清空时保留空草稿，失焦后恢复默认展示。
-  const [editing, setEditing] = useState({ value, selected: block.selected, draft: null as string | null });
-  if (editing.value !== value || editing.selected !== block.selected) {
-    setEditing({ value, selected: block.selected, draft: !block.selected || editing.draft === null ? null : value });
-  }
+  // 默认值在读取缺省字段时提供；显式清空后，选中、失焦和切换 Tab 都保留空白。
   useEffect(() => {
     const input = inputRef.current;
     if (block.selected && input && input.ownerDocument.activeElement === input) input.select();
@@ -269,17 +265,12 @@ function CanvasPlaceholderInput({ block, name, value, fallback, label }: { block
     ref={inputRef}
     aria-label={label}
     readOnly={!block.selected}
-    value={block.selected ? editing.draft ?? (value || fallback) : ""}
-    placeholder={block.selected ? "" : value || fallback}
+    value={block.selected ? value : ""}
+    placeholder={block.selected ? "" : value}
     onFocus={(event) => { if (block.selected) event.currentTarget.select(); }}
-    onBlur={() => setEditing((current) => ({ ...current, draft: null }))}
     onMouseDown={(event) => block.selected && event.stopPropagation()}
     onClick={(event) => block.selected && event.stopPropagation()}
-    onChange={(event) => {
-      const next = event.currentTarget.value;
-      setEditing((current) => ({ ...current, draft: next }));
-      block.onPropsChange({ [name]: next });
-    }}
+    onChange={(event) => block.onPropsChange({ [name]: event.currentTarget.value })}
     style={{ ...queryInputStyle(block), color: "#64748b" }}
   />;
 }
@@ -480,9 +471,9 @@ export function ReadyToGoQueryEditor(block: ReadyToGoEditorProps) {
   const [mode, setMode] = useState<"tracking" | "order">(text(block, "defaultQueryMode") === "order" ? "order" : "tracking");
   const tabId = useId();
   const tabRefs = useRef<Partial<Record<typeof mode, HTMLButtonElement | null>>>({});
-  const placeholder = mode === "tracking" ? readyToGoTrackingPlaceholder(block) : text(block, "defaultOrderNumber", "");
+  const placeholder = mode === "tracking" ? readyToGoTrackingPlaceholder(block) : text(block, "defaultOrderNumber", "Order Number");
   const placeholderField = mode === "tracking" ? "defaultTrackingNumber" : "defaultOrderNumber";
-  const emailPlaceholder = text(block, "emailPlaceholder", "");
+  const emailPlaceholder = text(block, "emailPlaceholder", "Email");
   // 查询模块的圆角只作用于 Tab 卡片，不传给外层区块、输入框或按钮。
   const moduleStyle = readyToGoModuleStyle({ ...block, moduleRadius: undefined }, false);
   return <ModuleFrame style={moduleStyle}><section aria-label="Ready-to-go query editor" style={moduleStyle ? { ...editorHeroStyle, backgroundColor: "var(--pb-color-background, #fff)" } : editorHeroStyle}>
@@ -529,14 +520,12 @@ export function ReadyToGoQueryEditor(block: ReadyToGoEditorProps) {
           block={block}
           name={placeholderField}
           value={placeholder}
-          fallback={mode === "tracking" ? "Tracking Number" : "Order Number"}
           label={`Canvas ${mode === "tracking" ? "tracking" : "order"} number placeholder`}
         />
         {mode === "order" ? <CanvasPlaceholderInput
           block={block}
           name="emailPlaceholder"
           value={emailPlaceholder}
-          fallback="Email"
           label="Canvas email placeholder"
         /> : null}
         <div style={submitButtonStyle(block)}>
@@ -615,12 +604,12 @@ export function ReadyToGoQueryBlock(props: Record<string, unknown>) {
       <form onSubmit={submit} style={{ marginTop: 24, display: "flex", flexDirection: "column", gap: 16, flex: 1 }}>
         {mode === "order" ? <>
           <label htmlFor="ready-to-go-order-number" style={{ position: "absolute", width: 1, height: 1, overflow: "hidden", clipPath: "inset(50%)" }}>Order number</label>
-          <input id="ready-to-go-order-number" aria-label="Order number" value={orderNumber} onChange={(event) => setOrderNumber(event.target.value)} placeholder={text(props, "defaultOrderNumber", "") || "Order Number"} style={queryInputStyle(props)} />
+          <input id="ready-to-go-order-number" aria-label="Order number" value={orderNumber} onChange={(event) => setOrderNumber(event.target.value)} placeholder={text(props, "defaultOrderNumber", "Order Number")} style={queryInputStyle(props)} />
           <label htmlFor="ready-to-go-email" style={{ position: "absolute", width: 1, height: 1, overflow: "hidden", clipPath: "inset(50%)" }}>Email</label>
-          <input id="ready-to-go-email" aria-label="Email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder={text(props, "emailPlaceholder", "") || "Email"} style={queryInputStyle(props)} />
+          <input id="ready-to-go-email" aria-label="Email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder={text(props, "emailPlaceholder", "Email")} style={queryInputStyle(props)} />
         </> : <>
           <label htmlFor="ready-to-go-tracking-number" style={{ position: "absolute", width: 1, height: 1, overflow: "hidden", clipPath: "inset(50%)" }}>Tracking number</label>
-          <input id="ready-to-go-tracking-number" aria-label="Tracking number" value={trackingNumber} onChange={(event) => setTrackingNumber(event.target.value)} placeholder={readyToGoTrackingPlaceholder(props) || "Tracking Number"} style={queryInputStyle(props)} />
+          <input id="ready-to-go-tracking-number" aria-label="Tracking number" value={trackingNumber} onChange={(event) => setTrackingNumber(event.target.value)} placeholder={readyToGoTrackingPlaceholder(props)} style={queryInputStyle(props)} />
         </>}
         {localError ? <p role="alert" style={{ margin: 0, textAlign: "center", fontSize: 12, color: "#f43f5e" }}>{localError}</p> : null}
         <button type="submit" disabled={submitDisabled} style={{ ...submitButtonStyle(props, submitDisabled), border: 0, font: "inherit", fontSize: 15, fontWeight: 600, cursor: submitDisabled ? "wait" : "pointer", opacity: submitDisabled ? 0.7 : 1 }}>{submitLabel}</button>

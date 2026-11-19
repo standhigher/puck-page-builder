@@ -26,6 +26,12 @@ function renderReadyToGo(query?: TrackingPageQuery, queryRecommendations?: Track
   );
 }
 
+const queryPlaceholders = [
+  { field: "defaultTrackingNumber", label: "Tracking number", canvasLabel: "Canvas tracking number placeholder", mode: "tracking", fallback: "Tracking Number" },
+  { field: "defaultOrderNumber", label: "Order number", canvasLabel: "Canvas order number placeholder", mode: "order", fallback: "Order Number" },
+  { field: "emailPlaceholder", label: "Email", canvasLabel: "Canvas email placeholder", mode: "order", fallback: "Email" }
+] as const;
+
 describe("V0.7.0 Ready-to-go", () => {
   it("registers the built-in template with all four required blocks", () => {
     const registry = createExtensionRegistry([bestTrackPageExtension]);
@@ -43,7 +49,11 @@ describe("V0.7.0 Ready-to-go", () => {
     }
     expect(registry.getBlock("besttrack.ready-to-go.query")?.fields.submitButtonColor).toMatchObject({ control: "color", label: "Button color" });
     expect(document?.blocks[0]?.props.submitButtonColor).toBe("#111111");
-    expect(document?.blocks[0]?.props.defaultTrackingNumber).toBe("");
+    expect(document?.blocks[0]?.props).toMatchObject({
+      defaultTrackingNumber: "Tracking Number",
+      defaultOrderNumber: "Order Number",
+      emailPlaceholder: "Email"
+    });
     expect(registry.getBlock("besttrack.ready-to-go.progress")?.fields.progressColor).toMatchObject({ control: "color", label: "Progress color" });
     expect(document?.blocks[1]?.props.progressColor).toBe("#0f172a");
   });
@@ -62,6 +72,7 @@ describe("V0.7.0 Ready-to-go", () => {
       </ReadyToGoRuntimeProvider>
     );
     expect(screen.getByLabelText("Tracking number")).toHaveValue("");
+    expect(screen.getByLabelText("Tracking number")).toHaveAttribute("placeholder", "Tracking Number");
   });
 
   it("shows saved tracking copy as a placeholder and submits only the user's input", async () => {
@@ -128,10 +139,53 @@ describe("V0.7.0 Ready-to-go", () => {
     expect(query).toHaveBeenCalledExactlyOnceWith({ mode: "order", orderNumber: "ORDER-1001", email: "buyer@example.test" });
   });
 
-  it.each([undefined, ""])("keeps the default Email hint when emailPlaceholder is %s", (emailPlaceholder) => {
-    render(<ReadyToGoQueryBlock defaultQueryMode="order" emailPlaceholder={emailPlaceholder} />);
-    expect(screen.getByLabelText("Email")).toHaveValue("");
-    expect(screen.getByLabelText("Email")).toHaveAttribute("placeholder", "Email");
+  it.each(queryPlaceholders)("uses the $field default only when its Web configuration is missing", ({ field, label, mode, fallback }) => {
+    const { rerender } = render(<ReadyToGoQueryBlock defaultQueryMode={mode} />);
+    expect(screen.getByLabelText(label)).toHaveAttribute("placeholder", fallback);
+
+    for (const value of [undefined, null, "", "Custom hint"]) {
+      rerender(<ReadyToGoQueryBlock defaultQueryMode={mode} {...{ [field]: value }} />);
+      expect(screen.getByLabelText(label)).toHaveValue("");
+      expect(screen.getByLabelText(label)).toHaveAttribute("placeholder", value ?? fallback);
+    }
+  });
+
+  it.each(queryPlaceholders)("preserves explicit $field values when the Inspector updates the canvas", ({ field, canvasLabel, mode, fallback }) => {
+    const onPropsChange = vi.fn();
+    const editor = (selected: boolean, props: Record<string, unknown> = {}) => (
+      <ReadyToGoQueryEditor blockId="query" selected={selected} defaultQueryMode={mode} onPropsChange={onPropsChange} {...props} />
+    );
+    const { rerender } = render(editor(false));
+    expect(screen.getByLabelText(canvasLabel)).toHaveAttribute("placeholder", fallback);
+
+    for (const value of [undefined, null, "", "Custom hint"]) {
+      rerender(editor(false, { [field]: value }));
+      expect(screen.getByLabelText(canvasLabel)).toHaveValue("");
+      expect(screen.getByLabelText(canvasLabel)).toHaveAttribute("placeholder", value ?? fallback);
+      rerender(editor(true, { [field]: value }));
+      expect(screen.getByLabelText(canvasLabel)).toHaveValue(value ?? fallback);
+      fireEvent.blur(screen.getByLabelText(canvasLabel));
+      expect(screen.getByLabelText(canvasLabel)).toHaveValue(value ?? fallback);
+    }
+    expect(onPropsChange).not.toHaveBeenCalled();
+  });
+
+  it.each(queryPlaceholders)("keeps $field blank after deleting its default copy and leaving the field", ({ field, canvasLabel, mode }) => {
+    const onPropsChange = vi.fn();
+    const editor = (selected: boolean, props: Record<string, unknown> = {}) => (
+      <ReadyToGoQueryEditor blockId="query" selected={selected} defaultQueryMode={mode} onPropsChange={onPropsChange} {...props} />
+    );
+    const { rerender } = render(editor(true));
+    fireEvent.change(screen.getByLabelText(canvasLabel), { target: { value: "" } });
+    expect(onPropsChange).toHaveBeenCalledExactlyOnceWith({ [field]: "" });
+    rerender(editor(true, { [field]: "" }));
+    fireEvent.blur(screen.getByLabelText(canvasLabel));
+    expect(screen.getByLabelText(canvasLabel)).toHaveValue("");
+    rerender(editor(false, { [field]: "" }));
+    expect(screen.getByLabelText(canvasLabel)).toHaveAttribute("placeholder", "");
+    rerender(editor(true, { [field]: "" }));
+    expect(screen.getByLabelText(canvasLabel)).toHaveValue("");
+    expect(onPropsChange).toHaveBeenCalledTimes(1);
   });
 
   it("uses the internal demo number in automatic preview without submitting placeholder copy", async () => {
@@ -213,7 +267,7 @@ describe("V0.7.0 Ready-to-go", () => {
     expect(screen.queryByLabelText("Canvas tracking number placeholder")).not.toBeInTheDocument();
   });
 
-  it("selects default canvas copy for editing and keeps an empty draft in its own tab", () => {
+  it("selects default canvas copy for editing and preserves cleared copy across tabs", () => {
     const query = vi.fn<TrackingPageQuery>();
     const onPropsChange = vi.fn();
     const editor = (defaultOrderNumber?: string) => (
@@ -245,7 +299,7 @@ describe("V0.7.0 Ready-to-go", () => {
     fireEvent.click(screen.getByRole("tab", { name: "Tracking Number" }));
     expect(screen.getByLabelText("Canvas tracking number placeholder")).toHaveValue("Tracking Number");
     fireEvent.click(screen.getByRole("tab", { name: "Order Number" }));
-    expect(screen.getByLabelText("Canvas order number placeholder")).toHaveValue("Order Number");
+    expect(screen.getByLabelText("Canvas order number placeholder")).toHaveValue("");
     expect(screen.getByLabelText("Canvas email placeholder")).toHaveValue("Email");
     expect(onPropsChange).toHaveBeenCalledExactlyOnceWith({ defaultOrderNumber: "" });
     expect(query).not.toHaveBeenCalled();
@@ -274,17 +328,15 @@ describe("V0.7.0 Ready-to-go", () => {
     rerender(editor(true, "Your email address"));
     fireEvent.change(email, { target: { value: "" } });
     expect(onPropsChange).toHaveBeenNthCalledWith(2, { emailPlaceholder: "" });
-    expect(email).toHaveValue("");
-    expect(email).toHaveAttribute("placeholder", "");
     rerender(editor(true, ""));
     expect(email).toHaveValue("");
     expect(email).toHaveAttribute("placeholder", "");
     fireEvent.blur(email);
-    expect(email).toHaveValue("Email");
+    expect(email).toHaveValue("");
     expect(onPropsChange).toHaveBeenCalledTimes(2);
     rerender(editor(false, ""));
     expect(email).toHaveValue("");
-    expect(email).toHaveAttribute("placeholder", "Email");
+    expect(email).toHaveAttribute("placeholder", "");
     expect(onPropsChange).toHaveBeenCalledTimes(2);
     expect(query).not.toHaveBeenCalled();
   });

@@ -102,10 +102,23 @@ should inject `transport` instead of inventing a new request body:
 
 That path reuses the original lookup: `POST /track/query?_t=`, snake_case
 `{ order_number, email, tracking_number, lang }`, one retry, independent
-`POST /products/recommend` with `{ page, page_size }`, the original Embla
+`POST /products/recommend` with `{ page: 1, page_size: 20 }`, the original Embla
 recommendation carousel, and the original
 progress / shipping / empty-state mapping. The host only supplies fetch,
-App Proxy prefix, and credentials.
+the store-configured App Proxy Base Path, and credentials; the package does not
+hard-code a prefix such as `/apps/bestrack-test`.
+
+The recommendation response keeps its `{ code, msg, data, trace_id }` envelope
+and supplies the Shopify store's default ISO 4217 currency in
+`data.currencyCode`, alongside `data.products`. Product price, or the first
+variant price when product price is absent, is converted to `TrackingPageMoney`
+using that currency's minor units: two decimal places for USD/EUR/CNY, zero for
+JPY, and three for KWD. For example, `12.00 EUR` becomes
+`{ amount: 1200, currencyCode: "EUR" }`, while `1025 JPY` has `amount: 1025`.
+Recommendation cards in all three templates format the supplied currency and
+keep a space between its symbol and amount, such as `$ 12.00` or `€ 12.00`.
+Missing or invalid currency codes hide only the price, leaving the card visible;
+they never default to USD. This formatting does not convert exchange rates.
 
 Branded and Sales keep the discriminated `query` callback:
 
@@ -147,5 +160,8 @@ secret, customer order data, email address, or live query result. Merchant
 resources use stable Shopify IDs. Catalog display prices may be stored on
 product snapshots as `{ amount, currencyCode }` minor units; formatted price
 strings, live availability, tokens, and secrets stay out of PageDocument.
+The host product picker must save the correct minor-unit amount and currency.
+Configured snapshots keep their own `price.currencyCode`; recommendation API
+currency does not override them.
 Production URLs must be public HTTPS URLs. Missing display data and
 unsafe resource URLs render controlled fallbacks.

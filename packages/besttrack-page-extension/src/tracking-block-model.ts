@@ -1,6 +1,6 @@
 import { parseProductReferences } from "@standhigher/puck-page-builder/runtime";
 import { resolveShopifyRecommendHref } from "./shopify/track-query";
-import type { TrackingPageMoney, TrackingPageQueryResult, TrackingPageRecommendation, TrackingPageRecommendationsState, TrackingPageRuntimePhase, TrackingPageTrackingEvent, TrackingPageTrackingStep } from "./tracking-page-runtime";
+import { createTrackingPageCurrencyFormatter, type TrackingPageMoney, type TrackingPageQueryResult, type TrackingPageRecommendation, type TrackingPageRecommendationsState, type TrackingPageRuntimePhase, type TrackingPageTrackingEvent, type TrackingPageTrackingStep } from "./tracking-page-runtime";
 
 /** 未提供进度节点时，按状态文本推导五个基础阶段；不为真实订单补造演示日期。 */
 export function defaultProgress(status: string): TrackingPageTrackingStep[] {
@@ -67,10 +67,16 @@ export function trackingEvents(result: TrackingPageQueryResult | undefined): Tra
   return [];
 }
 
-/** 沿用 Ready-to-go 推荐价格格式：最小货币单位除以 100，显示为 $ 0.00；不是通用多币种格式器。 */
+/** 三套模板共用商品币种和精度，保留推荐卡片的符号与金额间距。 */
 export function formatRecommendationPrice(price?: TrackingPageMoney) {
-  if (!price || !Number.isInteger(price.amount)) return "";
-  return `$ ${(price.amount / 100).toFixed(2)}`;
+  if (!price || !Number.isSafeInteger(price.amount) || price.amount < 0) return "";
+  const formatter = createTrackingPageCurrencyFormatter(price.currencyCode);
+  if (!formatter) return "";
+  const divisor = 10 ** formatter.resolvedOptions().maximumFractionDigits!;
+  return formatter.formatToParts(price.amount / divisor).map(({ type, value }) => {
+    if (type === "currency") return `${value} `;
+    return type === "literal" && !value.trim() ? "" : value;
+  }).join("");
 }
 
 export function trackingSteps(result: TrackingPageQueryResult) {

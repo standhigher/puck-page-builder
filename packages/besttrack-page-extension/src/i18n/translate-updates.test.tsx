@@ -1,7 +1,8 @@
 import { act, fireEvent, render, renderHook, screen, waitFor, within } from "@testing-library/react";
 import "@testing-library/jest-dom/vitest";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { ReadyToGoDeliveryBlock, ReadyToGoDeliveryEditor, ReadyToGoProgressBlock, ReadyToGoProgressEditor, ReadyToGoQueryBlock, ReadyToGoRuntimeProvider, shouldStackProgressIdentity } from "../ready-to-go";
+import { ReadyToGoDeliveryBlock, ReadyToGoDeliveryEditor, ReadyToGoProgressBlock, ReadyToGoProgressEditor, ReadyToGoQueryBlock, ReadyToGoRuntimeProvider } from "../ready-to-go";
+import { shouldStackProgressIdentity } from "../ready-to-go-layout";
 import { TrackingLoading } from "../tracking-loading";
 import { TranslatingEventLabel } from "../track-page-display";
 import { LOCALE_STORAGE_KEY, localeOptions } from "./locales";
@@ -144,6 +145,43 @@ describe("Translate updates menu", () => {
 
     await act(async () => { pending.resolve(resultFor("AAA")); });
     await waitFor(() => expect(screen.getByRole("button", { name: "翻译物流" })).toBeEnabled());
+  });
+
+  it("closes an open language menu when a query starts and keeps it closed after the query finishes", async () => {
+    const pending = deferred<TrackingPageQueryResult>();
+    const query = vi.fn<TrackingPageQuery>(() => pending.promise);
+    render(<TrackingRuntimeProvider query={query}>
+      <TranslateUpdatesMenu />
+      <QueryThenTranslate />
+    </TrackingRuntimeProvider>);
+
+    fireEvent.click(screen.getByRole("button", { name: "Translate updates" }));
+    expect(screen.getByRole("listbox")).toBeInTheDocument();
+    fireEvent.click(screen.getByLabelText("query-ready"));
+    expect(screen.queryByRole("listbox")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Translate updates" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Translate updates" })).toHaveAttribute("aria-expanded", "false");
+
+    await act(async () => { pending.resolve(resultFor("AAA")); });
+    const trigger = screen.getByRole("button", { name: "Translate updates" });
+    expect(trigger).toBeEnabled();
+    expect(trigger).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByRole("listbox")).not.toBeInTheDocument();
+    fireEvent.click(trigger);
+    expect(screen.getByRole("listbox")).toBeInTheDocument();
+  });
+
+  it("closes the language menu on Escape and outside pointer events", () => {
+    render(<TrackingRuntimeProvider><TranslateUpdatesMenu /></TrackingRuntimeProvider>);
+    const trigger = screen.getByRole("button", { name: "Translate updates" });
+
+    fireEvent.click(trigger);
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(screen.queryByRole("listbox")).not.toBeInTheDocument();
+    fireEvent.click(trigger);
+    expect(screen.getByRole("listbox")).toBeInTheDocument();
+    fireEvent.pointerDown(document.body);
+    expect(screen.queryByRole("listbox")).not.toBeInTheDocument();
   });
 
   it("greys out Track Your Order until the locale refresh query returns", async () => {
@@ -294,7 +332,7 @@ describe("TrackingRuntime locale refresh", () => {
   });
 
   it("sends the selected lang on the Shopify transport path", async () => {
-    const post = vi.fn(async (url: string, _body?: Record<string, unknown>) => {
+    const post = vi.fn<(url: string, body?: Record<string, unknown>) => Promise<unknown>>(async (url) => {
       if (url.includes("/products/recommend")) return { code: 0, data: { products: [] } };
       return {
         code: 0,

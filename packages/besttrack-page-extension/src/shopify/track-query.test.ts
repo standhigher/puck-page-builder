@@ -244,6 +244,7 @@ describe("Shopify Track Page query helpers", () => {
   it("maps the independent recommend payload without joining the tracking query", () => {
     expect(mapShopifyRecommendationsResponse({
       data: {
+        currencyCode: "USD",
         products: [{
           id: "gid://shopify/Product/9",
           title: "Travel tote",
@@ -261,6 +262,129 @@ describe("Shopify Track Page query helpers", () => {
       href: "https://shop.example.test/products/travel-tote",
       price: { amount: 1200, currencyCode: "USD" }
     }]);
+  });
+
+  it.each([
+    ["EUR", "12.34", 1234],
+    ["CNY", "1025.00", 102500],
+    ["JPY", "1025", 1025],
+    ["KWD", "1.234", 1234],
+    ["USD", "0.00", 0]
+  ] as const)("converts %s recommendation prices to their currency's minor units", (currencyCode, price, amount) => {
+    const products = mapShopifyRecommendationsResponse({
+      data: {
+        currencyCode,
+        products: [{ id: "tote", title: "Travel tote", price }]
+      }
+    });
+
+    expect(products[0]?.price).toEqual({ amount, currencyCode });
+  });
+
+  it("reads the new response envelope and keeps the recommendation request unchanged", async () => {
+    const post = vi.fn().mockResolvedValue({
+      code: 0,
+      msg: "ok",
+      trace_id: "recommend-trace",
+      data: {
+        page: 1,
+        pageSize: 20,
+        total: 1,
+        hasRemain: false,
+        currencyCode: "EUR",
+        products: [{
+          id: "gid://shopify/Product/10342059278657",
+          title: "The Collection Snowboard: Oxygen",
+          handle: "the-collection-snowboard-oxygen",
+          status: "ACTIVE",
+          publishedAt: "2026-08-11T11:39:12Z",
+          onlineStoreUrl: null,
+          featuredImage: { url: "https://cdn.shopify.com/oxygen.png", altText: "Oxygen snowboard" },
+          variants: [{
+            id: "gid://shopify/ProductVariant/52075367072065",
+            price: "1025.00",
+            compareAtPrice: "",
+            availableForSale: true,
+            inventoryQuantity: 8986
+          }]
+        }]
+      }
+    });
+
+    const products = await createShopifyRecommendationsQuery(post)();
+
+    expect(post).toHaveBeenCalledExactlyOnceWith("/products/recommend", { page: 1, page_size: 20 });
+    expect(products).toEqual([{
+      id: "gid://shopify/Product/10342059278657",
+      title: "The Collection Snowboard: Oxygen",
+      description: "",
+      imageUrl: "https://cdn.shopify.com/oxygen.png",
+      href: `${window.location.origin}/products/the-collection-snowboard-oxygen`,
+      price: { amount: 102500, currencyCode: "EUR" }
+    }]);
+  });
+
+  it.each(["/apps/bestrack-test", "/apps/custom-tracking/"])("lets the host configure the recommendation App Proxy prefix as %s", async (prefix) => {
+    const post = vi.fn().mockResolvedValue({ code: 0, data: { currencyCode: "USD", products: [] } });
+    const queryRecommendations = createShopifyRecommendationsQuery((url, body) =>
+      post(withShopifyAppProxyPrefix(url, prefix), body)
+    );
+
+    await expect(queryRecommendations()).resolves.toEqual([]);
+    expect(post).toHaveBeenCalledExactlyOnceWith(`${prefix.replace(/\/$/, "")}/products/recommend`, { page: 1, page_size: 20 });
+  });
+
+  it("prefers product prices and falls back only to the first variant price", () => {
+    const products = mapShopifyRecommendationsResponse({
+      data: {
+        currencyCode: "EUR",
+        products: [
+          { id: "product-price", title: "Product price", price: "15.00", variants: [{ price: "12.00" }] },
+          { id: "variant-price", title: "Variant price", variants: [{ price: "12.00" }, { price: "8.00" }] }
+        ]
+      }
+    });
+
+    expect(products.map((product) => product.price)).toEqual([
+      { amount: 1500, currencyCode: "EUR" },
+      { amount: 1200, currencyCode: "EUR" }
+    ]);
+  });
+
+  it.each([undefined, null, "", "usd", "EU", "EURO", "$", "EUR "])("keeps recommendation cards without prices when currency is %s", (currencyCode) => {
+    const products = mapShopifyRecommendationsResponse({
+      data: {
+        currencyCode: currencyCode as string | undefined,
+        products: [
+          { id: "product-price", title: "Product price", price: "12.00" },
+          { id: "variant-price", title: "Variant price", variants: [{ price: "8.00" }] }
+        ]
+      }
+    });
+
+    expect(products).toHaveLength(2);
+    expect(products.map(({ id, title, price }) => ({ id, title, price }))).toEqual([
+      { id: "product-price", title: "Product price", price: undefined },
+      { id: "variant-price", title: "Variant price", price: undefined }
+    ]);
+  });
+
+  it.each(["", " ", "-12.00", "$12.00", "bad", "NaN", "Infinity", "12x", "1,025.00", "1e2", "90071992547409.92", "9".repeat(400)])("keeps recommendation cards without malformed price %s", (price) => {
+    const products = mapShopifyRecommendationsResponse({
+      data: {
+        currencyCode: "USD",
+        products: [
+          { id: "product-price", title: "Product price", price },
+          { id: "variant-price", title: "Variant price", variants: [{ price }] }
+        ]
+      }
+    });
+
+    expect(products).toHaveLength(2);
+    expect(products.map(({ id, title, price: money }) => ({ id, title, price: money }))).toEqual([
+      { id: "product-price", title: "Product price", price: undefined },
+      { id: "variant-price", title: "Variant price", price: undefined }
+    ]);
   });
 
   it("falls back to /products/:handle when the recommend API omits onlineStoreUrl", () => {

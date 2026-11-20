@@ -126,9 +126,8 @@ export function TranslateUpdatesMenu() {
   const locale = runtime.locale;
   const busy = runtime.localeRefreshing || runtime.phase === "loading";
 
-  useEffect(() => {
-    if (busy) setOpen(false);
-  }, [busy]);
+  // Busy state closes the current menu immediately and must not reopen it when the query finishes.
+  if (busy && open) setOpen(false);
 
   useEffect(() => {
     if (!open) return;

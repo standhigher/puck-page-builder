@@ -57,7 +57,11 @@ The block does not read `result.recommendations`, and query failure or shipment
 selection never clears or changes the independent products. With no usable
 products the region is hidden; legacy `hideWhenEmpty` remains readable in
 saved documents but no longer changes this shared rule. The Branded grid stays
-in place and recommendation prices follow Ready-to-go's `$ 0.00` display.
+in place and recommendation prices share Ready-to-go's currency-aware display,
+including the space between currency symbol and amount. Live products use
+`data.currencyCode` from the recommendation response; configured snapshots keep
+their own `price.currencyCode`. A missing or malformed currency code hides only
+the price, not the card. See [the response contract](./track-page-dynamic-content.md).
 
 The composite tracking-experience block is mandatory and cannot be deleted or
 duplicated in the editor. Recommendations stay singleton and can be deleted,

@@ -4,6 +4,7 @@ import { scrollToTrackingResult } from "./shopify/track-query";
 import { useTrackingRuntime as useReadyToGoRuntime, type TrackingRecentQuery as ReadyToGoRecentQuery } from "./tracking-runtime";
 import { useTrackingQueryForm } from "./tracking-query-form";
 import { configuredRecommendations, recommendationItems, previewTrackingPageResult as previewReadyToGoTracking, trackingEvents as eventsFrom, trackingSteps, trackingSelection, trackingBlockState } from "./tracking-block-model";
+import { progressIdentityGap, shouldStackProgressIdentity } from "./ready-to-go-layout";
 // 保留原来的公开名称，实际与 Branded、Sales 指向同一个 Provider 和 Context。
 // 宿主只需在页面外包一份 Provider，查询、进度、配送和推荐区块即可订阅同一组状态。
 export { TrackingRuntimeProvider as ReadyToGoRuntimeProvider } from "./tracking-runtime";
@@ -275,8 +276,6 @@ function CanvasPlaceholderInput({ block, name, value, label }: { block: ReadyToG
   />;
 }
 
-const progressIdentityGap = 12;
-
 const progressIdentityStackRules = `
   .bt-progress-identity {
     display: flex;
@@ -316,12 +315,6 @@ const progressIdentityStyles = `
 @media (max-width: 640px) { ${progressIdentityStackRules} }
 @container (max-width: 640px) { ${progressIdentityStackRules} }
 `;
-
-/** 整卡居中要左右各留一列给语言按钮；按钮相对最后一档进度文案内缩后，左右列不够宽就改成上下布局。 */
-export function shouldStackProgressIdentity(labelWidth: number, menuWidth: number, availableWidth: number, gap = progressIdentityGap, menuInset = 0) {
-  if (availableWidth <= 0) return false;
-  return labelWidth + 2 * (menuWidth + Math.max(0, menuInset)) + 2 * gap > availableWidth;
-}
 
 function lastProgressLabelInset(identity: HTMLElement) {
   const labels = identity.closest(".bt-progress-result")?.querySelectorAll<HTMLElement>(".bt-progress__label");

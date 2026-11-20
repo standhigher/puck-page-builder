@@ -55,6 +55,7 @@ function RecommendationPreview({ queryRecommendations }: { queryRecommendations?
 
 afterEach(() => {
   window.history.replaceState({}, "", "/");
+  window.localStorage.removeItem("bestrack_locale");
 });
 
 describe.each(templates)("$name uses the Ready-to-go foundation", ({ name, Provider, Query, Recommendations, trackingLabel, separateDetails }) => {
@@ -96,6 +97,33 @@ describe.each(templates)("$name uses the Ready-to-go foundation", ({ name, Provi
     expect(queryRecommendations).toHaveBeenCalledTimes(1);
   });
 
+  it.each([
+    { currencyCode: "USD", price: "12.34", display: "$ 12.34" },
+    { currencyCode: "EUR", price: "12.34", display: "€ 12.34" },
+    { currencyCode: "CNY", price: "12.34", display: "CN¥ 12.34" },
+    { currencyCode: "JPY", price: "1025.00", display: "¥ 1,025" },
+    { currencyCode: "KWD", price: "1.234", display: "KWD 1.234" }
+  ])("renders recommendation prices from the $currencyCode API response", async ({ currencyCode, price, display }) => {
+    const post = vi.fn().mockResolvedValue({ code: 0, data: {
+      currencyCode,
+      products: [{ id: independentProduct.id, title: independentProduct.title, variants: [{ price }] }]
+    } });
+    render(<Provider transport={{ post }}><Recommendations heading="Suggestions" /></Provider>);
+
+    expect(await screen.findByText(independentProduct.title)).toBeVisible();
+    expect(screen.getByText(display)).toBeVisible();
+  });
+
+  it("keeps recommendations visible without a price when the API omits currency", async () => {
+    const post = vi.fn().mockResolvedValue({ code: 0, data: {
+      products: [{ id: independentProduct.id, title: independentProduct.title, price: "12.00" }]
+    } });
+    render(<Provider transport={{ post }}><Recommendations heading="Suggestions" /></Provider>);
+
+    expect(await screen.findByText(independentProduct.title)).toBeVisible();
+    expect(screen.queryByText(/12\.00/)).toBeNull();
+  });
+
   it("preserves the next input and query mode when a request finishes, then restores an explicitly selected history entry", async () => {
     // 请求完成只更新查询结果；只有点击历史记录才应回填输入，即使点击的仍是已选中的记录。
     const pending = deferred<TrackingPageQueryResult>();
@@ -133,11 +161,13 @@ describe.each(templates)("$name uses the Ready-to-go foundation", ({ name, Provi
 
   it("prioritizes merchant products and never sources recommendations from a lookup", async () => {
     const query = vi.fn<TrackingPageQuery>().mockResolvedValue(resultFor("AAA", { recommendations: [lookupProduct] }));
-    const queryRecommendations = vi.fn(async () => [independentProduct]);
-    const products = [{ id: "gid://shopify/Product/1", title: "Merchant selection", handle: "merchant-selection" }];
+    const queryRecommendations = vi.fn(async () => [{ ...independentProduct, price: { amount: 1200, currencyCode: "USD" } }]);
+    const products = [{ id: "gid://shopify/Product/1", title: "Merchant selection", handle: "merchant-selection", price: { amount: 2595, currencyCode: "EUR" } }];
     const { rerender } = render(<Provider query={query} queryRecommendations={queryRecommendations}><Query submitLabel="Find parcel" /><ReadyDetails enabled={separateDetails} /><Recommendations heading="Suggestions" products={products} /></Provider>);
     await waitFor(() => expect(queryRecommendations).toHaveBeenCalledOnce());
     expect(screen.getByText("Merchant selection")).toBeInTheDocument();
+    expect(screen.getByText("€ 25.95")).toBeVisible();
+    expect(screen.queryByText("$ 25.95")).toBeNull();
     expect(screen.queryByText(independentProduct.title)).toBeNull();
     submitTracking(trackingLabel, "AAA");
     await screen.findByText(/Status AAA/);
@@ -146,6 +176,7 @@ describe.each(templates)("$name uses the Ready-to-go foundation", ({ name, Provi
     // 去掉商家选品后使用已加载的独立推荐，查单响应里的商品在两个阶段都不应出现。
     rerender(<Provider query={query} queryRecommendations={queryRecommendations}><Query submitLabel="Find parcel" /><ReadyDetails enabled={separateDetails} /><Recommendations heading="Suggestions" /></Provider>);
     expect(screen.getByText(independentProduct.title)).toBeInTheDocument();
+    expect(screen.getByText("$ 12.00")).toBeVisible();
     expect(screen.queryByText("Merchant selection")).toBeNull();
     expect(screen.queryByText(lookupProduct.title)).toBeNull();
   });
@@ -343,6 +374,27 @@ describe("shared TrackingRuntimeProvider", () => {
     await act(async () => { await result.current.query({ mode: "order", orderNumber: "ORDER", email: "two@example.test" }); });
     expect(result.current.recentQueries).toHaveLength(1);
     expect(result.current.recentQueries[0].email).toBe("two@example.test");
+  });
+
+  it("uses the latest host query when refreshing the selected result in another language", async () => {
+    const firstQuery = vi.fn<TrackingPageQuery>().mockResolvedValue(resultFor("AAA"));
+    const nextQuery = vi.fn<TrackingPageQuery>().mockResolvedValue(resultFor("AAA", { latestEvent: "Translated by the replacement query" }));
+    let query: TrackingPageQuery = firstQuery;
+    const { result, rerender } = renderHook(useTrackingRuntime, {
+      wrapper: ({ children }) => <TrackingRuntimeProvider query={query}>{children}</TrackingRuntimeProvider>
+    });
+    await act(async () => { await result.current.query({ mode: "tracking", trackingNumber: "AAA" }); });
+
+    query = nextQuery;
+    rerender();
+    act(() => { result.current.setLocale("FR"); });
+
+    await waitFor(() => expect(result.current.localeRefreshing).toBe(false));
+    expect(nextQuery).toHaveBeenCalledExactlyOnceWith({ mode: "tracking", trackingNumber: "AAA" });
+    expect(firstQuery).toHaveBeenCalledTimes(1);
+    expect(result.current.result?.latestEvent).toBe("Translated by the replacement query");
+    expect(result.current.recentQueries).toHaveLength(1);
+    expect(result.current.locale).toBe("FR");
   });
 
   it("maps transport failures to empty while an injected query failure stays a generic error", async () => {

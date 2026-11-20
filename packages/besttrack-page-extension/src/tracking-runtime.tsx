@@ -170,15 +170,16 @@ export function TrackingRuntimeProvider({ children, query: injectedQuery, queryR
   const selectedRecentIndexRef = useRef(selectedRecentIndex);
   const selectedShipmentIndexRef = useRef(selectedShipmentIndex);
   const lastQueryRef = useRef<TrackingPageQueryRequest | null>(null);
-  localeRef.current = locale;
-  stateRef.current = state;
-  recentQueriesRef.current = recentQueries;
-  selectedRecentIndexRef.current = selectedRecentIndex;
-  selectedShipmentIndexRef.current = selectedShipmentIndex;
   const resolvedQuery = useMemo(() => {
     if (injectedQuery) return injectedQuery;
     // 语言入口接管 lang：查询时读当前 Runtime locale，而不是宿主传入的快照值。
-    if (transport) return createShopifyTrackQuery({ ...transport, locale: () => localeRef.current });
+    if (transport) {
+      // Keep the query identity stable while reading the latest locale only when a request starts.
+      return (request: TrackingPageQueryRequest) => createShopifyTrackQuery({
+        ...transport,
+        locale: () => localeRef.current
+      })(request);
+    }
     return undefined;
   }, [injectedQuery, transport]);
   const resolvedRecommendations = useMemo(() => {
@@ -188,7 +189,7 @@ export function TrackingRuntimeProvider({ children, query: injectedQuery, queryR
   }, [queryRecommendations, transport]);
   // 这里表示存在宿主查询来源（宿主也可显式注入 Mock）；仅完全没有来源时使用内置演示结果。
   // 已有来源的请求失败会进入 empty/error 规则，不能自动改走内置 Mock。
-  const live = Boolean(resolvedQuery);
+  const live = Boolean(injectedQuery || transport);
   const [recommendationLoad, setRecommendationLoad] = useState<{
     source: TrackingPageRecommendationsQuery | undefined;
     state: TrackingPageRecommendationsState;
@@ -260,7 +261,14 @@ export function TrackingRuntimeProvider({ children, query: injectedQuery, queryR
     onComplete?.(() => currentRequestId === requestId.current);
   }, [live, resolvedQuery]);
   const queryRef = useRef(query);
-  queryRef.current = query;
+  useEffect(() => {
+    localeRef.current = locale;
+    stateRef.current = state;
+    recentQueriesRef.current = recentQueries;
+    selectedRecentIndexRef.current = selectedRecentIndex;
+    selectedShipmentIndexRef.current = selectedShipmentIndex;
+    queryRef.current = query;
+  }, [locale, query, recentQueries, selectedRecentIndex, selectedShipmentIndex, state]);
   const setLocale = useCallback((next: Locale) => {
     if (next === localeRef.current) return;
     persistLocale(next);

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { createExtensionRegistry, createPageDocument, validatePageDocumentWithRegistry } from "@standhigher/puck-page-builder/runtime";
 import { formatTrackingPageMoney, isTrackingPageResourceReference, isValidOrderNumber, isValidTrackingNumber } from "./tracking-page-runtime";
+import { formatRecommendationPrice } from "./tracking-block-model";
 import { isSafeTrackingPageUrl, safeTrackingPageUrl } from "./tracking-page-url";
 import { bestTrackDocumentValidationExtensions } from "./validation";
 
@@ -27,6 +28,39 @@ describe("tracking page protocol and URL safety", () => {
     expect(isTrackingPageResourceReference({ id: "collection-1", kind: "collection" })).toBe(false);
     expect(formatTrackingPageMoney({ amount: 1200, compareAtAmount: 1500, currencyCode: "USD" })).toEqual({ amount: "$12.00", compareAt: "$15.00", startsAt: false });
     expect(formatTrackingPageMoney({ amount: 12.5, currencyCode: "USD" })).toBeUndefined();
+  });
+
+  it.each([
+    { currencyCode: "USD", amount: 1234, display: "$12.34", recommendation: "$ 12.34" },
+    { currencyCode: "EUR", amount: 1234, display: "€12.34", recommendation: "€ 12.34" },
+    { currencyCode: "CNY", amount: 1234, display: "CN¥12.34", recommendation: "CN¥ 12.34" },
+    { currencyCode: "JPY", amount: 1025, display: "¥1,025", recommendation: "¥ 1,025" },
+    { currencyCode: "KWD", amount: 1234, display: "KWD\u00a01.234", recommendation: "KWD 1.234" }
+  ])("formats $currencyCode minor units using the currency precision", ({ currencyCode, amount, display, recommendation }) => {
+    expect(formatTrackingPageMoney({ amount, currencyCode })?.amount).toBe(display);
+    expect(formatRecommendationPrice({ amount, currencyCode })).toBe(recommendation);
+  });
+
+  it("uses the currency precision for compare-at prices as well", () => {
+    expect(formatTrackingPageMoney({ amount: 1025, compareAtAmount: 1200, currencyCode: "JPY", startsAt: true })).toEqual({
+      amount: "¥1,025", compareAt: "¥1,200", startsAt: true
+    });
+    expect(formatTrackingPageMoney({ amount: 1234, compareAtAmount: 2500, currencyCode: "KWD" })).toEqual({
+      amount: "KWD\u00a01.234", compareAt: "KWD\u00a02.500", startsAt: false
+    });
+  });
+
+  it.each(["", "EURO", "usd", "$"])("hides prices with an invalid currency format: %s", (currencyCode) => {
+    expect(formatTrackingPageMoney({ amount: 1200, currencyCode })).toBeUndefined();
+    expect(formatRecommendationPrice({ amount: 1200, currencyCode })).toBe("");
+  });
+
+  it("does not display missing or invalid recommendation amounts as a price", () => {
+    expect(formatRecommendationPrice()).toBe("");
+    for (const amount of [-1, 12.5, NaN, Infinity, Number.MAX_SAFE_INTEGER + 1]) {
+      expect(formatRecommendationPrice({ amount, currencyCode: "USD" })).toBe("");
+    }
+    expect(formatRecommendationPrice({ amount: 0, currencyCode: "USD" })).toBe("$ 0.00");
   });
 
   it("provides a renderer-free contract for persisted template documents", () => {

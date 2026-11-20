@@ -162,15 +162,24 @@ export function isTrackingPageResourceReference(value: unknown, kind?: TrackingP
   return typeof candidate.id === "string" && candidate.id.startsWith("gid://shopify/") && (candidate.kind === "product" || candidate.kind === "collection" || candidate.kind === "media") && (kind === undefined || candidate.kind === kind);
 }
 
-export function formatTrackingPageMoney(value: TrackingPageMoney, locale = "en-US") {
-  if (!Number.isInteger(value.amount) || !/^[A-Z]{3}$/.test(value.currencyCode)) return undefined;
+/** Shared currency validation and precision for API amounts and money display. */
+export function createTrackingPageCurrencyFormatter(currencyCode?: string, locale = "en-US") {
+  if (typeof currencyCode !== "string" || !/^[A-Z]{3}$/.test(currencyCode)) return undefined;
   try {
-    const amount = new Intl.NumberFormat(locale, { style: "currency", currency: value.currencyCode }).format(value.amount / 100);
-    const compareAt = value.compareAtAmount !== undefined && Number.isInteger(value.compareAtAmount) && value.compareAtAmount > value.amount
-      ? new Intl.NumberFormat(locale, { style: "currency", currency: value.currencyCode }).format(value.compareAtAmount / 100)
-      : undefined;
-    return { amount, compareAt, startsAt: value.startsAt === true };
+    return new Intl.NumberFormat(locale, { style: "currency", currency: currencyCode });
   } catch {
     return undefined;
   }
+}
+
+export function formatTrackingPageMoney(value: TrackingPageMoney, locale = "en-US") {
+  if (!Number.isInteger(value.amount)) return undefined;
+  const formatter = createTrackingPageCurrencyFormatter(value.currencyCode, locale);
+  if (!formatter) return undefined;
+  const divisor = 10 ** formatter.resolvedOptions().maximumFractionDigits!;
+  const amount = formatter.format(value.amount / divisor);
+  const compareAt = value.compareAtAmount !== undefined && Number.isInteger(value.compareAtAmount) && value.compareAtAmount > value.amount
+    ? formatter.format(value.compareAtAmount / divisor)
+    : undefined;
+  return { amount, compareAt, startsAt: value.startsAt === true };
 }

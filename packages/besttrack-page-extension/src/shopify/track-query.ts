@@ -14,17 +14,19 @@ import {
   sanitizeMilestones,
   shouldShowEstimatedDelivery
 } from "./timeline";
-import type {
-  TrackingPageAd,
-  TrackingPageOrderItem,
-  TrackingPageQuery,
-  TrackingPageQueryRequest,
-  TrackingPageQueryResult,
-  TrackingPageRecommendation,
-  TrackingPageRecommendationsQuery,
-  TrackingPageShipment,
-  TrackingPageTrackingEvent,
-  TrackingPageTrackingStep
+import {
+  createTrackingPageCurrencyFormatter,
+  type TrackingPageMoney,
+  type TrackingPageAd,
+  type TrackingPageOrderItem,
+  type TrackingPageQuery,
+  type TrackingPageQueryRequest,
+  type TrackingPageQueryResult,
+  type TrackingPageRecommendation,
+  type TrackingPageRecommendationsQuery,
+  type TrackingPageShipment,
+  type TrackingPageTrackingEvent,
+  type TrackingPageTrackingStep
 } from "../tracking-page-runtime";
 
 export const SHOPIFY_TRACK_QUERY_PATH = "/track/query";
@@ -70,6 +72,12 @@ export type ShopifyRecommendProduct = {
   featuredImage?: { url?: string; altText?: string | null } | null;
   price?: string;
   variants?: Array<{ price?: string }> | null;
+};
+
+type ShopifyRecommendationsData = {
+  /** Shop default ISO 4217 currency, shared by every product in this response. */
+  currencyCode?: string;
+  products?: ShopifyRecommendProduct[];
 };
 
 const emptyResult = (): TrackingPageQueryResult => ({
@@ -221,13 +229,13 @@ export function mapShopifyTrackQueryResponse(
   };
 }
 
-function parseRecommendPrice(value?: string) {
-  if (!value) return undefined;
-  const numeric = Number(value.replace(/[^0-9.]/g, ""));
-  if (!Number.isFinite(numeric)) return undefined;
-  const amount = Math.round(numeric * 100);
-  if (!Number.isInteger(amount)) return undefined;
-  return { amount, currencyCode: "USD" as const };
+function parseRecommendPrice(value: string | undefined, currencyCode: string | undefined): TrackingPageMoney | undefined {
+  const formatter = createTrackingPageCurrencyFormatter(currencyCode);
+  if (!formatter || typeof value !== "string" || !/^\d+(?:\.\d+)?$/.test(value.trim())) return undefined;
+  const factor = 10 ** formatter.resolvedOptions().maximumFractionDigits!;
+  const amount = Math.round(Number(value) * factor);
+  if (!Number.isSafeInteger(amount)) return undefined;
+  return { amount, currencyCode: formatter.resolvedOptions().currency! };
 }
 
 export function resolveShopifyRecommendHref(onlineStoreUrl?: string | null, handle?: string) {
@@ -246,7 +254,7 @@ export function resolveShopifyRecommendHref(onlineStoreUrl?: string | null, hand
 }
 
 export function mapShopifyRecommendationsResponse(
-  response: ShopifyTrackApiResponse<{ products?: ShopifyRecommendProduct[] } | null | undefined>
+  response: ShopifyTrackApiResponse<ShopifyRecommendationsData | null | undefined>
 ): TrackingPageRecommendation[] {
   const products = response.data?.products ?? [];
   // 保持后端给出的商品顺序与数量；默认的店铺前 8 个产品也通过同一映射流程展示。
@@ -256,7 +264,7 @@ export function mapShopifyRecommendationsResponse(
     description: "",
     imageUrl: product.featuredImage?.url,
     href: resolveShopifyRecommendHref(product.onlineStoreUrl, product.handle),
-    price: parseRecommendPrice(product.price || product.variants?.[0]?.price)
+    price: parseRecommendPrice(product.price || product.variants?.[0]?.price, response.data?.currencyCode)
   }));
 }
 
@@ -314,7 +322,7 @@ export function createShopifyTrackQuery(transport: ShopifyTrackPageTransport): T
 export function createShopifyRecommendationsQuery(post: ShopifyTrackPagePost): TrackingPageRecommendationsQuery {
   return async () => {
     try {
-      const response = await post<{ products?: ShopifyRecommendProduct[] }>(SHOPIFY_RECOMMEND_PATH, { ...buildShopifyRecommendPayload() });
+      const response = await post<ShopifyRecommendationsData>(SHOPIFY_RECOMMEND_PATH, { ...buildShopifyRecommendPayload() });
       return mapShopifyRecommendationsResponse(response);
     } catch {
       return [];

@@ -91,8 +91,12 @@ eight products from that merchant's store. The host must connect the independent
 recommendations loader to obtain them; the frontend preserves the returned list.
 No products means no rendered recommendation content; errors, query switching
 and shipment switching do not alter independently loaded recommendations.
-Prices follow Ready-to-go's `$ 0.00` recommendation display; Sales retains its
-grid layout. `autoQueryDemo` is only for explicit Mock previews and suppresses
+Prices share Ready-to-go's currency-aware recommendation display, with a space
+between currency symbol and amount; Sales retains its grid layout. Live products
+use the response's `data.currencyCode`, while configured snapshots keep their own
+`price.currencyCode`. Missing or malformed currency codes hide only the price.
+See [the response contract](./track-page-dynamic-content.md).
+`autoQueryDemo` is only for explicit Mock previews and suppresses
 estimated delivery; production hosts omit it. The tracking timeline uses the
 shared **Translate updates** control; see
 [Translate updates](./translate-updates.md).

@@ -57,7 +57,7 @@ type TrackingPageRecommendationsQuery = () => Promise<TrackingPageRecommendation
 }
 ```
 
-编辑器画布继续使用包内 preview fixture。商家选品快照可带 `{ amount, currencyCode }` 展示价，编辑器、预览和已配置的线上页面都读这份快照。宿主选品器需保存正确的价格最小货币单位与币种；快照继续使用自身的 `price.currencyCode`，不由推荐接口的币种覆盖。线上页面在未配置商品时只渲染 host 注入的动态结果。
+编辑器画布继续使用包内 preview fixture。商家选品快照可带 `{ amount, currencyCode }` 展示价，编辑器、预览和已配置的线上页面继续使用这份快照。宿主选品器需保存正确的价格最小货币单位与币种。未配置商品时，线上页面读取独立推荐接口的结果。本次仅适配货币符号，商品来源、顺序和价格优先级保持原有规则。
 
 ## 宿主接入要求
 
@@ -85,14 +85,14 @@ type TrackingPageRecommendationsQuery = () => Promise<TrackingPageRecommendation
 
 推荐商品仍由 host 的 `transport.post` 或 `queryRecommendations` 发请求。Ready-to-go 在传入 `transport` 时按原页面调用 `POST /products/recommend`，请求体 `{ page: 1, page_size: 20 }`，与查单并行，失败时隐藏推荐区块。App Proxy Base Path 仍由宿主按店铺配置添加，例如 `/apps/bestrack-test/products/recommend`，不能在包内写死。也可以自行传入 `queryRecommendations`。
 
-推荐响应在 `data` 顶层返回 Shopify 店铺默认币种 `currencyCode`，采用 ISO 4217 代码，例如 `USD`、`EUR`、`CNY`；接口外层格式保持不变：
+推荐响应在 `data` 顶层沿用字段名 `currencyCode`，其值现为货币符号，例如 `$`、`€`、`৳`；接口外层格式保持不变：
 
 ```json
 {
   "code": 0,
   "msg": "ok",
   "data": {
-    "currencyCode": "EUR",
+    "currencyCode": "€",
     "products": [
       {
         "id": "gid://shopify/Product/9",
@@ -105,11 +105,23 @@ type TrackingPageRecommendationsQuery = () => Promise<TrackingPageRecommendation
 }
 ```
 
-旧推荐请求不要并入物流查询的 loading/error 状态。没有 `onlineStoreUrl` 时回退到 `/products/:handle`。价格仍取商品价，没有则取第一个变体价；结合 `data.currencyCode` 转成包的 `TrackingPageMoney`，`amount` 为该币种的最小单位：USD、EUR、CNY 保留两位，JPY 为零位，KWD 为三位。例如 `12.00 EUR` 转为 `{ amount: 1200, currencyCode: "EUR" }`，`1025 JPY` 转为 `{ amount: 1025, currencyCode: "JPY" }`，`1.234 KWD` 转为 `{ amount: 1234, currencyCode: "KWD" }`。
+旧推荐请求不要并入物流查询的 loading/error 状态。没有 `onlineStoreUrl` 时回退到 `/products/:handle`。价格优先取商品价，没有则取第一个变体价。直接拼接 `data.currencyCode` 符号与价格字符串，例如 `€ 12.00`、`৳ 1025.00`；不解析 ISO 币种，不换算最小单位，不添加千分位或改变小数位。
 
-Ready-to-go、Branded、Sales 的推荐卡片按 `currencyCode` 显示价格，保留货币符号与数值之间的间距，例如 `$ 12.00`、`€ 12.00`。币种缺失或格式无效时仅隐藏价格、保留商品卡片，不默认使用 USD，也不执行汇率换算。图片和跳转地址应是公开 HTTPS 地址，相对商品路径会在浏览器中解析为当前 origin。
+Ready-to-go、Branded、Sales 的推荐卡片共用该显示规则。符号缺失或价格无效时仅隐藏价格、保留商品卡片。接口商品及 `displayPrice` 仅保存在 Runtime，不写入 `PageDocument`。图片和跳转地址应是公开 HTTPS 地址，相对商品路径会在浏览器中解析为当前 origin。
 
-## 版本与主项目接入状态
+### Ready-to-go 店铺货币符号（0.5.37）
+
+宿主可将店铺信息中的 `currency_symbol` 传给 `ReadyToGoRuntimeProvider` 的可选 `currencySymbol` 属性。推荐快照会随该属性更新显示符号；C 端未显式传入时，使用推荐响应 `data.currencyCode` 的符号。金额仍来自原有快照，按快照币种确定小数位，不改变商品来源和价格优先级。没有有效符号时回退到快照币种的默认显示。
+
+```tsx
+<ReadyToGoRuntimeProvider currencySymbol={shopInfo.currency_symbol} queryRecommendations={queryRecommendations}>
+  <WebRenderer document={document} registry={registry} />
+</ReadyToGoRuntimeProvider>
+```
+
+该属性仅覆盖展示符号，金额最小单位与小数位仍由快照 `currencyCode` 决定，不进行汇率转换，不改写选品快照或 `PageDocument`。包不请求店铺信息，鉴权与缓存仍由宿主负责；Ready-to-go、Branded、Sales 共用符号规则。
+
+## 0.4.0 接入历史
 
 本次修改的是包仓库的 `0.4.0` 源码，尚未发布 npm。主项目 `bast Tack` 仍使用 `0.3.0` 和已有查询补丁，因此不能直接使用新增的 `queryRecommendations` 属性。
 

@@ -58,7 +58,7 @@ const document = registry.getTemplate("besttrack.ready-to-go")!.create();
 
 商家未选品时，推荐后端默认返回该店铺前 8 个产品，前端展示独立推荐请求的结果。宿主需提供 `queryRecommendations` 或 `transport` 才能取得这份默认商品；未选品本身不应被当作隐藏推荐的条件。
 
-`POST /products/recommend` 的响应通过 `data.currencyCode` 提供 Shopify 店铺默认币种（ISO 4217，例如 `USD`、`EUR`、`CNY`），外层仍为 `{ code, msg, data, trace_id }`。推荐价格优先读取商品价，否则读取第一个变体价，按币种最小单位转为 `{ amount, currencyCode }`：USD、EUR、CNY 为两位小数，JPY 为零位，KWD 为三位。推荐卡片按实际币种格式化，并保留货币符号与数值之间的间距；币种缺失或格式无效时只隐藏价格，商品卡片继续显示，不默认 USD。商家选品快照仍使用自身的 `price.currencyCode`，宿主选品器需正确保存金额与币种，不使用推荐接口的币种覆盖快照。接口示例见 [动态内容改动说明](./track-page-dynamic-content.md)。
+从 `0.5.37` 起，`POST /products/recommend` 响应的 `data.currencyCode` 表示展示符号（例如 `$`、`৳`），外层仍为 `{ code, msg, data, trace_id }`。推荐卡片直接拼接该符号与商品 `price` 字符串，商品价缺失时读取第一个变体价。例如 `৳` 和 `1025.00` 显示为 `৳ 1025.00`，不换算最小单位、不推断币种、不改写小数位。符号缺失或价格无效时只隐藏价格。商品来源和价格优先级保持原有规则：手动选品使用保存的快照；未选品时使用独立推荐接口结果。管理端预览仍可使用快照，并传入 `currencySymbol` 显示店铺符号。接口示例见 [动态内容改动说明](./track-page-dynamic-content.md)。
 
 ## 预览 Demo 与正式查单
 

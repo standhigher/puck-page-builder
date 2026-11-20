@@ -202,9 +202,9 @@ export function BrandedOrderItemsBlock(props: Record<string, unknown>) {
 }
 
 function RecommendationCard({ item }: { item: TrackingPageRecommendation }) {
+  const { currencySymbol } = useBrandedRuntime();
   const href = safeHref(item.href);
-  // 推荐价格共用 Ready-to-go 的币种格式化和符号间距。
-  const price = formatRecommendationPrice(item.price);
+  const price = item.displayPrice ?? formatRecommendationPrice(item.price, currencySymbol);
   return <article style={{ overflow: "hidden", borderRadius: 6, background: "#fff", boxShadow: "0 1px 2px rgb(0 0 0 / 8%)" }}><ProductImage src={item.imageUrl} alt={item.title} /><div style={{ padding: 14 }}><strong>{item.title}</strong>{price ? <p style={{ margin: "6px 0", fontWeight: 700 }}>{price}</p> : null}<p style={{ margin: "6px 0", color: "#6b6b6b", fontSize: 13 }}>{item.description}</p>{!href ? <span style={{ color: "#6b6b6b", fontSize: 13, fontWeight: 700 }}>View product</span> : <a href={href} style={{ color: "#0a0a0a", fontSize: 13, fontWeight: 700 }}>View product</a>}</div></article>;
 }
 

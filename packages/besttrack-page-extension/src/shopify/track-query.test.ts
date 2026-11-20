@@ -244,7 +244,7 @@ describe("Shopify Track Page query helpers", () => {
   it("maps the independent recommend payload without joining the tracking query", () => {
     expect(mapShopifyRecommendationsResponse({
       data: {
-        currencyCode: "USD",
+        currencyCode: "$",
         products: [{
           id: "gid://shopify/Product/9",
           title: "Travel tote",
@@ -260,17 +260,18 @@ describe("Shopify Track Page query helpers", () => {
       description: "",
       imageUrl: "https://cdn.example.test/tote.png",
       href: "https://shop.example.test/products/travel-tote",
-      price: { amount: 1200, currencyCode: "USD" }
+      displayPrice: "$ 12.00"
     }]);
   });
 
   it.each([
-    ["EUR", "12.34", 1234],
-    ["CNY", "1025.00", 102500],
-    ["JPY", "1025", 1025],
-    ["KWD", "1.234", 1234],
-    ["USD", "0.00", 0]
-  ] as const)("converts %s recommendation prices to their currency's minor units", (currencyCode, price, amount) => {
+    ["€", "12.34"],
+    ["৳", "1025.00"],
+    ["JP¥", "1025.00"],
+    ["KD", "1.234"],
+    ["$", "0.00"],
+    ["$", "90071992547409.92"]
+  ] as const)("renders the %s symbol and raw recommendation price %s without conversion", (currencyCode, price) => {
     const products = mapShopifyRecommendationsResponse({
       data: {
         currencyCode,
@@ -278,7 +279,8 @@ describe("Shopify Track Page query helpers", () => {
       }
     });
 
-    expect(products[0]?.price).toEqual({ amount, currencyCode });
+    expect(products[0]?.displayPrice).toBe(`${currencyCode} ${price}`);
+    expect(products[0]?.price).toBeUndefined();
   });
 
   it("reads the new response envelope and keeps the recommendation request unchanged", async () => {
@@ -291,7 +293,7 @@ describe("Shopify Track Page query helpers", () => {
         pageSize: 20,
         total: 1,
         hasRemain: false,
-        currencyCode: "EUR",
+        currencyCode: "€",
         products: [{
           id: "gid://shopify/Product/10342059278657",
           title: "The Collection Snowboard: Oxygen",
@@ -320,7 +322,7 @@ describe("Shopify Track Page query helpers", () => {
       description: "",
       imageUrl: "https://cdn.shopify.com/oxygen.png",
       href: `${window.location.origin}/products/the-collection-snowboard-oxygen`,
-      price: { amount: 102500, currencyCode: "EUR" }
+      displayPrice: "€ 1025.00"
     }]);
   });
 
@@ -337,7 +339,7 @@ describe("Shopify Track Page query helpers", () => {
   it("prefers product prices and falls back only to the first variant price", () => {
     const products = mapShopifyRecommendationsResponse({
       data: {
-        currencyCode: "EUR",
+        currencyCode: "€",
         products: [
           { id: "product-price", title: "Product price", price: "15.00", variants: [{ price: "12.00" }] },
           { id: "variant-price", title: "Variant price", variants: [{ price: "12.00" }, { price: "8.00" }] }
@@ -345,13 +347,10 @@ describe("Shopify Track Page query helpers", () => {
       }
     });
 
-    expect(products.map((product) => product.price)).toEqual([
-      { amount: 1500, currencyCode: "EUR" },
-      { amount: 1200, currencyCode: "EUR" }
-    ]);
+    expect(products.map((product) => product.displayPrice)).toEqual(["€ 15.00", "€ 12.00"]);
   });
 
-  it.each([undefined, null, "", "usd", "EU", "EURO", "$", "EUR "])("keeps recommendation cards without prices when currency is %s", (currencyCode) => {
+  it.each([undefined, null, "", " "])("keeps recommendation cards without prices when the symbol is missing: %s", (currencyCode) => {
     const products = mapShopifyRecommendationsResponse({
       data: {
         currencyCode: currencyCode as string | undefined,
@@ -363,16 +362,16 @@ describe("Shopify Track Page query helpers", () => {
     });
 
     expect(products).toHaveLength(2);
-    expect(products.map(({ id, title, price }) => ({ id, title, price }))).toEqual([
-      { id: "product-price", title: "Product price", price: undefined },
-      { id: "variant-price", title: "Variant price", price: undefined }
+    expect(products.map(({ id, title, displayPrice }) => ({ id, title, displayPrice }))).toEqual([
+      { id: "product-price", title: "Product price", displayPrice: undefined },
+      { id: "variant-price", title: "Variant price", displayPrice: undefined }
     ]);
   });
 
-  it.each(["", " ", "-12.00", "$12.00", "bad", "NaN", "Infinity", "12x", "1,025.00", "1e2", "90071992547409.92", "9".repeat(400)])("keeps recommendation cards without malformed price %s", (price) => {
+  it.each(["", " ", "-12.00", "$12.00", "bad", "NaN", "Infinity", "12x", "1,025.00", "1e2"])("keeps recommendation cards without malformed price %s", (price) => {
     const products = mapShopifyRecommendationsResponse({
       data: {
-        currencyCode: "USD",
+        currencyCode: "$",
         products: [
           { id: "product-price", title: "Product price", price },
           { id: "variant-price", title: "Variant price", variants: [{ price }] }
@@ -381,9 +380,9 @@ describe("Shopify Track Page query helpers", () => {
     });
 
     expect(products).toHaveLength(2);
-    expect(products.map(({ id, title, price: money }) => ({ id, title, price: money }))).toEqual([
-      { id: "product-price", title: "Product price", price: undefined },
-      { id: "variant-price", title: "Variant price", price: undefined }
+    expect(products.map(({ id, title, displayPrice }) => ({ id, title, displayPrice }))).toEqual([
+      { id: "product-price", title: "Product price", displayPrice: undefined },
+      { id: "variant-price", title: "Variant price", displayPrice: undefined }
     ]);
   });
 

@@ -226,7 +226,7 @@ export function SalesRecommendationsBlock(props: Record<string, unknown>) {
   return <Section title={title}><div style={gridStyle}>{recommendations.map((item) => {
     const href = safeHref(item.href);
     const itemTitle = text(item, "title", "Recommended product");
-    const price = formatRecommendationPrice(item.price);
+    const price = item.displayPrice ?? formatRecommendationPrice(item.price, runtime.currencySymbol);
     return <article key={item.id} style={{ display: "grid", gap: 14, minWidth: 0, padding: 18, border: "1px solid var(--pb-color-border)", borderRadius: "calc(var(--pb-radius) / 1.5)", background: "var(--pb-color-background)" }}><ProductImage src={item.imageUrl} alt={itemTitle} /><div><strong>{href ? <a href={href} style={{ color: "inherit" }}>{itemTitle}</a> : itemTitle}</strong>{price ? <small style={{ display: "block", marginTop: 5, color: "var(--pb-color-muted)" }}>{price}</small> : null}{item.description ? <p style={{ marginBottom: 0, color: "var(--pb-color-muted)" }}>{item.description}</p> : null}</div></article>;
   })}</div></Section>;
 }

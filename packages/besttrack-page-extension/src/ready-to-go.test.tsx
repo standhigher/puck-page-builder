@@ -1,9 +1,25 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import { ReadyToGoRecommendationsBlock } from "./ready-to-go";
+import { ReadyToGoRecommendationsBlock, ReadyToGoRuntimeProvider } from "./ready-to-go";
 import { PackageContents } from "./track-page-display";
 
 describe("Ready-to-go configured recommendations", () => {
+  it("updates the shop symbol without changing saved product prices and falls back when cleared", () => {
+    const products = [{ id: "gid://shopify/Product/1", title: "Travel tote", price: { amount: 1234, currencyCode: "BDT" } }];
+    const preview = (currencySymbol?: string) => (
+      <ReadyToGoRuntimeProvider currencySymbol={currencySymbol}>
+        <ReadyToGoRecommendationsBlock products={products} />
+      </ReadyToGoRuntimeProvider>
+    );
+    const { rerender } = render(preview());
+    expect(screen.getByText("BDT 12.34")).toBeInTheDocument();
+    rerender(preview("৳"));
+    expect(screen.getByText("৳ 12.34")).toBeInTheDocument();
+    rerender(preview(" "));
+    expect(screen.getByText("BDT 12.34")).toBeInTheDocument();
+    expect(products[0]!.price).toEqual({ amount: 1234, currencyCode: "BDT" });
+  });
+
   it("turns a saved Shopify handle into a clickable storefront URL", () => {
     render(<ReadyToGoRecommendationsBlock heading="You may also like..." products={[{
       id: "gid://shopify/Product/1",

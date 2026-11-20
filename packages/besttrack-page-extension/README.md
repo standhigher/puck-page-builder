@@ -108,17 +108,21 @@ progress / shipping / empty-state mapping. The host only supplies fetch,
 the store-configured App Proxy Base Path, and credentials; the package does not
 hard-code a prefix such as `/apps/bestrack-test`.
 
-The recommendation response keeps its `{ code, msg, data, trace_id }` envelope
-and supplies the Shopify store's default ISO 4217 currency in
-`data.currencyCode`, alongside `data.products`. Product price, or the first
-variant price when product price is absent, is converted to `TrackingPageMoney`
-using that currency's minor units: two decimal places for USD/EUR/CNY, zero for
-JPY, and three for KWD. For example, `12.00 EUR` becomes
-`{ amount: 1200, currencyCode: "EUR" }`, while `1025 JPY` has `amount: 1025`.
-Recommendation cards in all three templates format the supplied currency and
-keep a space between its symbol and amount, such as `$ 12.00` or `€ 12.00`.
-Missing or invalid currency codes hide only the price, leaving the card visible;
-they never default to USD. This formatting does not convert exchange rates.
+The recommendation response keeps its `{ code, msg, data, trace_id }` envelope.
+Despite its name, `data.currencyCode` now contains the shop's display symbol,
+such as `$` or `৳`. Cards display that symbol and the product's price string,
+falling back to the first variant price when product price is absent. For example,
+`currencyCode: "৳"` and `price: "1025.00"` display `৳ 1025.00` unchanged.
+No currency lookup, minor-unit conversion, rounding or exchange conversion runs
+on this path. Missing symbols or malformed prices hide only the price.
+The mapped `displayPrice` is transient and never stored in PageDocument.
+
+Configured product snapshots retain their existing priority over the independent
+recommendation response. Product selection, order and price sources are unchanged.
+Selected snapshots keep their saved amounts and currency precision while using
+the recommendation response's current symbol. The optional `currencySymbol`
+Provider prop lets the editor supply its shop symbol and takes precedence over
+the response symbol.
 
 Branded and Sales keep the discriminated `query` callback:
 
@@ -161,7 +165,7 @@ resources use stable Shopify IDs. Catalog display prices may be stored on
 product snapshots as `{ amount, currencyCode }` minor units; formatted price
 strings, live availability, tokens, and secrets stay out of PageDocument.
 The host product picker must save the correct minor-unit amount and currency.
-Configured snapshots keep their own `price.currencyCode`; recommendation API
-currency does not override them.
+Configured snapshots keep their own amounts and `price.currencyCode`; the
+response symbol affects display only and never rewrites those snapshots.
 Production URLs must be public HTTPS URLs. Missing display data and
 unsafe resource URLs render controlled fallbacks.

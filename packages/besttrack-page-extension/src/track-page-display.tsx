@@ -317,6 +317,7 @@ export function PackageContents({ items }: { items: ReadyToGoOrderItem[] }) {
  * 这里仅接收最终列表，并复用统一价格格式，避免展示组件把查单数据误当作推荐来源。
  */
 export function RecommendationCards({ items }: { items: ReadyToGoRecommendation[] }) {
+  const { currencySymbol } = useTrackingRuntime();
   // 保留 Ready-to-go 的轮播规则：每 3 秒前进一项，悬停暂停；拖动或点击不会永久关闭自动播放。
   // 插件实例在挂载期间保持稳定，避免商品或查询状态重渲染时重建计时器。
   const autoplay = useMemo(() => Autoplay({ delay: 3000, stopOnInteraction: false, stopOnMouseEnter: true }), []);
@@ -386,7 +387,7 @@ export function RecommendationCards({ items }: { items: ReadyToGoRecommendation[
       <div style={{ display: "flex" }}>
         {items.map((item) => {
           const href = safeHref(item.href);
-          const displayPrice = formatRecommendationPrice(item.price);
+          const displayPrice = item.displayPrice ?? formatRecommendationPrice(item.price, currencySymbol);
           const card = <>
             <div style={{ width: 262, height: 262, maxWidth: "100%", borderRadius: "var(--pb-image-radius, 8px)", border: "1px solid #E3E3E3", overflow: "hidden", background: "#fff" }}>
               <ProductImage src={item.imageUrl} alt={item.title} size={262} />

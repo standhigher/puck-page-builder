@@ -40,6 +40,8 @@ export type TrackingPageRecommendation = {
   imageUrl?: string;
   href?: string;
   price?: TrackingPageMoney;
+  /** 推荐接口直接返回的符号和价格文本，仅供运行时展示，不保存到 PageDocument。 */
+  displayPrice?: string;
 };
 
 /** Host callback for page-level recommendations, independent of tracking queries. */

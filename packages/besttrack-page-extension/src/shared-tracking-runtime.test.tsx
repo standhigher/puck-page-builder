@@ -98,11 +98,11 @@ describe.each(templates)("$name uses the Ready-to-go foundation", ({ name, Provi
   });
 
   it.each([
-    { currencyCode: "USD", price: "12.34", display: "$ 12.34" },
-    { currencyCode: "EUR", price: "12.34", display: "€ 12.34" },
-    { currencyCode: "CNY", price: "12.34", display: "CN¥ 12.34" },
-    { currencyCode: "JPY", price: "1025.00", display: "¥ 1,025" },
-    { currencyCode: "KWD", price: "1.234", display: "KWD 1.234" }
+    { currencyCode: "$", price: "12.34", display: "$ 12.34" },
+    { currencyCode: "€", price: "12.34", display: "€ 12.34" },
+    { currencyCode: "৳", price: "12.34", display: "৳ 12.34" },
+    { currencyCode: "JP¥", price: "1025.00", display: "JP¥ 1025.00" },
+    { currencyCode: "KD", price: "1.234", display: "KD 1.234" }
   ])("renders recommendation prices from the $currencyCode API response", async ({ currencyCode, price, display }) => {
     const post = vi.fn().mockResolvedValue({ code: 0, data: {
       currencyCode,
@@ -112,6 +112,22 @@ describe.each(templates)("$name uses the Ready-to-go foundation", ({ name, Provi
 
     expect(await screen.findByText(independentProduct.title)).toBeVisible();
     expect(screen.getByText(display)).toBeVisible();
+  });
+
+  it("uses the response symbol for selected snapshots without changing prices or product priority", async () => {
+    const products = [{ id: "gid://shopify/Product/1", title: "Merchant selection", price: { amount: 2595, currencyCode: "BDT" } }];
+    const snapshot = structuredClone(products);
+    const post = vi.fn().mockResolvedValue({ code: 0, data: { currencyCode: "৳", products: [] } });
+    const transport = { post };
+    const { rerender } = render(<Provider transport={transport}><Recommendations heading="Suggestions" products={products} /></Provider>);
+    expect(await screen.findByText("৳ 25.95")).toBeVisible();
+    expect(screen.getByText("Merchant selection")).toBeVisible();
+    expect(products).toEqual(snapshot);
+
+    rerender(<Provider transport={transport} currencySymbol="Tk"><Recommendations heading="Suggestions" products={products} /></Provider>);
+    expect(screen.getByText("Tk 25.95")).toBeVisible();
+    expect(post).toHaveBeenCalledOnce();
+    expect(products).toEqual(snapshot);
   });
 
   it("keeps recommendations visible without a price when the API omits currency", async () => {

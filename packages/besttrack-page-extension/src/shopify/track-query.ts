@@ -15,8 +15,6 @@ import {
   shouldShowEstimatedDelivery
 } from "./timeline";
 import {
-  createTrackingPageCurrencyFormatter,
-  type TrackingPageMoney,
   type TrackingPageAd,
   type TrackingPageOrderItem,
   type TrackingPageQuery,
@@ -75,7 +73,7 @@ export type ShopifyRecommendProduct = {
 };
 
 type ShopifyRecommendationsData = {
-  /** Shop default ISO 4217 currency, shared by every product in this response. */
+  /** 店铺货币符号（例如 $、৳）；字段名沿用后端 currencyCode。 */
   currencyCode?: string;
   products?: ShopifyRecommendProduct[];
 };
@@ -229,13 +227,10 @@ export function mapShopifyTrackQueryResponse(
   };
 }
 
-function parseRecommendPrice(value: string | undefined, currencyCode: string | undefined): TrackingPageMoney | undefined {
-  const formatter = createTrackingPageCurrencyFormatter(currencyCode);
-  if (!formatter || typeof value !== "string" || !/^\d+(?:\.\d+)?$/.test(value.trim())) return undefined;
-  const factor = 10 ** formatter.resolvedOptions().maximumFractionDigits!;
-  const amount = Math.round(Number(value) * factor);
-  if (!Number.isSafeInteger(amount)) return undefined;
-  return { amount, currencyCode: formatter.resolvedOptions().currency! };
+function recommendationPriceText(value: string | undefined, currencySymbol: string | undefined): string | undefined {
+  const symbol = currencySymbol?.trim();
+  if (!symbol || typeof value !== "string" || !/^\d+(?:\.\d+)?$/.test(value.trim())) return undefined;
+  return `${symbol} ${value.trim()}`;
 }
 
 export function resolveShopifyRecommendHref(onlineStoreUrl?: string | null, handle?: string) {
@@ -264,7 +259,7 @@ export function mapShopifyRecommendationsResponse(
     description: "",
     imageUrl: product.featuredImage?.url,
     href: resolveShopifyRecommendHref(product.onlineStoreUrl, product.handle),
-    price: parseRecommendPrice(product.price || product.variants?.[0]?.price, response.data?.currencyCode)
+    displayPrice: recommendationPriceText(product.price || product.variants?.[0]?.price, response.data?.currencyCode)
   }));
 }
 
@@ -318,16 +313,19 @@ export function createShopifyTrackQuery(transport: ShopifyTrackPageTransport): T
   };
 }
 
+/** 同次响应的符号也供已选商品快照显示；不改写快照金额或顺序。 */
+export async function loadShopifyRecommendations(post: ShopifyTrackPagePost): Promise<{ items: TrackingPageRecommendation[]; currencySymbol?: string }> {
+  try {
+    const response = await post<ShopifyRecommendationsData>(SHOPIFY_RECOMMEND_PATH, { ...buildShopifyRecommendPayload() });
+    return { items: mapShopifyRecommendationsResponse(response), currencySymbol: response.data?.currencyCode?.trim() || undefined };
+  } catch {
+    return { items: [] };
+  }
+}
+
 /** 推荐独立请求；请求或映射抛错时返回空列表，不影响查单状态，也不回退到演示商品。 */
 export function createShopifyRecommendationsQuery(post: ShopifyTrackPagePost): TrackingPageRecommendationsQuery {
-  return async () => {
-    try {
-      const response = await post<ShopifyRecommendationsData>(SHOPIFY_RECOMMEND_PATH, { ...buildShopifyRecommendPayload() });
-      return mapShopifyRecommendationsResponse(response);
-    } catch {
-      return [];
-    }
-  };
+  return async () => (await loadShopifyRecommendations(post)).items;
 }
 
 // 复用原 Track Page 的编号合并规则，供公共 Runtime 管理第一层最近查询；包裹列表不经过合并。

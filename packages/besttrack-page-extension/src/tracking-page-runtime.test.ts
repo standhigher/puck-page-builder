@@ -41,6 +41,15 @@ describe("tracking page protocol and URL safety", () => {
     expect(formatRecommendationPrice({ amount, currencyCode })).toBe(recommendation);
   });
 
+  it("overrides only the recommendation symbol and preserves currency precision", () => {
+    expect(formatRecommendationPrice({ amount: 1234, currencyCode: "BDT" }, " ৳ ")).toBe("৳ 12.34");
+    expect(formatRecommendationPrice({ amount: 1025, currencyCode: "JPY" }, "円")).toBe("円 1,025");
+    expect(formatRecommendationPrice({ amount: 1234, currencyCode: "KWD" }, "KD")).toBe("KD 1.234");
+    expect(formatRecommendationPrice({ amount: 1234, currencyCode: "USD" }, "  ")).toBe("$ 12.34");
+    expect(formatRecommendationPrice({ amount: 1234, currencyCode: "" }, "$")).toBe("");
+    expect(formatRecommendationPrice({ amount: -1, currencyCode: "USD" }, "$")).toBe("");
+  });
+
   it("uses the currency precision for compare-at prices as well", () => {
     expect(formatTrackingPageMoney({ amount: 1025, compareAtAmount: 1200, currencyCode: "JPY", startsAt: true })).toEqual({
       amount: "¥1,025", compareAt: "¥1,200", startsAt: true

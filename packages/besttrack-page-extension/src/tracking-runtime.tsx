@@ -1,7 +1,7 @@
 /* eslint-disable react-refresh/only-export-components -- Shared runtime intentionally exports its context hook. */
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { persistLocale, resolveInitialLocale, syncLocaleToUrl, type Locale } from "./i18n/locales";
-import { createShopifyRecommendationsQuery, createShopifyTrackQuery, mergeDisplayValues, shouldHidePoweredBy, type ShopifyTrackPageTransport } from "./shopify/track-query";
+import { loadShopifyRecommendations, createShopifyTrackQuery, mergeDisplayValues, shouldHidePoweredBy, type ShopifyTrackPageTransport } from "./shopify/track-query";
 import { previewTrackingPageResult } from "./tracking-block-model";
 import { isEmptyTrackingPageResult, type TrackingPageAd, type TrackingPageQuery, type TrackingPageQueryRequest, type TrackingPageQueryResult, type TrackingPageRecommendationsQuery, type TrackingPageRecommendationsState, type TrackingPageWatermark } from "./tracking-page-runtime";
 import type { ShopifyResourceResolution } from "./shopify-resource-contract";
@@ -16,6 +16,8 @@ export type TrackingRecentQuery = {
 /** empty 由结果显式标记；error 表示查询回调抛错，不能仅凭缺少物流节点判断未找到。 */
 export type TrackingRuntimeState = { phase: "idle" | "loading" | "success" | "empty" | "error"; result?: TrackingPageQueryResult; error?: string };
 export type TrackingRuntime = TrackingRuntimeState & {
+  /** 推荐价格的店铺符号；快照金额精度仍由其 currencyCode 决定。 */
+  currencySymbol?: string;
   /** 当前有效查询结束后触发，包括成功、未找到和失败；已失效请求不触发。 */
   query(request: TrackingPageQueryRequest, onComplete?: (isCurrent: () => boolean) => void): Promise<void>;
   reset(): void;
@@ -120,6 +122,8 @@ const initialRuntime: TrackingRuntime = {
 };
 const TrackingRuntimeContext = createContext<TrackingRuntime>(initialRuntime);
 export type TrackingRuntimeProviderProps = {
+  /** 管理端可显式传入店铺符号；C 端默认读取推荐接口的 currencyCode 符号。 */
+  currencySymbol?: string;
   children: ReactNode;
   /** 宿主已解析的 Shopify 商品/集合资源，直接供 Sales 等区块读取；Provider 不自动解析引用。 */
   resourceResolution?: ShopifyResourceResolution;
@@ -154,7 +158,7 @@ async function queryMockTracking(request: TrackingPageQueryRequest): Promise<Tra
  * 三套模板共用的页面状态；历史与订单结果仅保存在本 Provider 内存中。
  * 店铺、访客授权或 Mock/Live 上下文改变时，宿主需重新挂载或更换 key；替换 query 本身不清历史。
  */
-export function TrackingRuntimeProvider({ children, query: injectedQuery, queryRecommendations, transport, autoQueryFromUrl, autoQueryDemo = false, watermark, adPreview, resourceResolution }: TrackingRuntimeProviderProps) {
+export function TrackingRuntimeProvider({ children, query: injectedQuery, queryRecommendations, transport, autoQueryFromUrl, autoQueryDemo = false, watermark, adPreview, resourceResolution, currencySymbol }: TrackingRuntimeProviderProps) {
   const [state, setState] = useState<TrackingRuntimeState>({ phase: "idle" });
   const [recentQueries, setRecentQueries] = useState<TrackingRecentQuery[]>([]);
   const [selectedRecentIndex, setSelectedRecentIndex] = useState(0);
@@ -183,20 +187,22 @@ export function TrackingRuntimeProvider({ children, query: injectedQuery, queryR
     return undefined;
   }, [injectedQuery, transport]);
   const resolvedRecommendations = useMemo(() => {
-    if (queryRecommendations) return queryRecommendations;
-    if (transport) return createShopifyRecommendationsQuery(transport.post);
+    if (queryRecommendations) return async () => ({ items: await queryRecommendations(), currencySymbol: undefined });
+    if (transport) return () => loadShopifyRecommendations(transport.post);
     return undefined;
   }, [queryRecommendations, transport]);
   // 这里表示存在宿主查询来源（宿主也可显式注入 Mock）；仅完全没有来源时使用内置演示结果。
   // 已有来源的请求失败会进入 empty/error 规则，不能自动改走内置 Mock。
   const live = Boolean(injectedQuery || transport);
   const [recommendationLoad, setRecommendationLoad] = useState<{
-    source: TrackingPageRecommendationsQuery | undefined;
+    source: typeof resolvedRecommendations;
     state: TrackingPageRecommendationsState;
+    currencySymbol?: string;
   }>(() => ({ source: resolvedRecommendations, state: { phase: resolvedRecommendations ? "loading" : "idle", items: [] } }));
   const recommendations = useMemo<TrackingPageRecommendationsState>(() => recommendationLoad.source === resolvedRecommendations
     ? recommendationLoad.state
     : { phase: resolvedRecommendations ? "loading" : "idle", items: [] }, [recommendationLoad, resolvedRecommendations]);
+  const recommendationCurrencySymbol = recommendationLoad.source === resolvedRecommendations ? recommendationLoad.currencySymbol : undefined;
   // 回调身份变化或被移除时，当前渲染立即弃用旧来源商品，不等待 effect 才清空。
   // 例如预览从 Mock 切到 Live 时，不应短暂展示先前的演示推荐。
   if (recommendationLoad.source !== resolvedRecommendations) {
@@ -208,9 +214,9 @@ export function TrackingRuntimeProvider({ children, query: injectedQuery, queryR
     // 推荐有自己的生命周期；来源变化或卸载后，旧请求的成功/失败均不能回写新来源状态。
     // effect 依赖加载函数身份，宿主应保持 queryRecommendations/transport 稳定，避免无意中重复加载。
     let active = true;
-    void Promise.resolve().then(resolvedRecommendations).then((items) => {
+    void Promise.resolve().then(resolvedRecommendations).then(({ items, currencySymbol }) => {
       if (!active) return;
-      setRecommendationLoad({ source: resolvedRecommendations, state: { phase: items.length ? "success" : "empty", items } });
+      setRecommendationLoad({ source: resolvedRecommendations, state: { phase: items.length ? "success" : "empty", items }, currencySymbol });
     }).catch(() => {
       if (!active) return;
       setRecommendationLoad({ source: resolvedRecommendations, state: { phase: "error", items: [] } });
@@ -324,6 +330,7 @@ export function TrackingRuntimeProvider({ children, query: injectedQuery, queryR
   );
   const value = useMemo<TrackingRuntime>(() => ({
     ...state,
+    currencySymbol: currencySymbol ?? recommendationCurrencySymbol,
     adPreview,
     resourceResolution,
     reset,
@@ -341,7 +348,7 @@ export function TrackingRuntimeProvider({ children, query: injectedQuery, queryR
     locale,
     localeRefreshing,
     setLocale
-  }), [adPreview, resourceResolution, reset, autoQueryDemo, locale, localeRefreshing, query, recentQueries, recommendations, resolveAutoQuery, resolvedWatermark, selectRecentQuery, selectShipment, selectedRecentIndex, selectionRevision, selectedShipmentIndex, setLocale, state]);
+  }), [currencySymbol, recommendationCurrencySymbol, adPreview, resourceResolution, reset, autoQueryDemo, locale, localeRefreshing, query, recentQueries, recommendations, resolveAutoQuery, resolvedWatermark, selectRecentQuery, selectShipment, selectedRecentIndex, selectionRevision, selectedShipmentIndex, setLocale, state]);
   return <TrackingRuntimeContext.Provider value={value}>{children}</TrackingRuntimeContext.Provider>;
 }
 

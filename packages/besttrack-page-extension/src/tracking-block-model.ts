@@ -68,13 +68,13 @@ export function trackingEvents(result: TrackingPageQueryResult | undefined): Tra
 }
 
 /** 三套模板共用商品币种和精度，保留推荐卡片的符号与金额间距。 */
-export function formatRecommendationPrice(price?: TrackingPageMoney) {
+export function formatRecommendationPrice(price?: TrackingPageMoney, currencySymbol?: string) {
   if (!price || !Number.isSafeInteger(price.amount) || price.amount < 0) return "";
   const formatter = createTrackingPageCurrencyFormatter(price.currencyCode);
   if (!formatter) return "";
   const divisor = 10 ** formatter.resolvedOptions().maximumFractionDigits!;
   return formatter.formatToParts(price.amount / divisor).map(({ type, value }) => {
-    if (type === "currency") return `${value} `;
+    if (type === "currency") return `${currencySymbol?.trim() || value} `;
     return type === "literal" && !value.trim() ? "" : value;
   }).join("");
 }

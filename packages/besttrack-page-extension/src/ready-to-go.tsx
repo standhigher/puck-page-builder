@@ -431,6 +431,7 @@ function LocalizedInlineText({ block, name, englishDefault }: { block: ReadyToGo
 
 const deliveryColumnsStyle: CSSProperties = {
   ...contentWidth,
+  paddingTop: 18,
   display: "grid",
   gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 280px), 500px))",
   gap: 40,

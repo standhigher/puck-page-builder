@@ -36,6 +36,11 @@ describe('locale helpers', () => {
     expect(normalizeLocale('zh')).toBe('ZH-HANS')
     expect(normalizeLocale('zh-hans')).toBe('ZH-HANS')
     expect(normalizeLocale('zh-CN')).toBe('ZH-HANS')
+    expect(normalizeLocale('zh-SG')).toBe('ZH-HANS')
+    expect(normalizeLocale('zh-Hans-CN')).toBe('ZH-HANS')
+    expect(normalizeLocale('zh-TW')).toBeNull()
+    expect(normalizeLocale('zh-Hant')).toBeNull()
+    expect(normalizeLocale('zh-HK')).toBeNull()
     expect(normalizeLocale('en-GB')).toBe('EN')
     expect(normalizeLocale('fr-CA')).toBe('FR')
     expect(normalizeLocale('es-MX')).toBe('ES')
@@ -75,6 +80,26 @@ describe('locale helpers', () => {
     expect(toHtmlLocale('EN')).toBe('en')
     expect(toHtmlLocale('ZH-HANS')).toBe('zh-Hans')
     expect(toHtmlLocale('PT-BR')).toBe('pt-BR')
+  })
+
+  it('uses the host fallback after URL and stored language preferences', () => {
+    const browser = { location: { search: '' }, localStorage: { getItem: vi.fn((): string | null => null) } }
+    Object.defineProperty(globalThis, 'window', { configurable: true, value: browser })
+    expect(resolveInitialLocale('FR')).toBe('FR')
+    browser.localStorage.getItem.mockReturnValue('de-DE')
+    expect(resolveInitialLocale('FR')).toBe('DE')
+    browser.location.search = '?lang=es-MX'
+    expect(resolveInitialLocale('FR')).toBe('ES')
+    browser.location.search = '?lang=unsupported'
+    expect(resolveInitialLocale('FR')).toBe('DE')
+  })
+
+  it('keeps URL and fallback preferences available when storage is blocked', () => {
+    const browser = { location: { search: '' }, get localStorage(): never { throw new Error('blocked') } }
+    Object.defineProperty(globalThis, 'window', { configurable: true, value: browser })
+    expect(resolveInitialLocale('FR')).toBe('FR')
+    browser.location.search = '?lang=DE'
+    expect(resolveInitialLocale('FR')).toBe('DE')
   })
 
   it('persists and syncs canonical uppercase locale keys', () => {

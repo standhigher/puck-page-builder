@@ -53,6 +53,7 @@ export {
   type TrackingPageTrackingStep
 } from "./tracking-page-runtime";
 export { isSafeTrackingPageUrl, safeTrackingPageUrl, type TrackingPageUrlOptions } from "./tracking-page-url";
+export { normalizeLocale } from "./i18n/locales";
 export {
   ShopifyCollectionResourceField,
   ShopifyProductResourceField,

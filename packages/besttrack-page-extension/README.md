@@ -42,9 +42,25 @@ tracking page and in the editor canvas. Both surfaces share
 preview of the same runtime, not an editor-only toggle.
 
 Default is **`EN`**. Resolution order is `?lang=`, then `bestrack_locale`,
-then English. Browser `navigator.language` is not read. The menu lists the
+then English. `resolveInitialLocale(fallbackLocale)` lets a host supply the
+last fallback; `normalizeLocale` maps browser tags to supported codes. The
+package does not read `navigator.language` itself. The menu lists the
 original Track Page locales: `EN`, `ZH-HANS`, `FR`, `ES`, `DE`, `PT-BR`,
 `IT`, `ID`, `VI`, `TH`.
+
+Hosts that fetch a default-language policy can pass a stable
+`loadInitialLocale: (signal: AbortSignal) => Promise<Locale>` to the provider.
+The host owns that request and browser-language selection. Runtime exposes
+`localeReady` and waits before starting the first lookup and constructing
+its language-dependent response mapper. The query form stays visible and
+accepts submissions while initialization is pending; a submission enters
+the normal loading state until initialization and the lookup finish.
+Recommendations load independently. Automatic initialization only updates
+Runtime memory; it never writes `?lang=` or `bestrack_locale`. A manual
+selection during initialization wins. Unmounting or replacing the loader
+aborts its signal and ignores the old result. A failed loader falls back to
+the existing URL/storage/English resolution. Without a loader, readiness is
+immediate and existing behavior is unchanged.
 
 The menu sits in the top-right of the shipment progress card (Ready-to-go)
 or next to the tracking timeline (Branded / Sales). Ready-to-go keeps the
@@ -80,7 +96,9 @@ carrier names, destinations, and product titles also stay as returned.
 This locale is not `adminLocale`. Do not pass a static `transport.locale`
 snapshot; the runtime reads locale at request time. Custom `query`
 callbacks do not receive `locale` on the request object; read `?lang=` or
-`bestrack_locale` at call time if the host must translate carrier events.
+`bestrack_locale` at call time for explicit choices and use the host's
+resolved default for automatic initialization. Prefer `transport` when the
+runtime should supply the effective language to carrier-event requests.
 Hosts that already inject `transport` or `query` only need to upgrade this
 package. See `docs/integration/translate-updates.md`.
 

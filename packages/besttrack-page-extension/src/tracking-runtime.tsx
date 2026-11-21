@@ -38,6 +38,8 @@ export type TrackingRuntime = TrackingRuntimeState & {
   adPreview?: TrackingPageAd | null;
   /** 物流节点翻译语言；默认英文，可由 URL `lang` 或 `bestrack_locale` 覆盖。 */
   locale: Locale;
+  /** 宿主的异步初始语言已确定；提交可提前进入 loading，实际查单会等待此状态。 */
+  localeReady: boolean;
   setLocale: (locale: Locale) => void;
   /** 语言切换触发的原地重查尚未返回；期间 Translate updates 不可再点。 */
   localeRefreshing: boolean;
@@ -115,13 +117,17 @@ const initialRuntime: TrackingRuntime = {
   autoQueryFromUrl: false,
   autoQueryDemo: false,
   locale: "EN",
+  localeReady: true,
   localeRefreshing: false,
   setLocale() { return undefined; },
   reset() { return undefined; },
   async query() { return undefined; }
 };
 const TrackingRuntimeContext = createContext<TrackingRuntime>(initialRuntime);
+type InitialLocaleLoader = (signal: AbortSignal) => Promise<Locale>;
 export type TrackingRuntimeProviderProps = {
+  /** 宿主读取默认语言；包只初始化运行时，不将自动结果写入 URL 或本地存储。保持回调引用稳定。 */
+  loadInitialLocale?: InitialLocaleLoader;
   /** 管理端可显式传入店铺符号；C 端默认读取推荐接口的 currencyCode 符号。 */
   currencySymbol?: string;
   children: ReactNode;
@@ -158,22 +164,73 @@ async function queryMockTracking(request: TrackingPageQueryRequest): Promise<Tra
  * 三套模板共用的页面状态；历史与订单结果仅保存在本 Provider 内存中。
  * 店铺、访客授权或 Mock/Live 上下文改变时，宿主需重新挂载或更换 key；替换 query 本身不清历史。
  */
-export function TrackingRuntimeProvider({ children, query: injectedQuery, queryRecommendations, transport, autoQueryFromUrl, autoQueryDemo = false, watermark, adPreview, resourceResolution, currencySymbol }: TrackingRuntimeProviderProps) {
+export function TrackingRuntimeProvider({ children, loadInitialLocale, query: injectedQuery, queryRecommendations, transport, autoQueryFromUrl, autoQueryDemo = false, watermark, adPreview, resourceResolution, currencySymbol }: TrackingRuntimeProviderProps) {
   const [state, setState] = useState<TrackingRuntimeState>({ phase: "idle" });
   const [recentQueries, setRecentQueries] = useState<TrackingRecentQuery[]>([]);
   const [selectedRecentIndex, setSelectedRecentIndex] = useState(0);
   const [selectionRevision, setSelectionRevision] = useState(0);
   const [selectedShipmentIndex, setSelectedShipmentIndex] = useState(0);
-  const [locale, setLocaleState] = useState<Locale>(resolveInitialLocale);
+  const [locale, setLocaleState] = useState<Locale>(() => resolveInitialLocale());
   const [localeRefreshing, setLocaleRefreshing] = useState(false);
+  const [completedLocaleLoad, setCompletedLocaleLoad] = useState<{ source: InitialLocaleLoader } | null>(null);
+  const localeReady = !loadInitialLocale || completedLocaleLoad?.source === loadInitialLocale;
+  // 离开已完成的来源即弃用其就绪标记，切回同一回调也需等待本轮初始化。
+  if (completedLocaleLoad && completedLocaleLoad.source !== loadInitialLocale) setCompletedLocaleLoad(null);
   // 单调递增的版本号只使旧响应失效，不取消网络请求；成功与异常分支都必须核对版本。
   const requestId = useRef(0);
   const localeRef = useRef(locale);
+  const manualLocaleRevision = useRef(0);
+  const localeLoadRef = useRef<{
+    source: InitialLocaleLoader;
+    controller: AbortController;
+    promise: Promise<boolean>;
+    queryRequestId?: number;
+  } | null>(null);
   const stateRef = useRef(state);
   const recentQueriesRef = useRef(recentQueries);
   const selectedRecentIndexRef = useRef(selectedRecentIndex);
   const selectedShipmentIndexRef = useRef(selectedShipmentIndex);
   const lastQueryRef = useRef<TrackingPageQueryRequest | null>(null);
+  const initializeLocale = useCallback(() => {
+    if (!loadInitialLocale) return Promise.resolve(true);
+    const pending = localeLoadRef.current;
+    if (pending?.source === loadInitialLocale && !pending.controller.signal.aborted) return pending.promise;
+    pending?.controller.abort();
+    const controller = new AbortController();
+    const revision = manualLocaleRevision.current;
+    const apply = (next: Locale) => {
+      if (controller.signal.aborted) return false;
+      // 异步默认值不能覆盖等待期间访客已经作出的手动选择。
+      if (revision === manualLocaleRevision.current) {
+        localeRef.current = next;
+        setLocaleState(next);
+      }
+      setCompletedLocaleLoad({ source: loadInitialLocale });
+      return true;
+    };
+    const promise = Promise.resolve()
+      .then(() => controller.signal.aborted ? undefined : loadInitialLocale(controller.signal))
+      .then((next) => next ? apply(next) : false, () => apply(resolveInitialLocale()));
+    localeLoadRef.current = { source: loadInitialLocale, controller, promise };
+    return promise;
+  }, [loadInitialLocale]);
+
+  useEffect(() => {
+    if (!loadInitialLocale) return;
+    // query 也可先于父 effect 调用此入口，共用同一次初始化。
+    void initializeLocale();
+    const pending = localeLoadRef.current;
+    return () => {
+      pending?.controller.abort();
+      // 只取消由本轮语言初始化承接的当前查询，不能使新来源已启动的查询失效。
+      if (pending?.queryRequestId !== requestId.current) return;
+      const canceledRequestId = ++requestId.current;
+      setLocaleRefreshing(false);
+      setState((previous) => requestId.current === canceledRequestId && previous.phase === "loading"
+        ? { phase: "idle" }
+        : previous);
+    };
+  }, [initializeLocale, loadInitialLocale]);
   const resolvedQuery = useMemo(() => {
     if (injectedQuery) return injectedQuery;
     // 语言入口接管 lang：查询时读当前 Runtime locale，而不是宿主传入的快照值。
@@ -234,6 +291,12 @@ export function TrackingRuntimeProvider({ children, query: injectedQuery, queryR
       setState({ phase: "loading" });
     }
     try {
+      if (loadInitialLocale) {
+        const initialization = initializeLocale();
+        if (localeLoadRef.current) localeLoadRef.current.queryRequestId = currentRequestId;
+        if (!await initialization) return;
+      }
+      if (currentRequestId !== requestId.current) return;
       const result = live ? await resolvedQuery!(request) : await queryMockTracking(request);
       if (currentRequestId !== requestId.current) return;
       if (isEmptyTrackingPageResult(result)) {
@@ -265,7 +328,7 @@ export function TrackingRuntimeProvider({ children, query: injectedQuery, queryR
     if (currentRequestId === requestId.current && preserveResult) setLocaleRefreshing(false);
     // 展示层的滚动等副作用不属于请求失败，不能让回调异常覆盖查询状态。
     onComplete?.(() => currentRequestId === requestId.current);
-  }, [live, resolvedQuery]);
+  }, [initializeLocale, live, loadInitialLocale, resolvedQuery]);
   const queryRef = useRef(query);
   useEffect(() => {
     localeRef.current = locale;
@@ -276,6 +339,7 @@ export function TrackingRuntimeProvider({ children, query: injectedQuery, queryR
     queryRef.current = query;
   }, [locale, query, recentQueries, selectedRecentIndex, selectedShipmentIndex, state]);
   const setLocale = useCallback((next: Locale) => {
+    manualLocaleRevision.current += 1;
     if (next === localeRef.current) return;
     persistLocale(next);
     syncLocaleToUrl(next);
@@ -346,9 +410,10 @@ export function TrackingRuntimeProvider({ children, query: injectedQuery, queryR
     autoQueryDemo,
     watermark: resolvedWatermark,
     locale,
+    localeReady,
     localeRefreshing,
     setLocale
-  }), [currencySymbol, recommendationCurrencySymbol, adPreview, resourceResolution, reset, autoQueryDemo, locale, localeRefreshing, query, recentQueries, recommendations, resolveAutoQuery, resolvedWatermark, selectRecentQuery, selectShipment, selectedRecentIndex, selectionRevision, selectedShipmentIndex, setLocale, state]);
+  }), [currencySymbol, recommendationCurrencySymbol, adPreview, resourceResolution, reset, autoQueryDemo, locale, localeReady, localeRefreshing, query, recentQueries, recommendations, resolveAutoQuery, resolvedWatermark, selectRecentQuery, selectShipment, selectedRecentIndex, selectionRevision, selectedShipmentIndex, setLocale, state]);
   return <TrackingRuntimeContext.Provider value={value}>{children}</TrackingRuntimeContext.Provider>;
 }
 

@@ -51,7 +51,7 @@ export function useTrackingQueryForm({ initialTrackingNumber, initialOrderNumber
   }
 
   useEffect(() => {
-    if (autoQueryStarted.current) return;
+    if (autoQueryStarted.current || !runtime.localeReady) return;
     if (locationState?.canAutoQuery) {
       // 有完整可查询深链时优先执行；同一次挂载不再追加演示查询。
       autoQueryStarted.current = true;
@@ -65,7 +65,7 @@ export function useTrackingQueryForm({ initialTrackingNumber, initialOrderNumber
     autoQueryStarted.current = true;
     // 不触发 onComplete 滚动，避免预览一打开就自动跳离查询区。
     void query({ mode: "tracking", trackingNumber: PREVIEW_DEMO_TRACKING_NUMBER });
-  }, [locationState, onComplete, query, runtime.autoQueryDemo]);
+  }, [locationState, onComplete, query, runtime.autoQueryDemo, runtime.localeReady]);
 
   const setMode = (next: QueryMode) => {
     // 切换输入模式只清除表单校验提示，保留两个模式的输入，也不改变当前已展示的查询结果。
@@ -88,6 +88,7 @@ export function useTrackingQueryForm({ initialTrackingNumber, initialOrderNumber
         return;
       }
       // 提交时同步 URL，历史恢复走 Runtime 缓存，不经过此处也不会再请求接口。
+      autoQueryStarted.current = true;
       syncTrackingQueryToUrl("order", orderNumber.trim(), email.trim());
       void query({ mode: "order", orderNumber: orderNumber.trim(), email: email.trim() }, onComplete);
       return;
@@ -97,6 +98,8 @@ export function useTrackingQueryForm({ initialTrackingNumber, initialOrderNumber
       setFirstInvalidField("tracking");
       return;
     }
+    // 用户可在默认语言尚未返回时提交，之后不再补查挂载时捕获的旧深链。
+    autoQueryStarted.current = true;
     syncTrackingQueryToUrl("tracking", trackingNumber.trim());
     void query({ mode: "tracking", trackingNumber: trackingNumber.trim() }, onComplete);
   };

@@ -35,7 +35,23 @@ Translate updates **不是只在画布里切换**。编辑器画布和已发布�
 2. `localStorage` 键 `bestrack_locale`
 3. 回退英文
 
-不读取浏览器 `navigator.language`。别名如 `zh-CN`、`fr-FR` 会规范成上表码。
+包不读取浏览器 `navigator.language`。公开的 `normalizeLocale` 可将 `zh-CN`、`zh-SG`、`zh-Hans-CN`、`fr-FR` 等别名规范成上表码；不将 `zh-TW`、`zh-Hant` 等繁体标签映射到简体。`resolveInitialLocale(fallbackLocale = "EN")` 保留 URL、存储优先，最后使用宿主给定的回退语言；存储不可访问时仍可回退。
+
+## 异步默认语言
+
+宿主需要先读取店铺语言策略时，向 Provider 传入稳定的 `loadInitialLocale: (signal: AbortSignal) => Promise<Locale>`。业务接口、鉴权与是否跟随浏览器语言由宿主负责，包只负责初始化 Runtime 和等待查询。例如宿主完成策略请求后返回：
+
+```ts
+return resolveInitialLocale(
+  autoEnabled ? normalizeLocale(navigator.languages[0] || navigator.language) ?? "EN" : "EN"
+);
+```
+
+- `useTrackingRuntime().localeReady` 在等待期间为 `false`；查询表单可直接显示并接受提交，提交后正常显示查询中，实际请求等待语言确定。推荐商品独立加载。
+- 首次查询和 URL 深链自动查询等待初始化后再执行，确保请求 `lang` 和响应时间格式使用同一语言。
+- 自动结果仅更新内存中的 Runtime，不写 URL、本地存储或 `PageDocument`；等待期间的手动语言选择优先。
+- 回调失败时按 URL、存储、英文顺序回退；没有回调时立即就绪，保持原行为。
+- 卸载或替换回调会取消旧 `signal` 并忽略旧结果；宿主应把 `signal` 传入实际请求并保持回调引用稳定。
 
 ## 入口位置与样式
 
@@ -58,7 +74,7 @@ Translate updates **不是只在画布里切换**。编辑器画布和已发布�
 
 `transport` 路径每次请求读当前 Runtime locale，请求体为 `{ order_number, email, tracking_number, lang }`。不要再给 `transport.locale` 传一份与入口脱节的快照。
 
-自定义 `query` 的请求类型不含 `locale`。若宿主也要按语言翻译承运商节点，须在回调执行时自行读取已更新的 `?lang=` 或 `bestrack_locale`；不要缓存页面加载时的语言。
+自定义 `query` 的请求类型不含 `locale`。若宿主也要按语言翻译承运商节点，须在回调执行时自行解析 URL / 存储中的手动选择和宿主已确定的自动默认值；自动初始化不会写入 URL 或存储。使用 `transport` 时包会直接传入有效的 Runtime 语言。
 
 ## 哪些文案会随语言变
 

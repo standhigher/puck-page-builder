@@ -46,7 +46,7 @@ export function normalizeLocale(value: string | null | undefined): Locale | null
   if (isSupportedLocale(canonical)) return canonical
 
   const lower = normalized.toLowerCase()
-  if (lower === 'zh' || lower === 'zh-cn' || lower === 'zh-hans') return 'ZH-HANS'
+  if (lower === 'zh' || lower === 'zh-cn' || lower === 'zh-sg' || lower === 'zh-hans' || lower.startsWith('zh-hans-')) return 'ZH-HANS'
   if (lower === 'en' || lower.startsWith('en-')) return 'EN'
   if (lower === 'fr' || lower.startsWith('fr-')) return 'FR'
   if (lower === 'es' || lower.startsWith('es-')) return 'ES'
@@ -60,16 +60,20 @@ export function normalizeLocale(value: string | null | undefined): Locale | null
   return null
 }
 
-export function resolveInitialLocale(): Locale {
+export function resolveInitialLocale(fallbackLocale: Locale = 'EN'): Locale {
   if (typeof window !== 'undefined') {
     const urlLocale = normalizeLocale(new URLSearchParams(window.location.search).get('lang'))
     if (urlLocale) return urlLocale
 
-    const storedLocale = normalizeLocale(window.localStorage.getItem(LOCALE_STORAGE_KEY))
-    if (storedLocale) return storedLocale
+    try {
+      const storedLocale = normalizeLocale(window.localStorage.getItem(LOCALE_STORAGE_KEY))
+      if (storedLocale) return storedLocale
+    } catch {
+      // 受限浏览器仍可使用 URL 中的显式语言和宿主提供的默认语言。
+    }
   }
 
-  return 'EN'
+  return fallbackLocale
 }
 
 const htmlLocaleMap: Record<Locale, string> = {
